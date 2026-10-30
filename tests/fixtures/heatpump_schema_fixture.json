@@ -1,0 +1,5763 @@
+{
+  "fictional": true,
+  "defaults": {
+    "ac_heating_additional_demand_pct": 0,
+    "ac_heating_windows": [
+      {
+        "end_minute": 480,
+        "id": "morning",
+        "start_minute": 360
+      },
+      {
+        "end_minute": 1200,
+        "id": "evening",
+        "start_minute": 960
+      }
+    ],
+    "actual_price_future_factor": 1,
+    "baseline_power_kw": 3.0,
+    "battery_c_rate_max": 0.5,
+    "battery_calendar_fade": 0.015,
+    "battery_charge_efficiency": null,
+    "battery_cost_kwh": 500.0,
+    "battery_cycle_fade": 5e-05,
+    "battery_discharge_efficiency": null,
+    "battery_inverter_kw": 3.0,
+    "battery_kwh": 5,
+    "battery_mixed_sizes": false,
+    "battery_module_cost_override": null,
+    "battery_module_extra_cost": 0.0,
+    "battery_module_kwh": 5,
+    "battery_modules": 1,
+    "battery_replace_year": 12,
+    "battery_replacement_cost_kwh": 250,
+    "battery_secondary_module_cost_override": null,
+    "battery_secondary_module_extra_cost": 0.0,
+    "battery_secondary_module_kwh": 6.9,
+    "battery_secondary_modules": 0,
+    "battery_soc_max": 1.0,
+    "battery_soc_min": 0.0,
+    "boiler_efficiency": 0.8,
+    "cashflow_mode": "nominal",
+    "cer_eligible_export_share": 0,
+    "cer_enabled": false,
+    "cer_tariff": 0.1,
+    "cer_user_allocation": 0,
+    "charge_kw": 3,
+    "cleaning_annual": 0,
+    "clipping_ac_max": 0.03,
+    "clipping_dc_max": 0.04,
+    "cooking_smc_annual": 20.0,
+    "deduction_eligible_fraction": 1,
+    "deduction_price_premium": 0,
+    "deduction_rate": 0.0,
+    "deduction_start_year": 1,
+    "deduction_tax_capacity": 0.0,
+    "dhw_heating_type": "resistance",
+    "dhw_midday_fraction": 0.5,
+    "dhw_resistance_efficiency": 0.98,
+    "dhw_scop": 3.0,
+    "diffuse_suppression": 0,
+    "discharge_kw": 3,
+    "dormer_extra_cost_per_panel": 0.0,
+    "dormer_panels": 0,
+    "dormer_south_proxy": false,
+    "east_extra_cost_per_panel": 0.0,
+    "east_panels": 0,
+    "electric_excise": 0.0227,
+    "electric_vat": 0.1,
+    "electrification_capex": 6000,
+    "electrification_capex_include_baseline": false,
+    "electrified_power_kw": 6,
+    "energy_real_escalation": 0,
+    "ev_charge_efficiency": 0.9,
+    "ev_day_fraction": 0.2,
+    "ev_home_fraction": 1,
+    "ev_km_annual": 7500,
+    "ev_kwh_100km": 15,
+    "ev_start_year": 1,
+    "export_capture_factor": 1.0,
+    "export_fee_tax_deductible": false,
+    "export_irpef": 0.33,
+    "export_market_price": 0.1,
+    "export_price_future_years": 10,
+    "export_price_profile": "empirical_csud",
+    "export_price_window": "oct2025_sep2026",
+    "flat_extra_cost_per_panel": 0.0,
+    "flat_panels": 0,
+    "gas_commodity": 0.5,
+    "gas_cooking_efficiency": 0.45,
+    "gas_disconnect_cost": 150,
+    "gas_excise_0_120": 0.038,
+    "gas_excise_120_480": 0.135,
+    "gas_excise_480_1560": 0.12,
+    "gas_excise_over_1560": 0.15,
+    "gas_fixed_day": 0.3,
+    "gas_pcs": 11.0,
+    "gas_real_escalation": 0,
+    "gas_regional_0_120": 0.019,
+    "gas_regional_over_120": 0.031,
+    "gas_regulated": 0.4,
+    "gas_vat_reduced": 0.1,
+    "gas_vat_standard": 0.22,
+    "gse_fee_eur_kw_year": 0.7,
+    "gse_fee_vat": 0.22,
+    "heating_balance_temp": 18,
+    "heating_schedule_mode": "scheduled",
+    "horizon_years": 20,
+    "hp_additional_defrost_penalty": 0.0,
+    "hp_additional_unit_aux_kw": 0.0,
+    "hp_annual_maintenance": 100.0,
+    "hp_backup_efficiency": 1.0,
+    "hp_backup_kw": 3.0,
+    "hp_capex": 10000.0,
+    "hp_coil_approach": 5.0,
+    "hp_cooking_capex": 500.0,
+    "hp_curve_flow_cold": 55.0,
+    "hp_curve_flow_mild": 35.0,
+    "hp_curve_outdoor_cold": -5.0,
+    "hp_curve_outdoor_mild": 15.0,
+    "hp_cycling_penalty": 0.1,
+    "hp_dhw_demand_mode": "gas_calibrated",
+    "hp_dhw_litres_day": 150.0,
+    "hp_disconnect_gas": false,
+    "hp_distribution_loss_fraction": 0.0,
+    "hp_draw_evening_off": 21,
+    "hp_draw_evening_on": 18,
+    "hp_draw_morning_fraction": 0.5,
+    "hp_draw_morning_off": 9,
+    "hp_draw_morning_on": 7,
+    "hp_electric_cooking": false,
+    "hp_evening_off": 20,
+    "hp_evening_on": 16,
+    "hp_external_pump_kw": 0.06,
+    "hp_hygiene_duration_hours": 1,
+    "hp_hygiene_enabled": false,
+    "hp_hygiene_hour": 12,
+    "hp_hygiene_temp": 60.0,
+    "hp_hygiene_weekday": 0,
+    "hp_indoor_temp": 18.0,
+    "hp_manufacturer_map_json": "",
+    "hp_min_modulation_fraction": 0.25,
+    "hp_morning_off": 8,
+    "hp_morning_on": 6,
+    "hp_nominal_kw": 9.0,
+    "hp_prior_dhw_loss_fraction": 0.0,
+    "hp_radiator_dt50_kw": 10.0,
+    "hp_radiator_exponent": 1.3,
+    "hp_reheat_mode": "continuous",
+    "hp_reheat_off": 16,
+    "hp_reheat_on": 11,
+    "hp_replacement_cost": 6000.0,
+    "hp_replacement_year": 0,
+    "hp_return_drop": 5.0,
+    "hp_schedule_mode": "continuous",
+    "hp_setback_delta": 0.0,
+    "hp_standby_kw": 0.02,
+    "hp_tank_ambient_temp": 20.0,
+    "hp_tank_deadband": 5.0,
+    "hp_tank_initial_temp": 50.0,
+    "hp_tank_inlet_temp": 15.0,
+    "hp_tank_litres": 200.0,
+    "hp_tank_loss_w_k": 1.0,
+    "hp_tank_service_temp": 40.0,
+    "hp_tank_target_temp": 50.0,
+    "hp_weather_sensitive": false,
+    "ilr_ac_max": 1.35,
+    "ilr_dc_max": 1.7,
+    "induction_efficiency": 0.85,
+    "inflation": 0.02,
+    "installation_vat": 0.1,
+    "installation_year": 2026,
+    "insurance_annual": 0,
+    "inverter_efficiency": 0.96,
+    "inverter_kw": 4,
+    "inverter_replace_year": 13,
+    "inverter_replacement_cost": 1200,
+    "load_growth": 1,
+    "load_scenario": "baseline",
+    "loan_amount": 10000.0,
+    "loan_apr": 0.05,
+    "loan_fraction": 0,
+    "loan_include_electrification": false,
+    "loan_max_monthly_payment": null,
+    "loan_mode": "fraction",
+    "loan_upfront_fees_or_tax": 0.0,
+    "loan_years": 10,
+    "municipal_additional_tax": 0.0,
+    "network_fixed_month": 2.0,
+    "om_annual": 100,
+    "panel_watts": 400,
+    "planning_heat_pump": false,
+    "pmg_election": true,
+    "pmg_nominal_escalation": 0,
+    "pmg_price": 0.0475,
+    "power_fixed_kw_month": 2.0,
+    "principal_residence_confirmed": false,
+    "pv_annual_fade": 0.0035,
+    "pv_battery_coupling": "ac_equivalent",
+    "pv_cost_kwp": 1000.0,
+    "pv_dispatch_model": "legacy",
+    "pv_first_year_loss": 0.01,
+    "pv_fixed_cost": 1000.0,
+    "pv_max_kwp": null,
+    "quote_total": null,
+    "quote_vat_included": true,
+    "real_discount_rate": 0.03,
+    "regional_additional_tax": 0.0,
+    "regulated_real_escalation": 0,
+    "residual_fraction": 0,
+    "retail_commodity": 0.12,
+    "retail_regulated": 0.05,
+    "roundtrip_efficiency": 0.9,
+    "routing_priority": "auto",
+    "routing_switch_hour": 11,
+    "scheduled_end_month": 9,
+    "scheduled_start_month": 3,
+    "scop": 4.0,
+    "secondary_south_extra_cost_per_panel": 0.0,
+    "secondary_south_panels": 0,
+    "shade_strength": 1,
+    "south_extra_cost_per_panel": 0.0,
+    "south_panels": 10,
+    "summer_ac_multiplier": 1.0,
+    "summer_gas_base": 20.0,
+    "supplier_fixed_month": 8.0,
+    "timezone_mode": "civil",
+    "west_extra_cost_per_panel": 0.0,
+    "west_panels": 0
+  },
+  "records": [
+    {
+      "bounds": [
+        2026,
+        2035
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for installation_year; supply profile-specific inputs and verify applicability.",
+      "group": "tax",
+      "name": "installation_year",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        2026,
+        2035
+      ],
+      "reasoning": "Neutral example for installation_year; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "year",
+      "value": 2026
+    },
+    {
+      "bounds": null,
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for principal_residence_confirmed; supply profile-specific inputs and verify applicability.",
+      "group": "tax",
+      "name": "principal_residence_confirmed",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Neutral example for principal_residence_confirmed; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "boolean",
+      "value": false
+    },
+    {
+      "bounds": [
+        0,
+        null
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for south_panels; supply profile-specific inputs and verify applicability.",
+      "group": "layout",
+      "name": "south_panels",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        null
+      ],
+      "reasoning": "Neutral example for south_panels; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "panels",
+      "value": 10
+    },
+    {
+      "bounds": [
+        0,
+        null
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for west_panels; supply profile-specific inputs and verify applicability.",
+      "group": "layout",
+      "name": "west_panels",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        null
+      ],
+      "reasoning": "Neutral example for west_panels; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "panels",
+      "value": 0
+    },
+    {
+      "bounds": [
+        0,
+        null
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for east_panels; supply profile-specific inputs and verify applicability.",
+      "group": "layout",
+      "name": "east_panels",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        null
+      ],
+      "reasoning": "Neutral example for east_panels; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "panels",
+      "value": 0
+    },
+    {
+      "bounds": [
+        0,
+        null
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for dormer_panels; supply profile-specific inputs and verify applicability.",
+      "group": "layout",
+      "name": "dormer_panels",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        null
+      ],
+      "reasoning": "Neutral example for dormer_panels; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "panels",
+      "value": 0
+    },
+    {
+      "bounds": [
+        0,
+        null
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for flat_panels; supply profile-specific inputs and verify applicability.",
+      "group": "layout",
+      "name": "flat_panels",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        null
+      ],
+      "reasoning": "Neutral example for flat_panels; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "panels",
+      "value": 0
+    },
+    {
+      "bounds": [
+        0,
+        null
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for secondary_south_panels; supply profile-specific inputs and verify applicability.",
+      "group": "layout",
+      "name": "secondary_south_panels",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        null
+      ],
+      "reasoning": "Neutral example for secondary_south_panels; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "panels",
+      "value": 0
+    },
+    {
+      "bounds": [
+        1,
+        null
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Module power used to scale production; physical module fit requires a verified layout.",
+      "group": "layout",
+      "name": "panel_watts",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        1,
+        null
+      ],
+      "reasoning": "Module power used to scale production; physical module fit requires a verified layout.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "W",
+      "value": 400
+    },
+    {
+      "bounds": [
+        3,
+        20
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "PV inverter AC rating; DC coupling shares it with battery discharge, AC coupling uses a separate battery inverter. Modeling bounds are 3–20 kW, not a product rating or equipment selection; PV battery topology is selected separately.",
+      "group": "equipment",
+      "name": "inverter_kw",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        3,
+        20
+      ],
+      "reasoning": "PV inverter AC rating; DC coupling shares it with battery discharge, AC coupling uses a separate battery inverter. Modeling bounds are 3–20 kW, not a product rating or equipment selection; PV battery topology is selected separately.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "kW",
+      "value": 4
+    },
+    {
+      "bounds": [
+        "ac_equivalent",
+        "dc_coupled"
+      ],
+      "choices": [
+        "ac_equivalent",
+        "dc_coupled"
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "AC coupling caps PV before battery charging and physical mode uses a separate battery inverter. DC coupling charges before the hybrid inverter and shares its AC output across PV, discharge and export. Legacy mode retains the earlier AC-equivalent approximation.",
+      "group": "equipment",
+      "name": "pv_battery_coupling",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "AC coupling caps PV before battery charging and physical mode uses a separate battery inverter. DC coupling charges before the hybrid inverter and shares its AC output across PV, discharge and export. Legacy mode retains the earlier AC-equivalent approximation.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "topology",
+      "value": "ac_equivalent"
+    },
+    {
+      "bounds": [
+        "legacy",
+        "physical"
+      ],
+      "choices": [
+        "legacy",
+        "physical"
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "System designer uses physical bus routing; legacy preserves earlier scenario dispatch.",
+      "group": "equipment",
+      "name": "pv_dispatch_model",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "System designer uses physical bus routing; legacy preserves earlier scenario dispatch.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "choice",
+      "value": "legacy"
+    },
+    {
+      "bounds": [
+        "auto",
+        "battery_first",
+        "grid_first",
+        "scheduled_hybrid",
+        "dynamic_reserve"
+      ],
+      "choices": [
+        "auto",
+        "battery_first",
+        "grid_first",
+        "scheduled_hybrid",
+        "dynamic_reserve"
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "EMS work mode for the physical dispatch kernel. Auto evaluates battery-first, grid-first, scheduled AM/PM and dynamic clipping reserve for the active system and picks the highest median equity NPV mode; the sidebar stays Auto until a recommendation is applied. Battery-first is the standard self-use inverter mode (Load -> Battery -> Grid). Grid-first exports sub-inverter surplus and only charges from over-inverter DC power (Load -> Clipping Recapture -> Grid -> Battery). Scheduled AM/PM uses grid-first before the switch hour during the configured active months to preserve midday clipping headroom. Dynamic clipping reserve caps morning sub-inverter charging at SoC ceiling = usable capacity minus remaining over-inverter capturable energy.",
+      "group": "equipment",
+      "name": "routing_priority",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "EMS work mode for the physical dispatch kernel. Auto evaluates battery-first, grid-first, scheduled AM/PM and dynamic clipping reserve for the active system and picks the highest median equity NPV mode; the sidebar stays Auto until a recommendation is applied. Battery-first is the standard self-use inverter mode (Load -> Battery -> Grid). Grid-first exports sub-inverter surplus and only charges from over-inverter DC power (Load -> Clipping Recapture -> Grid -> Battery). Scheduled AM/PM uses grid-first before the switch hour during the configured active months to preserve midday clipping headroom. Dynamic clipping reserve caps morning sub-inverter charging at SoC ceiling = usable capacity minus remaining over-inverter capturable energy.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "enum",
+      "value": "auto"
+    },
+    {
+      "bounds": [
+        9,
+        15
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Local solar/clock hour when Scheduled AM/PM mode switches from Feed-in Priority (Grid-First) to Self-Use (Battery-First) during high-irradiance months (Mar-Sep by default).",
+      "group": "equipment",
+      "name": "routing_switch_hour",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        9,
+        15
+      ],
+      "reasoning": "Local solar/clock hour when Scheduled AM/PM mode switches from Feed-in Priority (Grid-First) to Self-Use (Battery-First) during high-irradiance months (Mar-Sep by default).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "hour",
+      "value": 11
+    },
+    {
+      "bounds": [
+        1,
+        12
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Scheduled AM/PM start month (inclusive, fixed UTC+1). A start later than end wraps across December.",
+      "group": "equipment",
+      "name": "scheduled_start_month",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        1,
+        12
+      ],
+      "reasoning": "Scheduled AM/PM start month (inclusive, fixed UTC+1). A start later than end wraps across December.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "month",
+      "value": 3
+    },
+    {
+      "bounds": [
+        1,
+        12
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Scheduled AM/PM end month (inclusive). Outside this span dispatch uses Self-Use 24/7.",
+      "group": "equipment",
+      "name": "scheduled_end_month",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        1,
+        12
+      ],
+      "reasoning": "Scheduled AM/PM end month (inclusive). Outside this span dispatch uses Self-Use 24/7.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "month",
+      "value": 9
+    },
+    {
+      "bounds": [
+        0.5,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "DC to AC conversion efficiency. DC availability is reconstructed from AC-equivalent PVGIS by dividing by this value.",
+      "group": "equipment",
+      "name": "inverter_efficiency",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.5,
+        1
+      ],
+      "reasoning": "DC to AC conversion efficiency. DC availability is reconstructed from AC-equivalent PVGIS by dividing by this value.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.96
+    },
+    {
+      "bounds": [
+        1,
+        3
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Maximum PV DC nameplate / PV inverter AC rating for AC coupling.",
+      "group": "equipment",
+      "name": "ilr_ac_max",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        1,
+        3
+      ],
+      "reasoning": "Maximum PV DC nameplate / PV inverter AC rating for AC coupling.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "ratio",
+      "value": 1.35
+    },
+    {
+      "bounds": [
+        1,
+        3
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Maximum PV DC nameplate / shared hybrid AC rating for DC coupling.",
+      "group": "equipment",
+      "name": "ilr_dc_max",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        1,
+        3
+      ],
+      "reasoning": "Maximum PV DC nameplate / shared hybrid AC rating for DC coupling.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "ratio",
+      "value": 1.7
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Maximum annual DC clipping fraction in every simulated weather and project year for AC coupling.",
+      "group": "equipment",
+      "name": "clipping_ac_max",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "Maximum annual DC clipping fraction in every simulated weather and project year for AC coupling.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.03
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Maximum annual residual DC clipping fraction in every simulated weather and project year for DC coupling.",
+      "group": "equipment",
+      "name": "clipping_dc_max",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "Maximum annual residual DC clipping fraction in every simulated weather and project year for DC coupling.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.04
+    },
+    {
+      "bounds": [
+        0,
+        20
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Dedicated battery inverter AC rating, used only for AC coupling; zero for DC candidates.",
+      "group": "equipment",
+      "name": "battery_inverter_kw",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        20
+      ],
+      "reasoning": "Dedicated battery inverter AC rating, used only for AC coupling; zero for DC candidates.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "kW",
+      "value": 3.0
+    },
+    {
+      "bounds": [
+        0.01,
+        5
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Maximum DC terminal charge/discharge power divided by nominal battery energy.",
+      "group": "equipment",
+      "name": "battery_c_rate_max",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.01,
+        5
+      ],
+      "reasoning": "Maximum DC terminal charge/discharge power divided by nominal battery energy.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "1/hour",
+      "value": 0.5
+    },
+    {
+      "bounds": [
+        0,
+        0.99
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Minimum nominal SoC. Existing battery_kwh remains usable energy; nominal energy = usable / (SoC max - SoC min).",
+      "group": "equipment",
+      "name": "battery_soc_min",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.99
+      ],
+      "reasoning": "Minimum nominal SoC. Existing battery_kwh remains usable energy; nominal energy = usable / (SoC max - SoC min).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.0
+    },
+    {
+      "bounds": [
+        0.01,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Maximum nominal SoC; must exceed minimum SoC.",
+      "group": "equipment",
+      "name": "battery_soc_max",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.01,
+        1
+      ],
+      "reasoning": "Maximum nominal SoC; must exceed minimum SoC.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 1.0
+    },
+    {
+      "bounds": [
+        0.5,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Battery DC charging efficiency; blank derives sqrt(roundtrip_efficiency).",
+      "group": "equipment",
+      "name": "battery_charge_efficiency",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.5,
+        1
+      ],
+      "reasoning": "Battery DC charging efficiency; blank derives sqrt(roundtrip_efficiency).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": null
+    },
+    {
+      "bounds": [
+        0.5,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Battery DC discharging efficiency; blank derives sqrt(roundtrip_efficiency).",
+      "group": "equipment",
+      "name": "battery_discharge_efficiency",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.5,
+        1
+      ],
+      "reasoning": "Battery DC discharging efficiency; blank derives sqrt(roundtrip_efficiency).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": null
+    },
+    {
+      "bounds": [
+        0,
+        null
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Maximum connected PV array nameplate capacity used by system sizing. Separate from inverter AC capacity; blank means use the inverter AC capacity.",
+      "group": "equipment",
+      "name": "pv_max_kwp",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        null
+      ],
+      "reasoning": "Maximum connected PV array nameplate capacity used by system sizing. Separate from inverter AC capacity; blank means use the inverter AC capacity.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "kWp",
+      "value": null
+    },
+    {
+      "bounds": [
+        0,
+        null
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Total usable storage; canonical value retained for existing scenarios.",
+      "group": "equipment",
+      "name": "battery_kwh",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        null
+      ],
+      "reasoning": "Total usable storage; canonical value retained for existing scenarios.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "usable kWh",
+      "value": 5
+    },
+    {
+      "bounds": [
+        0,
+        null
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Count of identical battery modules; total usable capacity is module count times module capacity.",
+      "group": "equipment",
+      "name": "battery_modules",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        null
+      ],
+      "reasoning": "Count of identical battery modules; total usable capacity is module count times module capacity.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "modules",
+      "value": 1
+    },
+    {
+      "bounds": [
+        0,
+        null
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Usable capacity of each battery module.",
+      "group": "equipment",
+      "name": "battery_module_kwh",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        null
+      ],
+      "reasoning": "Usable capacity of each battery module.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "usable kWh/module",
+      "value": 5
+    },
+    {
+      "bounds": null,
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Derive battery capacity from two module sizes; battery_modules remains total count.",
+      "group": "equipment",
+      "name": "battery_mixed_sizes",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Derive battery capacity from two module sizes; battery_modules remains total count.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "boolean",
+      "value": false
+    },
+    {
+      "bounds": [
+        0,
+        null
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Usable capacity of secondary battery modules when mixed sizes are enabled.",
+      "group": "equipment",
+      "name": "battery_secondary_module_kwh",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        null
+      ],
+      "reasoning": "Usable capacity of secondary battery modules when mixed sizes are enabled.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "usable kWh/module",
+      "value": 6.9
+    },
+    {
+      "bounds": [
+        0,
+        null
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Count of second-size modules included in total battery_modules when mixed sizes are enabled.",
+      "group": "equipment",
+      "name": "battery_secondary_modules",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        null
+      ],
+      "reasoning": "Count of second-size modules included in total battery_modules when mixed sizes are enabled.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "modules",
+      "value": 0
+    },
+    {
+      "bounds": [
+        0,
+        10
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Battery charge-input power limit (DC terminals in physical designer); not a manufacturer-verified combined PV/battery rating.",
+      "group": "equipment",
+      "name": "charge_kw",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        10
+      ],
+      "reasoning": "Battery charge-input power limit (DC terminals in physical designer); not a manufacturer-verified combined PV/battery rating.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "kW",
+      "value": 3
+    },
+    {
+      "bounds": [
+        0,
+        20
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Legacy: battery discharge delivered to load. Physical designer: DC terminal discharge limit, additionally constrained by C-rate and the applicable inverter. Modeling bounds are 0–20 kW, not a product rating or equipment selection.",
+      "group": "equipment",
+      "name": "discharge_kw",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        20
+      ],
+      "reasoning": "Legacy: battery discharge delivered to load. Physical designer: DC terminal discharge limit, additionally constrained by C-rate and the applicable inverter. Modeling bounds are 0–20 kW, not a product rating or equipment selection.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "kW",
+      "value": 3
+    },
+    {
+      "bounds": [
+        0.65,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Legacy AC-equivalent round trip. Physical dispatch uses its square root for each DC battery efficiency unless explicitly overridden; inverter losses are separate.",
+      "group": "equipment",
+      "name": "roundtrip_efficiency",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.65,
+        1
+      ],
+      "reasoning": "Legacy AC-equivalent round trip. Physical dispatch uses its square root for each DC battery efficiency unless explicitly overridden; inverter losses are separate.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.9
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Apply local beam shadow once to PVGIS production.",
+      "group": "energy",
+      "name": "shade_strength",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "Apply local beam shadow once to PVGIS production.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 1
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Sensitivity for diffuse blocked light; sky view and strings unmeasured.",
+      "group": "energy",
+      "name": "diffuse_suppression",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "Sensitivity for diffuse blocked light; sky view and strings unmeasured.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0
+    },
+    {
+      "bounds": [
+        0,
+        0.1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "AIKO Neostar 3S+54 first-year warranty loss: 1% of nameplate power; existing PVGIS 14% remains intact.",
+      "group": "aging",
+      "name": "pv_first_year_loss",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.1
+      ],
+      "reasoning": "AIKO Neostar 3S+54 first-year warranty loss: 1% of nameplate power; existing PVGIS 14% remains intact.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.01
+    },
+    {
+      "bounds": [
+        0,
+        0.03
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "AIKO Neostar 3S+54 linear warranty loss after year one: 0.35% of nameplate power per year, years 2–30.",
+      "group": "aging",
+      "name": "pv_annual_fade",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.03
+      ],
+      "reasoning": "AIKO Neostar 3S+54 linear warranty loss after year one: 0.35% of nameplate power per year, years 2–30.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction/year",
+      "value": 0.0035
+    },
+    {
+      "bounds": [
+        0,
+        0.08
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Forecast assumption, not a warranty-derived decay curve.",
+      "group": "aging",
+      "name": "battery_calendar_fade",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.08
+      ],
+      "reasoning": "Forecast assumption, not a warranty-derived decay curve.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction/year",
+      "value": 0.015
+    },
+    {
+      "bounds": [
+        0,
+        0.0003
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Multiplicative usable-capacity reduction per equivalent full cycle.",
+      "group": "aging",
+      "name": "battery_cycle_fade",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.0003
+      ],
+      "reasoning": "Multiplicative usable-capacity reduction per equivalent full cycle.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction/EFC",
+      "value": 5e-05
+    },
+    {
+      "bounds": [
+        0,
+        30
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Zero disables replacement; cost at end of specified year; new battery operates from the following year.",
+      "group": "aging",
+      "name": "battery_replace_year",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        30
+      ],
+      "reasoning": "Zero disables replacement; cost at end of specified year; new battery operates from the following year.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "year",
+      "value": 12
+    },
+    {
+      "bounds": [
+        0,
+        30
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Zero disables replacement.",
+      "group": "aging",
+      "name": "inverter_replace_year",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        30
+      ],
+      "reasoning": "Zero disables replacement.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "year",
+      "value": 13
+    },
+    {
+      "bounds": [
+        1,
+        30
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Year-end cash flows.",
+      "group": "finance",
+      "name": "horizon_years",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        1,
+        30
+      ],
+      "reasoning": "Year-end cash flows.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "years",
+      "value": 20
+    },
+    {
+      "bounds": [
+        0,
+        0.2
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Nominal rate=(1+real rate)*(1+inflation)-1.",
+      "group": "finance",
+      "name": "real_discount_rate",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.2
+      ],
+      "reasoning": "Nominal rate=(1+real rate)*(1+inflation)-1.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction/year",
+      "value": 0.03
+    },
+    {
+      "bounds": [
+        0,
+        0.15
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Applied consistently to nominal costs and real component price paths.",
+      "group": "finance",
+      "name": "inflation",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.15
+      ],
+      "reasoning": "Applied consistently to nominal costs and real component price paths.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction/year",
+      "value": 0.02
+    },
+    {
+      "bounds": [
+        -0.1,
+        0.1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Retail commodity and export market move together.",
+      "group": "prices",
+      "name": "energy_real_escalation",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        -0.1,
+        0.1
+      ],
+      "reasoning": "Retail commodity and export market move together.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction/year",
+      "value": 0
+    },
+    {
+      "bounds": [
+        -0.05,
+        0.05
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Electric network/tax/fixed-cost scenario.",
+      "group": "prices",
+      "name": "regulated_real_escalation",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        -0.05,
+        0.05
+      ],
+      "reasoning": "Electric network/tax/fixed-cost scenario.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction/year",
+      "value": 0
+    },
+    {
+      "bounds": [
+        -0.1,
+        0.1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Gas commodity/regulated variable path scenario.",
+      "group": "prices",
+      "name": "gas_real_escalation",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        -0.1,
+        0.1
+      ],
+      "reasoning": "Gas commodity/regulated variable path scenario.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction/year",
+      "value": 0
+    },
+    {
+      "bounds": [
+        0,
+        0.5
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for retail_commodity; supply profile-specific inputs and verify applicability.",
+      "group": "bill",
+      "name": "retail_commodity",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.5
+      ],
+      "reasoning": "Neutral example for retail_commodity; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/kWh",
+      "value": 0.12
+    },
+    {
+      "bounds": [
+        0,
+        0.5
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for retail_regulated; supply profile-specific inputs and verify applicability.",
+      "group": "bill",
+      "name": "retail_regulated",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.5
+      ],
+      "reasoning": "Neutral example for retail_regulated; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/kWh",
+      "value": 0.05
+    },
+    {
+      "bounds": [
+        0,
+        0.05
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Accisa: national domestic electricity consumption tax, normally 0.0227 EUR per imported kWh, separate from network/system charges and subject to VAT. Italian bill: summary 'Accise e IVA', detailed bill 'IMPOSTE' > 'accisa'. Flat-rate model is appropriate above 3 kW; resident supplies up to 3 kW have consumption-dependent exemptions not modeled here.",
+      "group": "bill",
+      "name": "electric_excise",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.05
+      ],
+      "reasoning": "Accisa: national domestic electricity consumption tax, normally 0.0227 EUR per imported kWh, separate from network/system charges and subject to VAT. Italian bill: summary 'Accise e IVA', detailed bill 'IMPOSTE' > 'accisa'. Flat-rate model is appropriate above 3 kW; resident supplies up to 3 kW have consumption-dependent exemptions not modeled here.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/kWh",
+      "value": 0.0227
+    },
+    {
+      "bounds": [
+        0,
+        0.22
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Electricity VAT scenario. Italian bill: summary 'Accise e IVA', detailed 'TOTALE IVA'.",
+      "group": "bill",
+      "name": "electric_vat",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.22
+      ],
+      "reasoning": "Electricity VAT scenario. Italian bill: summary 'Accise e IVA', detailed 'TOTALE IVA'.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.1
+    },
+    {
+      "bounds": [
+        0,
+        30
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for supplier_fixed_month; supply profile-specific inputs and verify applicability.",
+      "group": "bill",
+      "name": "supplier_fixed_month",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        30
+      ],
+      "reasoning": "Neutral example for supplier_fixed_month; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/month",
+      "value": 8.0
+    },
+    {
+      "bounds": [
+        0,
+        20
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for network_fixed_month; supply profile-specific inputs and verify applicability.",
+      "group": "bill",
+      "name": "network_fixed_month",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        20
+      ],
+      "reasoning": "Neutral example for network_fixed_month; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/month",
+      "value": 2.0
+    },
+    {
+      "bounds": [
+        0,
+        5
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for power_fixed_kw_month; supply profile-specific inputs and verify applicability.",
+      "group": "bill",
+      "name": "power_fixed_kw_month",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        5
+      ],
+      "reasoning": "Neutral example for power_fixed_kw_month; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/kW/month",
+      "value": 2.0
+    },
+    {
+      "bounds": [
+        3,
+        10
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for baseline_power_kw; supply profile-specific inputs and verify applicability.",
+      "group": "bill",
+      "name": "baseline_power_kw",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        3,
+        10
+      ],
+      "reasoning": "Neutral example for baseline_power_kw; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "kW",
+      "value": 3.0
+    },
+    {
+      "bounds": [
+        3,
+        15
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Separate future contracted-power scenario (same bill field as 'Quota potenza').",
+      "group": "bill",
+      "name": "electrified_power_kw",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        3,
+        15
+      ],
+      "reasoning": "Separate future contracted-power scenario (same bill field as 'Quota potenza').",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "kW",
+      "value": 6
+    },
+    {
+      "bounds": [
+        0,
+        0.3
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for export_market_price; supply profile-specific inputs and verify applicability.",
+      "group": "export",
+      "name": "export_market_price",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.3
+      ],
+      "reasoning": "Neutral example for export_market_price; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/kWh",
+      "value": 0.1
+    },
+    {
+      "bounds": [
+        0.3,
+        1.2
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for export_capture_factor; supply profile-specific inputs and verify applicability.",
+      "group": "export",
+      "name": "export_capture_factor",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.3,
+        1.2
+      ],
+      "reasoning": "Neutral example for export_capture_factor; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 1.0
+    },
+    {
+      "bounds": [
+        0.3,
+        2
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Future export-price factor to reach. It starts at 1.0 in the first modeled year, moves linearly to this target over the selected ramp duration, then stays at the target. For example, 0.75 means export prices are 25% lower once the ramp finishes; a value above 1.0 increases them. Inflation and energy escalation are applied separately. This changes export revenue only, not import prices or retail self-consumption.",
+      "group": "export",
+      "name": "actual_price_future_factor",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.3,
+        2
+      ],
+      "reasoning": "Future export-price factor to reach. It starts at 1.0 in the first modeled year, moves linearly to this target over the selected ramp duration, then stays at the target. For example, 0.75 means export prices are 25% lower once the ramp finishes; a value above 1.0 increases them. Inflation and energy escalation are applied separately. This changes export revenue only, not import prices or retail self-consumption.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "multiplier",
+      "value": 1
+    },
+    {
+      "bounds": [
+        1,
+        30
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Number of years for the future export-price factor to reach its target. The factor starts at 1.0 in modeled year 1, moves linearly to the target, and holds there after the ramp; a 10-year duration reaches the target in year 11. Inflation and energy escalation are applied separately. The ramp changes export revenue only, not import prices or retail self-consumption.",
+      "group": "export",
+      "name": "export_price_future_years",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        1,
+        30
+      ],
+      "reasoning": "Number of years for the future export-price factor to reach its target. The factor starts at 1.0 in modeled year 1, moves linearly to the target, and holds there after the ramp; a 10-year duration reaches the target in year 11. Inflation and energy escalation are applied separately. The ramp changes export revenue only, not import prices or retail self-consumption.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "years",
+      "value": 10
+    },
+    {
+      "bounds": [
+        "empirical_csud",
+        "flat_benchmark"
+      ],
+      "choices": [
+        "empirical_csud",
+        "flat_benchmark"
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for export_price_profile; supply profile-specific inputs and verify applicability.",
+      "group": "export",
+      "name": "export_price_profile",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Neutral example for export_price_profile; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "choice",
+      "value": "flat_benchmark"
+    },
+    {
+      "bounds": [
+        "oct2025_sep2026",
+        "calendar_2025"
+      ],
+      "choices": [
+        "oct2025_sep2026",
+        "calendar_2025"
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Empirical GME market data window: default Oct 2025 - Sep 2026 (recent 12 complete months) vs Calendar 2025.",
+      "group": "export",
+      "name": "export_price_window",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Empirical GME market data window: default Oct 2025 - Sep 2026 (recent 12 complete months) vs Calendar 2025.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "choice",
+      "value": "oct2025_sep2026"
+    },
+    {
+      "bounds": [
+        0,
+        5
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for gse_fee_eur_kw_year; supply profile-specific inputs and verify applicability.",
+      "group": "export",
+      "name": "gse_fee_eur_kw_year",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        5
+      ],
+      "reasoning": "Neutral example for gse_fee_eur_kw_year; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/kW/year",
+      "value": 0.7
+    },
+    {
+      "bounds": [
+        0,
+        0.22
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for gse_fee_vat; supply profile-specific inputs and verify applicability.",
+      "group": "export",
+      "name": "gse_fee_vat",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.22
+      ],
+      "reasoning": "Neutral example for gse_fee_vat; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.22
+    },
+    {
+      "bounds": null,
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Annual true-up max(hourly PZO proceeds, PMG*export); eligibility pending.",
+      "group": "export",
+      "name": "pmg_election",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Annual true-up max(hourly PZO proceeds, PMG*export); eligibility pending.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "boolean",
+      "value": true
+    },
+    {
+      "bounds": [
+        0,
+        0.15
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "PMG input to verify for installation year.",
+      "group": "export",
+      "name": "pmg_price",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.15
+      ],
+      "reasoning": "PMG input to verify for installation year.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/kWh",
+      "value": 0.0475
+    },
+    {
+      "bounds": [
+        -0.05,
+        0.1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Nominal PMG scenario separate from wholesale path.",
+      "group": "export",
+      "name": "pmg_nominal_escalation",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        -0.05,
+        0.1
+      ],
+      "reasoning": "Nominal PMG scenario separate from wholesale path.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction/year",
+      "value": 0
+    },
+    {
+      "bounds": [
+        0,
+        0.5
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "User scenario; marginal rate/tax treatment still pending.",
+      "group": "tax",
+      "name": "export_irpef",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.5
+      ],
+      "reasoning": "User scenario; marginal rate/tax treatment still pending.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.33
+    },
+    {
+      "bounds": [
+        0,
+        0.05
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for regional_additional_tax; supply profile-specific inputs and verify applicability.",
+      "group": "tax",
+      "name": "regional_additional_tax",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.05
+      ],
+      "reasoning": "Neutral example for regional_additional_tax; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.0
+    },
+    {
+      "bounds": [
+        0,
+        0.015
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for municipal_additional_tax; supply profile-specific inputs and verify applicability.",
+      "group": "tax",
+      "name": "municipal_additional_tax",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.015
+      ],
+      "reasoning": "Neutral example for municipal_additional_tax; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.0
+    },
+    {
+      "bounds": null,
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for export_fee_tax_deductible; supply profile-specific inputs and verify applicability.",
+      "group": "tax",
+      "name": "export_fee_tax_deductible",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Neutral example for export_fee_tax_deductible; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "boolean",
+      "value": false
+    },
+    {
+      "bounds": [
+        0,
+        0.5
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for deduction_rate; supply profile-specific inputs and verify applicability.",
+      "group": "tax",
+      "name": "deduction_rate",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.5
+      ],
+      "reasoning": "Neutral example for deduction_rate; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.0
+    },
+    {
+      "bounds": [
+        0,
+        100000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for deduction_tax_capacity; supply profile-specific inputs and verify applicability.",
+      "group": "tax",
+      "name": "deduction_tax_capacity",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        100000
+      ],
+      "reasoning": "Neutral example for deduction_tax_capacity; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/year",
+      "value": 0.0
+    },
+    {
+      "bounds": [
+        1,
+        10
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Ten equal nominal annual installments.",
+      "group": "tax",
+      "name": "deduction_start_year",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        1,
+        10
+      ],
+      "reasoning": "Ten equal nominal annual installments.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "year",
+      "value": 1
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Solar capex eligibility; conversion capex excluded from this deduction model.",
+      "group": "tax",
+      "name": "deduction_eligible_fraction",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "Solar capex eligibility; conversion capex excluded from this deduction model.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 1
+    },
+    {
+      "bounds": [
+        0,
+        0.22
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Added only when quote_vat_included is false.",
+      "group": "cost",
+      "name": "installation_vat",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.22
+      ],
+      "reasoning": "Added only when quote_vat_included is false.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.1
+    },
+    {
+      "bounds": [
+        0,
+        15000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for pv_fixed_cost; supply profile-specific inputs and verify applicability.",
+      "group": "cost",
+      "name": "pv_fixed_cost",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        15000
+      ],
+      "reasoning": "Neutral example for pv_fixed_cost; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR",
+      "value": 1000.0
+    },
+    {
+      "bounds": [
+        0,
+        5000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for pv_cost_kwp; supply profile-specific inputs and verify applicability.",
+      "group": "cost",
+      "name": "pv_cost_kwp",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        5000
+      ],
+      "reasoning": "Neutral example for pv_cost_kwp; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/kWp",
+      "value": 1000.0
+    },
+    {
+      "bounds": [
+        0,
+        2000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for battery_cost_kwh; supply profile-specific inputs and verify applicability.",
+      "group": "cost",
+      "name": "battery_cost_kwh",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        2000
+      ],
+      "reasoning": "Neutral example for battery_cost_kwh; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/usable kWh",
+      "value": 500.0
+    },
+    {
+      "bounds": [
+        0,
+        0.5
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Proposed supplier premium when deduction positive; applies to estimated cost only, never actual quote.",
+      "group": "cost",
+      "name": "deduction_price_premium",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.5
+      ],
+      "reasoning": "Proposed supplier premium when deduction positive; applies to estimated cost only, never actual quote.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0
+    },
+    {
+      "bounds": [
+        0,
+        150000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Optional solar+storage total override; conversion excluded.",
+      "group": "cost",
+      "name": "quote_total",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        150000
+      ],
+      "reasoning": "Optional solar+storage total override; conversion excluded.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR",
+      "value": null
+    },
+    {
+      "bounds": null,
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Quote scope must be checked against itemized installer prices.",
+      "group": "cost",
+      "name": "quote_vat_included",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Quote scope must be checked against itemized installer prices.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "boolean",
+      "value": true
+    },
+    {
+      "bounds": [
+        0,
+        2000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Optional extra mounting or layout installation cost per panel on south roof.",
+      "group": "cost",
+      "name": "south_extra_cost_per_panel",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        2000
+      ],
+      "reasoning": "Optional extra mounting or layout installation cost per panel on south roof.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/panel",
+      "value": 0.0
+    },
+    {
+      "bounds": [
+        0,
+        2000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Optional extra mounting or layout installation cost per panel on west roof.",
+      "group": "cost",
+      "name": "west_extra_cost_per_panel",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        2000
+      ],
+      "reasoning": "Optional extra mounting or layout installation cost per panel on west roof.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/panel",
+      "value": 0.0
+    },
+    {
+      "bounds": [
+        0,
+        2000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Optional extra mounting or layout installation cost per panel on east roof.",
+      "group": "cost",
+      "name": "east_extra_cost_per_panel",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        2000
+      ],
+      "reasoning": "Optional extra mounting or layout installation cost per panel on east roof.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/panel",
+      "value": 0.0
+    },
+    {
+      "bounds": [
+        0,
+        2000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Optional extra mounting or layout installation cost per panel on dormer roof.",
+      "group": "cost",
+      "name": "dormer_extra_cost_per_panel",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        2000
+      ],
+      "reasoning": "Optional extra mounting or layout installation cost per panel on dormer roof.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/panel",
+      "value": 0.0
+    },
+    {
+      "bounds": [
+        0,
+        2000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Optional extra mounting or ballast installation cost per panel on flat roof.",
+      "group": "cost",
+      "name": "flat_extra_cost_per_panel",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        2000
+      ],
+      "reasoning": "Optional extra mounting or ballast installation cost per panel on flat roof.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/panel",
+      "value": 0.0
+    },
+    {
+      "bounds": [
+        0,
+        2000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Optional extra mounting or layout installation cost per panel on secondary south roof.",
+      "group": "cost",
+      "name": "secondary_south_extra_cost_per_panel",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        2000
+      ],
+      "reasoning": "Optional extra mounting or layout installation cost per panel on secondary south roof.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/panel",
+      "value": 0.0
+    },
+    {
+      "bounds": [
+        0,
+        20000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Optional explicit unit purchase cost for primary battery modules; replaces battery_module_kwh * battery_cost_kwh when set.",
+      "group": "cost",
+      "name": "battery_module_cost_override",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        20000
+      ],
+      "reasoning": "Optional explicit unit purchase cost for primary battery modules; replaces battery_module_kwh * battery_cost_kwh when set.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/module",
+      "value": null
+    },
+    {
+      "bounds": [
+        0,
+        20000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Optional explicit unit purchase cost for secondary battery modules; replaces battery_secondary_module_kwh * battery_cost_kwh when set.",
+      "group": "cost",
+      "name": "battery_secondary_module_cost_override",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        20000
+      ],
+      "reasoning": "Optional explicit unit purchase cost for secondary battery modules; replaces battery_secondary_module_kwh * battery_cost_kwh when set.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/module",
+      "value": null
+    },
+    {
+      "bounds": [
+        0,
+        5000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Optional extra installation or hardware cost per primary battery module.",
+      "group": "cost",
+      "name": "battery_module_extra_cost",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        5000
+      ],
+      "reasoning": "Optional extra installation or hardware cost per primary battery module.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/module",
+      "value": 0.0
+    },
+    {
+      "bounds": [
+        0,
+        5000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Optional extra installation or hardware cost per secondary battery module.",
+      "group": "cost",
+      "name": "battery_secondary_module_extra_cost",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        5000
+      ],
+      "reasoning": "Optional extra installation or hardware cost per secondary battery module.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/module",
+      "value": 0.0
+    },
+    {
+      "bounds": [
+        0,
+        1000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Operations/maintenance scenario.",
+      "group": "cost",
+      "name": "om_annual",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1000
+      ],
+      "reasoning": "Operations/maintenance scenario.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/year",
+      "value": 100
+    },
+    {
+      "bounds": [
+        0,
+        500
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Incremental PV insurance scenario.",
+      "group": "cost",
+      "name": "insurance_annual",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        500
+      ],
+      "reasoning": "Incremental PV insurance scenario.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/year",
+      "value": 0
+    },
+    {
+      "bounds": [
+        0,
+        500
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Incremental cleaning scenario.",
+      "group": "cost",
+      "name": "cleaning_annual",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        500
+      ],
+      "reasoning": "Incremental cleaning scenario.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/year",
+      "value": 0
+    },
+    {
+      "bounds": [
+        0,
+        10000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "PLACEHOLDER installed replacement cost in current euros.",
+      "group": "cost",
+      "name": "inverter_replacement_cost",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        10000
+      ],
+      "reasoning": "PLACEHOLDER installed replacement cost in current euros.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "placeholder",
+      "unit": "EUR",
+      "value": 1200
+    },
+    {
+      "bounds": [
+        0,
+        2000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "PLACEHOLDER replacement cost in current euros.",
+      "group": "cost",
+      "name": "battery_replacement_cost_kwh",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        2000
+      ],
+      "reasoning": "PLACEHOLDER replacement cost in current euros.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "placeholder",
+      "unit": "EUR/kWh",
+      "value": 250
+    },
+    {
+      "bounds": [
+        0,
+        0.5
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Terminal solar asset value relative to initial capex, current euros.",
+      "group": "finance",
+      "name": "residual_fraction",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.5
+      ],
+      "reasoning": "Terminal solar asset value relative to initial capex, current euros.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Financed solar capex share; unlevered and equity metrics separated.",
+      "group": "finance",
+      "name": "loan_fraction",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "Financed solar capex share; unlevered and equity metrics separated.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0
+    },
+    {
+      "bounds": [
+        "fraction",
+        "amount"
+      ],
+      "choices": [
+        "fraction",
+        "amount"
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Choose a loan share or an absolute loan principal amount; the other input is inactive.",
+      "group": "finance",
+      "name": "loan_mode",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Choose a loan share or an absolute loan principal amount; the other input is inactive.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "mode",
+      "value": "fraction"
+    },
+    {
+      "bounds": [
+        0,
+        200000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for loan_amount; supply profile-specific inputs and verify applicability.",
+      "group": "finance",
+      "name": "loan_amount",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        200000
+      ],
+      "reasoning": "Neutral example for loan_amount; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR",
+      "value": 10000.0
+    },
+    {
+      "bounds": [
+        0,
+        100000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for loan_upfront_fees_or_tax; supply profile-specific inputs and verify applicability.",
+      "group": "finance",
+      "name": "loan_upfront_fees_or_tax",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        100000
+      ],
+      "reasoning": "Neutral example for loan_upfront_fees_or_tax; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR",
+      "value": 0.0
+    },
+    {
+      "bounds": [
+        0,
+        100000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Optional maximum scheduled monthly loan instalment for the loan amount search; blank means no limit.",
+      "group": "finance",
+      "name": "loan_max_monthly_payment",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        100000
+      ],
+      "reasoning": "Optional maximum scheduled monthly loan instalment for the loan amount search; blank means no limit.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/month",
+      "value": null
+    },
+    {
+      "bounds": null,
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Include electrification equipment and gas disconnection capex in the loan and financed package cash flows. Electrification remains excluded from the modeled tax deduction basis.",
+      "group": "finance",
+      "name": "loan_include_electrification",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Include electrification equipment and gas disconnection capex in the loan and financed package cash flows. Electrification remains excluded from the modeled tax deduction basis.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "boolean",
+      "value": false
+    },
+    {
+      "bounds": [
+        0,
+        0.3
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for loan_apr; supply profile-specific inputs and verify applicability.",
+      "group": "finance",
+      "name": "loan_apr",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.3
+      ],
+      "reasoning": "Neutral example for loan_apr; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction/year",
+      "value": 0.05
+    },
+    {
+      "bounds": [
+        1,
+        30
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Debt service continues to maturity; remaining debt settles at horizon.",
+      "group": "finance",
+      "name": "loan_years",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        1,
+        30
+      ],
+      "reasoning": "Debt service continues to maturity; remaining debt settles at horizon.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "years",
+      "value": 10
+    },
+    {
+      "bounds": [
+        "baseline",
+        "electrified",
+        "ev"
+      ],
+      "choices": [
+        "baseline",
+        "electrified",
+        "ev"
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "EV scenario includes electrification plus EV home charging.",
+      "group": "loads",
+      "name": "load_scenario",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "EV scenario includes electrification plus EV home charging.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "scenario",
+      "value": "baseline"
+    },
+    {
+      "bounds": [
+        0.5,
+        2
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Measured electrical-load sensitivity.",
+      "group": "loads",
+      "name": "load_growth",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.5,
+        2
+      ],
+      "reasoning": "Measured electrical-load sensitivity.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "multiplier",
+      "value": 1
+    },
+    {
+      "bounds": [
+        1.0,
+        3.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Summer AC electricity multiplier (default 1.0 = unchanged, e.g. 1.3 = +30% cooling). Baseline cooling is estimated from measured household demand using August mean daily kWh minus October mean daily kWh across June–September (note: this seasonal difference proxy is an estimate that may include non-AC seasonal variations). Incremental electricity (multiplier - 1) × baseline AC is distributed across cooling degree hours above 24°C.",
+      "group": "loads",
+      "name": "summer_ac_multiplier",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        1.0,
+        3.0
+      ],
+      "reasoning": "Summer AC electricity multiplier (default 1.0 = unchanged, e.g. 1.3 = +30% cooling). Baseline cooling is estimated from measured household demand using August mean daily kWh minus October mean daily kWh across June–September (note: this seasonal difference proxy is an estimate that may include non-AC seasonal variations). Incremental electricity (multiplier - 1) × baseline AC is distributed across cooling degree hours above 24°C.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "multiplier",
+      "value": 1.0
+    },
+    {
+      "bounds": [
+        "civil",
+        "standard"
+      ],
+      "choices": [
+        "civil",
+        "standard"
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Naive 96-interval export; both mappings conserve measured monthly energy.",
+      "group": "loads",
+      "name": "timezone_mode",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Naive 96-interval export; both mappings conserve measured monthly energy.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "mapping",
+      "value": "civil"
+    },
+    {
+      "bounds": [
+        0,
+        null
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for summer_gas_base; supply profile-specific inputs and verify applicability.",
+      "group": "loads",
+      "name": "summer_gas_base",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        null
+      ],
+      "reasoning": "Neutral example for summer_gas_base; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "Smc/month",
+      "value": 20.0
+    },
+    {
+      "bounds": [
+        15,
+        40
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for cooking_smc_annual; supply profile-specific inputs and verify applicability.",
+      "group": "loads",
+      "name": "cooking_smc_annual",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        15,
+        40
+      ],
+      "reasoning": "Neutral example for cooking_smc_annual; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "Smc/year",
+      "value": 20.0
+    },
+    {
+      "bounds": [
+        10,
+        12
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for gas_pcs; supply profile-specific inputs and verify applicability.",
+      "group": "loads",
+      "name": "gas_pcs",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        10,
+        12
+      ],
+      "reasoning": "Neutral example for gas_pcs; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "kWh/Smc",
+      "value": 11.0
+    },
+    {
+      "bounds": [
+        0.65,
+        0.9
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for boiler_efficiency; supply profile-specific inputs and verify applicability.",
+      "group": "loads",
+      "name": "boiler_efficiency",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.65,
+        0.9
+      ],
+      "reasoning": "Neutral example for boiler_efficiency; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.8
+    },
+    {
+      "bounds": [
+        0.3,
+        0.6
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Useful gas cooking heat.",
+      "group": "loads",
+      "name": "gas_cooking_efficiency",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.3,
+        0.6
+      ],
+      "reasoning": "Useful gas cooking heat.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.45
+    },
+    {
+      "bounds": [
+        0.75,
+        0.95
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Cooking electricity.",
+      "group": "loads",
+      "name": "induction_efficiency",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.75,
+        0.95
+      ],
+      "reasoning": "Cooking electricity.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.85
+    },
+    {
+      "bounds": [
+        0.9,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "DHW modeled as electrical resistance, not a heat pump.",
+      "group": "loads",
+      "name": "dhw_resistance_efficiency",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.9,
+        1
+      ],
+      "reasoning": "DHW modeled as electrical resistance, not a heat pump.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.98
+    },
+    {
+      "bounds": [
+        "resistance",
+        "heat_pump"
+      ],
+      "choices": [
+        "resistance",
+        "heat_pump"
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "DHW equipment assumption; select resistance efficiency or heat-pump SCOP.",
+      "group": "loads",
+      "name": "dhw_heating_type",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "DHW equipment assumption; select resistance efficiency or heat-pump SCOP.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "choice",
+      "value": "resistance"
+    },
+    {
+      "bounds": [
+        1,
+        8
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Seasonal efficiency of a dedicated DHW heat pump.",
+      "group": "loads",
+      "name": "dhw_scop",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        1,
+        8
+      ],
+      "reasoning": "Seasonal efficiency of a dedicated DHW heat pump.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "kWh heat/kWh electricity",
+      "value": 3.0
+    },
+    {
+      "bounds": [
+        1,
+        8
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for scop; supply profile-specific inputs and verify applicability.",
+      "group": "loads",
+      "name": "scop",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        1,
+        8
+      ],
+      "reasoning": "Neutral example for scop; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "kWh heat/kWh electricity",
+      "value": 4.0
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Fixed shiftable DHW fraction scheduled 11-15 local standard hours.",
+      "group": "loads",
+      "name": "dhw_midday_fraction",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "Fixed shiftable DHW fraction scheduled 11-15 local standard hours.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.5
+    },
+    {
+      "bounds": [
+        12,
+        22
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Outdoor degree-hour balance-temperature threshold; distinct from the indoor comfort setpoint.",
+      "group": "loads",
+      "name": "heating_balance_temp",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        12,
+        22
+      ],
+      "reasoning": "Outdoor degree-hour balance-temperature threshold; distinct from the indoor comfort setpoint.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "C",
+      "value": 18
+    },
+    {
+      "bounds": [
+        "scheduled",
+        "continuous"
+      ],
+      "choices": [
+        "scheduled",
+        "continuous"
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Space-heating schedule mode: \"scheduled\" restricts space-heating heat pump operation to permitted daily clock windows (morning and afternoon/evening); \"continuous\" restores unconstrained 24h temperature-weighted operation. Both conserve the exact monthly heating-electricity budget.",
+      "group": "loads",
+      "name": "heating_schedule_mode",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Space-heating schedule mode: \"scheduled\" restricts space-heating heat pump operation to permitted daily clock windows (morning and afternoon/evening); \"continuous\" restores unconstrained 24h temperature-weighted operation. Both conserve the exact monthly heating-electricity budget.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "choice",
+      "value": "scheduled"
+    },
+    {
+      "bounds": null,
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Space-heating operating windows (start-inclusive, end-exclusive local clock minutes from 0..1440). Empty schedule allows draft UI configuration.",
+      "group": "loads",
+      "name": "ac_heating_windows",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Space-heating operating windows (start-inclusive, end-exclusive local clock minutes from 0..1440). Empty schedule allows draft UI configuration.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "windows",
+      "value": [
+        {
+          "end_minute": 480,
+          "id": "morning",
+          "start_minute": 360
+        },
+        {
+          "end_minute": 1200,
+          "id": "evening",
+          "start_minute": 960
+        }
+      ]
+    },
+    {
+      "bounds": [
+        0,
+        null
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Additional useful space-heating demand for AC heat pump operation as a percentage of historical gas heating displacement. Sensitivity at fixed SCOP and operating hours; does not model indoor temperature, comfort, or equipment adequacy.",
+      "group": "loads",
+      "name": "ac_heating_additional_demand_pct",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        null
+      ],
+      "reasoning": "Additional useful space-heating demand for AC heat pump operation as a percentage of historical gas heating displacement. Sensitivity at fixed SCOP and operating hours; does not model indoor temperature, comfort, or equipment adequacy.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "%",
+      "value": 0
+    },
+    {
+      "bounds": [
+        0,
+        40000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "EV mobility benefit and vehicle purchase excluded from PV economics.",
+      "group": "loads",
+      "name": "ev_km_annual",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        40000
+      ],
+      "reasoning": "EV mobility benefit and vehicle purchase excluded from PV economics.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "km/year",
+      "value": 7500
+    },
+    {
+      "bounds": [
+        10,
+        25
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Vehicle battery energy consumption.",
+      "group": "loads",
+      "name": "ev_kwh_100km",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        10,
+        25
+      ],
+      "reasoning": "Vehicle battery energy consumption.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "kWh/100km",
+      "value": 15
+    },
+    {
+      "bounds": [
+        0.7,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Wall-to-vehicle efficiency.",
+      "group": "loads",
+      "name": "ev_charge_efficiency",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.7,
+        1
+      ],
+      "reasoning": "Wall-to-vehicle efficiency.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.9
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Fraction of charging supplied at home.",
+      "group": "loads",
+      "name": "ev_home_fraction",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "Fraction of charging supplied at home.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 1
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Home charging at 11-16 vs 18-23; availability unverified.",
+      "group": "loads",
+      "name": "ev_day_fraction",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "Home charging at 11-16 vs 18-23; availability unverified.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.2
+    },
+    {
+      "bounds": [
+        1,
+        30
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "EV charging starts in this project year.",
+      "group": "loads",
+      "name": "ev_start_year",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        1,
+        30
+      ],
+      "reasoning": "EV charging starts in this project year.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "year",
+      "value": 1
+    },
+    {
+      "bounds": [
+        0,
+        20000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "PROPOSED conversion equipment/installation cost; no quote.",
+      "group": "loads",
+      "name": "electrification_capex",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        20000
+      ],
+      "reasoning": "PROPOSED conversion equipment/installation cost; no quote.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR",
+      "value": 6000
+    },
+    {
+      "bounds": null,
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Include electrification equipment CAPEX as an equipment cost in baseline scenario; gas disconnection is excluded and gas service is retained.",
+      "group": "loads",
+      "name": "electrification_capex_include_baseline",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Include electrification equipment CAPEX as an equipment cost in baseline scenario; gas disconnection is excluded and gas service is retained.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "boolean",
+      "value": false
+    },
+    {
+      "bounds": [
+        0,
+        1000
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "PROPOSED disconnection cost; no quote.",
+      "group": "loads",
+      "name": "gas_disconnect_cost",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1000
+      ],
+      "reasoning": "PROPOSED disconnection cost; no quote.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR",
+      "value": 150
+    },
+    {
+      "bounds": [
+        0,
+        2
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Pre-tax gas commodity scenario price per Smc.",
+      "group": "gas",
+      "name": "gas_commodity",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        2
+      ],
+      "reasoning": "Pre-tax gas commodity scenario price per Smc.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/Smc",
+      "value": 0.5
+    },
+    {
+      "bounds": [
+        0,
+        2
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Pre-tax network and system charges; an explicit flat approximation.",
+      "group": "gas",
+      "name": "gas_regulated",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        2
+      ],
+      "reasoning": "Pre-tax network and system charges; an explicit flat approximation.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/Smc",
+      "value": 0.4
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Pre-tax combined supplier and network fixed charge per day.",
+      "group": "gas",
+      "name": "gas_fixed_day",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "Pre-tax combined supplier and network fixed charge per day.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/day",
+      "value": 0.3
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "National gas excise rate for 0–120 Smc/year (Mezzogiorno/non-industrial).",
+      "group": "gas",
+      "name": "gas_excise_0_120",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "National gas excise rate for 0–120 Smc/year (Mezzogiorno/non-industrial).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/Smc",
+      "value": 0.038
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "National gas excise rate for 120–480 Smc/year (Mezzogiorno/non-industrial).",
+      "group": "gas",
+      "name": "gas_excise_120_480",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "National gas excise rate for 120–480 Smc/year (Mezzogiorno/non-industrial).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/Smc",
+      "value": 0.135
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "National gas excise rate for 480–1560 Smc/year (Mezzogiorno/non-industrial).",
+      "group": "gas",
+      "name": "gas_excise_480_1560",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "National gas excise rate for 480–1560 Smc/year (Mezzogiorno/non-industrial).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/Smc",
+      "value": 0.12
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "National gas excise rate over 1560 Smc/year (Mezzogiorno/non-industrial).",
+      "group": "gas",
+      "name": "gas_excise_over_1560",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "National gas excise rate over 1560 Smc/year (Mezzogiorno/non-industrial).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/Smc",
+      "value": 0.15
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Campania regional gas excise surcharge (ARISGAN) for 0–120 Smc/year.",
+      "group": "gas",
+      "name": "gas_regional_0_120",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "Campania regional gas excise surcharge (ARISGAN) for 0–120 Smc/year.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/Smc",
+      "value": 0.019
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Campania regional gas excise surcharge (ARISGAN) over 120 Smc/year.",
+      "group": "gas",
+      "name": "gas_regional_over_120",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "Campania regional gas excise surcharge (ARISGAN) over 120 Smc/year.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/Smc",
+      "value": 0.031
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Reduced VAT rate for natural gas (applies to first 480 Smc/year variable consumption including excise and surcharge).",
+      "group": "gas",
+      "name": "gas_vat_reduced",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "Reduced VAT rate for natural gas (applies to first 480 Smc/year variable consumption including excise and surcharge).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.1
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Standard VAT rate for natural gas (applies to variable consumption over 480 Smc/year and all fixed charges).",
+      "group": "gas",
+      "name": "gas_vat_standard",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "Standard VAT rate for natural gas (applies to variable consumption over 480 Smc/year and all fixed charges).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.22
+    },
+    {
+      "bounds": null,
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Excluded from base case; actual community matching/terms absent.",
+      "group": "cer",
+      "name": "cer_enabled",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Excluded from base case; actual community matching/terms absent.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "boolean",
+      "value": false
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Modeled fraction, not computed hourly community sharing.",
+      "group": "cer",
+      "name": "cer_eligible_export_share",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "Modeled fraction, not computed hourly community sharing.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0
+    },
+    {
+      "bounds": [
+        0,
+        0.12
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Conditional tariff input: actual plant/market terms require verification.",
+      "group": "cer",
+      "name": "cer_tariff",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        0.12
+      ],
+      "reasoning": "Conditional tariff input: actual plant/market terms require verification.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/kWh",
+      "value": 0.1
+    },
+    {
+      "bounds": [
+        0,
+        1
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Community allocation to user; unknown until contract.",
+      "group": "cer",
+      "name": "cer_user_allocation",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        1
+      ],
+      "reasoning": "Community allocation to user; unknown until contract.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0
+    },
+    {
+      "bounds": null,
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Neutral example for dormer_south_proxy; supply profile-specific inputs and verify applicability.",
+      "group": "layout",
+      "name": "dormer_south_proxy",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Neutral example for dormer_south_proxy; supply profile-specific inputs and verify applicability.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "boolean",
+      "value": false
+    },
+    {
+      "bounds": [
+        "nominal",
+        "real"
+      ],
+      "choices": [
+        "nominal",
+        "real"
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Real display deflates nominal flows using the same inflation assumption.",
+      "group": "finance",
+      "name": "cashflow_mode",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Real display deflates nominal flows using the same inflation assumption.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "mode",
+      "value": "nominal"
+    },
+    {
+      "bounds": null,
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Planning a heat pump",
+      "group": "heat_pump",
+      "name": "planning_heat_pump",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Planning a heat pump",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "boolean",
+      "value": false
+    },
+    {
+      "bounds": [
+        0.5,
+        50.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Nominal heat pump thermal capacity at A7/W35 reference condition (illustrative model input, no selected equipment, not verified capacity).",
+      "group": "heat_pump",
+      "name": "hp_nominal_kw",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.5,
+        50.0
+      ],
+      "reasoning": "Nominal heat pump thermal capacity at A7/W35 reference condition (illustrative model input, no selected equipment, not verified capacity).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "kW",
+      "value": 9.0
+    },
+    {
+      "bounds": null,
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Weather-sensitive degree-day space heating demand scaling.",
+      "group": "heat_pump",
+      "name": "hp_weather_sensitive",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Weather-sensitive degree-day space heating demand scaling.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "boolean",
+      "value": false
+    },
+    {
+      "bounds": [
+        10.0,
+        30.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Indoor heating comfort setpoint temperature.",
+      "group": "heat_pump",
+      "name": "hp_indoor_temp",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        10.0,
+        30.0
+      ],
+      "reasoning": "Indoor heating comfort setpoint temperature.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "C",
+      "value": 18.0
+    },
+    {
+      "bounds": [
+        0.0,
+        15.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Indoor temperature setback reduction during unheated hours.",
+      "group": "heat_pump",
+      "name": "hp_setback_delta",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.0,
+        15.0
+      ],
+      "reasoning": "Indoor temperature setback reduction during unheated hours.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "C",
+      "value": 0.0
+    },
+    {
+      "bounds": [
+        "continuous",
+        "scheduled"
+      ],
+      "choices": [
+        "continuous",
+        "scheduled"
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Heat pump space heating operating schedule mode (continuous 24h or scheduled daily windows).",
+      "group": "heat_pump",
+      "name": "hp_schedule_mode",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Heat pump space heating operating schedule mode (continuous 24h or scheduled daily windows).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "choice",
+      "value": "continuous"
+    },
+    {
+      "bounds": [
+        0,
+        23
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Heat pump morning space heating window start hour (inclusive).",
+      "group": "heat_pump",
+      "name": "hp_morning_on",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        23
+      ],
+      "reasoning": "Heat pump morning space heating window start hour (inclusive).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "hour",
+      "value": 6
+    },
+    {
+      "bounds": [
+        0,
+        23
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Heat pump morning space heating window stop hour (exclusive).",
+      "group": "heat_pump",
+      "name": "hp_morning_off",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        23
+      ],
+      "reasoning": "Heat pump morning space heating window stop hour (exclusive).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "hour",
+      "value": 8
+    },
+    {
+      "bounds": [
+        0,
+        23
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Heat pump evening space heating window start hour (inclusive).",
+      "group": "heat_pump",
+      "name": "hp_evening_on",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        23
+      ],
+      "reasoning": "Heat pump evening space heating window start hour (inclusive).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "hour",
+      "value": 16
+    },
+    {
+      "bounds": [
+        0,
+        23
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Heat pump evening space heating window stop hour (exclusive).",
+      "group": "heat_pump",
+      "name": "hp_evening_off",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        23
+      ],
+      "reasoning": "Heat pump evening space heating window stop hour (exclusive).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "hour",
+      "value": 20
+    },
+    {
+      "bounds": [
+        -30.0,
+        15.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Outdoor design temperature at cold design point for weather compensation.",
+      "group": "heat_pump",
+      "name": "hp_curve_outdoor_cold",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        -30.0,
+        15.0
+      ],
+      "reasoning": "Outdoor design temperature at cold design point for weather compensation.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "C",
+      "value": -5.0
+    },
+    {
+      "bounds": [
+        0.0,
+        30.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Outdoor mild temperature for weather compensation.",
+      "group": "heat_pump",
+      "name": "hp_curve_outdoor_mild",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.0,
+        30.0
+      ],
+      "reasoning": "Outdoor mild temperature for weather compensation.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "C",
+      "value": 15.0
+    },
+    {
+      "bounds": [
+        25.0,
+        80.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Flow temperature at outdoor cold design point.",
+      "group": "heat_pump",
+      "name": "hp_curve_flow_cold",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        25.0,
+        80.0
+      ],
+      "reasoning": "Flow temperature at outdoor cold design point.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "C",
+      "value": 55.0
+    },
+    {
+      "bounds": [
+        20.0,
+        60.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Flow temperature at outdoor mild design point.",
+      "group": "heat_pump",
+      "name": "hp_curve_flow_mild",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        20.0,
+        60.0
+      ],
+      "reasoning": "Flow temperature at outdoor mild design point.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "C",
+      "value": 35.0
+    },
+    {
+      "bounds": [
+        0.5,
+        100.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Provisional total installed radiator capacity at Delta-T 50 (EN 442 rating; installed emitters unverified).",
+      "group": "heat_pump",
+      "name": "hp_radiator_dt50_kw",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.5,
+        100.0
+      ],
+      "reasoning": "Provisional total installed radiator capacity at Delta-T 50 (EN 442 rating; installed emitters unverified).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "kW",
+      "value": 10.0
+    },
+    {
+      "bounds": [
+        1.0,
+        2.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Radiator output temperature exponent n (provisional EN 442 default 1.3).",
+      "group": "heat_pump",
+      "name": "hp_radiator_exponent",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        1.0,
+        2.0
+      ],
+      "reasoning": "Radiator output temperature exponent n (provisional EN 442 default 1.3).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "exponent",
+      "value": 1.3
+    },
+    {
+      "bounds": [
+        0.5,
+        30.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Radiator return temperature drop (flow minus return temperature).",
+      "group": "heat_pump",
+      "name": "hp_return_drop",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.5,
+        30.0
+      ],
+      "reasoning": "Radiator return temperature drop (flow minus return temperature).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "C",
+      "value": 5.0
+    },
+    {
+      "bounds": [
+        10.0,
+        2000.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "DHW cylinder storage volume.",
+      "group": "heat_pump",
+      "name": "hp_tank_litres",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        10.0,
+        2000.0
+      ],
+      "reasoning": "DHW cylinder storage volume.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "litres",
+      "value": 200.0
+    },
+    {
+      "bounds": [
+        30.0,
+        85.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "DHW cylinder target storage temperature.",
+      "group": "heat_pump",
+      "name": "hp_tank_target_temp",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        30.0,
+        85.0
+      ],
+      "reasoning": "DHW cylinder target storage temperature.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "C",
+      "value": 50.0
+    },
+    {
+      "bounds": [
+        0.0,
+        40.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Cold water mains inlet supply temperature.",
+      "group": "heat_pump",
+      "name": "hp_tank_inlet_temp",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.0,
+        40.0
+      ],
+      "reasoning": "Cold water mains inlet supply temperature.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "C",
+      "value": 15.0
+    },
+    {
+      "bounds": [
+        -20.0,
+        60.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Ambient air temperature surrounding DHW storage cylinder.",
+      "group": "heat_pump",
+      "name": "hp_tank_ambient_temp",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        -20.0,
+        60.0
+      ],
+      "reasoning": "Ambient air temperature surrounding DHW storage cylinder.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "C",
+      "value": 20.0
+    },
+    {
+      "bounds": [
+        0.0,
+        10.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "DHW cylinder standing heat loss coefficient.",
+      "group": "heat_pump",
+      "name": "hp_tank_loss_w_k",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.0,
+        10.0
+      ],
+      "reasoning": "DHW cylinder standing heat loss coefficient.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "W/K",
+      "value": 1.0
+    },
+    {
+      "bounds": [
+        0.5,
+        25.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "DHW tank thermostat hysteresis deadband.",
+      "group": "heat_pump",
+      "name": "hp_tank_deadband",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.5,
+        25.0
+      ],
+      "reasoning": "DHW tank thermostat hysteresis deadband.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "C",
+      "value": 5.0
+    },
+    {
+      "bounds": [
+        25.0,
+        70.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Minimum hot water service delivery temperature threshold.",
+      "group": "heat_pump",
+      "name": "hp_tank_service_temp",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        25.0,
+        70.0
+      ],
+      "reasoning": "Minimum hot water service delivery temperature threshold.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "C",
+      "value": 40.0
+    },
+    {
+      "bounds": [
+        10.0,
+        85.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Initial tank water temperature at simulation start.",
+      "group": "heat_pump",
+      "name": "hp_tank_initial_temp",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        10.0,
+        85.0
+      ],
+      "reasoning": "Initial tank water temperature at simulation start.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "C",
+      "value": 50.0
+    },
+    {
+      "bounds": [
+        0.5,
+        20.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Heat exchanger coil approach temperature delta for DHW reheat.",
+      "group": "heat_pump",
+      "name": "hp_coil_approach",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.5,
+        20.0
+      ],
+      "reasoning": "Heat exchanger coil approach temperature delta for DHW reheat.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "C",
+      "value": 5.0
+    },
+    {
+      "bounds": [
+        "gas_calibrated",
+        "litres"
+      ],
+      "choices": [
+        "gas_calibrated",
+        "litres"
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "DHW thermal demand allocation basis (gas-calibrated monthly or litres/day).",
+      "group": "heat_pump",
+      "name": "hp_dhw_demand_mode",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "DHW thermal demand allocation basis (gas-calibrated monthly or litres/day).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "choice",
+      "value": "gas_calibrated"
+    },
+    {
+      "bounds": [
+        0.0,
+        1000.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Daily DHW draw volume for litres demand mode.",
+      "group": "heat_pump",
+      "name": "hp_dhw_litres_day",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.0,
+        1000.0
+      ],
+      "reasoning": "Daily DHW draw volume for litres demand mode.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "litres/day",
+      "value": 150.0
+    },
+    {
+      "bounds": [
+        0.0,
+        1.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Estimated prior gas water heating standing loss fraction to subtract from gross gas DHW heat.",
+      "group": "heat_pump",
+      "name": "hp_prior_dhw_loss_fraction",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.0,
+        1.0
+      ],
+      "reasoning": "Estimated prior gas water heating standing loss fraction to subtract from gross gas DHW heat.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.0
+    },
+    {
+      "bounds": [
+        0,
+        23
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "DHW morning draw window start hour (inclusive).",
+      "group": "heat_pump",
+      "name": "hp_draw_morning_on",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        23
+      ],
+      "reasoning": "DHW morning draw window start hour (inclusive).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "hour",
+      "value": 7
+    },
+    {
+      "bounds": [
+        0,
+        23
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "DHW morning draw window stop hour (exclusive).",
+      "group": "heat_pump",
+      "name": "hp_draw_morning_off",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        23
+      ],
+      "reasoning": "DHW morning draw window stop hour (exclusive).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "hour",
+      "value": 9
+    },
+    {
+      "bounds": [
+        0,
+        23
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "DHW evening draw window start hour (inclusive).",
+      "group": "heat_pump",
+      "name": "hp_draw_evening_on",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        23
+      ],
+      "reasoning": "DHW evening draw window start hour (inclusive).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "hour",
+      "value": 18
+    },
+    {
+      "bounds": [
+        0,
+        23
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "DHW evening draw window stop hour (exclusive).",
+      "group": "heat_pump",
+      "name": "hp_draw_evening_off",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        23
+      ],
+      "reasoning": "DHW evening draw window stop hour (exclusive).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "hour",
+      "value": 21
+    },
+    {
+      "bounds": [
+        0.0,
+        1.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Fraction of daily DHW draw allocated to morning window.",
+      "group": "heat_pump",
+      "name": "hp_draw_morning_fraction",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.0,
+        1.0
+      ],
+      "reasoning": "Fraction of daily DHW draw allocated to morning window.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.5
+    },
+    {
+      "bounds": [
+        "continuous",
+        "scheduled"
+      ],
+      "choices": [
+        "continuous",
+        "scheduled"
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "DHW cylinder reheat schedule mode (continuous 24h or scheduled window).",
+      "group": "heat_pump",
+      "name": "hp_reheat_mode",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "DHW cylinder reheat schedule mode (continuous 24h or scheduled window).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "choice",
+      "value": "continuous"
+    },
+    {
+      "bounds": [
+        0,
+        23
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Scheduled DHW reheat window start hour (inclusive).",
+      "group": "heat_pump",
+      "name": "hp_reheat_on",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        23
+      ],
+      "reasoning": "Scheduled DHW reheat window start hour (inclusive).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "hour",
+      "value": 11
+    },
+    {
+      "bounds": [
+        0,
+        23
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Scheduled DHW reheat window stop hour (exclusive).",
+      "group": "heat_pump",
+      "name": "hp_reheat_off",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        23
+      ],
+      "reasoning": "Scheduled DHW reheat window stop hour (exclusive).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "hour",
+      "value": 16
+    },
+    {
+      "bounds": null,
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Enable periodic high-temperature thermal hygiene/legionella disinfection.",
+      "group": "heat_pump",
+      "name": "hp_hygiene_enabled",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Enable periodic high-temperature thermal hygiene/legionella disinfection.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "boolean",
+      "value": false
+    },
+    {
+      "bounds": [
+        50.0,
+        90.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Target water temperature during thermal hygiene disinfection cycle.",
+      "group": "heat_pump",
+      "name": "hp_hygiene_temp",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        50.0,
+        90.0
+      ],
+      "reasoning": "Target water temperature during thermal hygiene disinfection cycle.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "C",
+      "value": 60.0
+    },
+    {
+      "bounds": [
+        0,
+        6
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Day of week for hygiene cycle (0=Monday, 6=Sunday).",
+      "group": "heat_pump",
+      "name": "hp_hygiene_weekday",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        6
+      ],
+      "reasoning": "Day of week for hygiene cycle (0=Monday, 6=Sunday).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "weekday",
+      "value": 0
+    },
+    {
+      "bounds": [
+        0,
+        23
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Start clock hour for weekly hygiene cycle.",
+      "group": "heat_pump",
+      "name": "hp_hygiene_hour",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        23
+      ],
+      "reasoning": "Start clock hour for weekly hygiene cycle.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "hour",
+      "value": 12
+    },
+    {
+      "bounds": [
+        1,
+        12
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Duration of hygiene disinfection cycle in hours.",
+      "group": "heat_pump",
+      "name": "hp_hygiene_duration_hours",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        1,
+        12
+      ],
+      "reasoning": "Duration of hygiene disinfection cycle in hours.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "hours",
+      "value": 1
+    },
+    {
+      "bounds": [
+        0.0,
+        30.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Electrical resistance auxiliary backup heater capacity.",
+      "group": "heat_pump",
+      "name": "hp_backup_kw",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.0,
+        30.0
+      ],
+      "reasoning": "Electrical resistance auxiliary backup heater capacity.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "kW",
+      "value": 3.0
+    },
+    {
+      "bounds": [
+        0.5,
+        1.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Backup electric heater thermal conversion efficiency.",
+      "group": "heat_pump",
+      "name": "hp_backup_efficiency",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.5,
+        1.0
+      ],
+      "reasoning": "Backup electric heater thermal conversion efficiency.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 1.0
+    },
+    {
+      "bounds": [
+        0.0,
+        2.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Secondary hydronic distribution circulation pump power.",
+      "group": "heat_pump",
+      "name": "hp_external_pump_kw",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.0,
+        2.0
+      ],
+      "reasoning": "Secondary hydronic distribution circulation pump power.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "kW",
+      "value": 0.06
+    },
+    {
+      "bounds": [
+        0.0,
+        1.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Continuous heat pump standby electrical consumption.",
+      "group": "heat_pump",
+      "name": "hp_standby_kw",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.0,
+        1.0
+      ],
+      "reasoning": "Continuous heat pump standby electrical consumption.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "kW",
+      "value": 0.02
+    },
+    {
+      "bounds": [
+        0.05,
+        1.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Minimum compressor modulation output fraction before cycling occurs.",
+      "group": "heat_pump",
+      "name": "hp_min_modulation_fraction",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.05,
+        1.0
+      ],
+      "reasoning": "Minimum compressor modulation output fraction before cycling occurs.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.25
+    },
+    {
+      "bounds": [
+        0.0,
+        0.5
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "COP degradation penalty factor when modulating below minimum modulation fraction.",
+      "group": "heat_pump",
+      "name": "hp_cycling_penalty",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.0,
+        0.5
+      ],
+      "reasoning": "COP degradation penalty factor when modulating below minimum modulation fraction.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.1
+    },
+    {
+      "bounds": [
+        0.0,
+        0.5
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Hydronic heating piping distribution thermal loss fraction.",
+      "group": "heat_pump",
+      "name": "hp_distribution_loss_fraction",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.0,
+        0.5
+      ],
+      "reasoning": "Hydronic heating piping distribution thermal loss fraction.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.0
+    },
+    {
+      "bounds": [
+        0.0,
+        0.5
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Additional seasonal defrost COP penalty (skipped if map metadata confirms defrost included).",
+      "group": "heat_pump",
+      "name": "hp_additional_defrost_penalty",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.0,
+        0.5
+      ],
+      "reasoning": "Additional seasonal defrost COP penalty (skipped if map metadata confirms defrost included).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "fraction",
+      "value": 0.0
+    },
+    {
+      "bounds": [
+        0.0,
+        2.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Additional internal unit auxiliary electrical power (skipped if map metadata confirms unit auxiliaries included).",
+      "group": "heat_pump",
+      "name": "hp_additional_unit_aux_kw",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.0,
+        2.0
+      ],
+      "reasoning": "Additional internal unit auxiliary electrical power (skipped if map metadata confirms unit auxiliaries included).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "kW",
+      "value": 0.0
+    },
+    {
+      "bounds": [
+        0.0,
+        50000.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Turnkey heat pump system installed capital expenditure (shared outdoor unit and DHW cylinder; explicit placeholder).",
+      "group": "cost",
+      "name": "hp_capex",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.0,
+        50000.0
+      ],
+      "reasoning": "Turnkey heat pump system installed capital expenditure (shared outdoor unit and DHW cylinder; explicit placeholder).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "placeholder",
+      "unit": "EUR",
+      "value": 10000.0
+    },
+    {
+      "bounds": [
+        0.0,
+        2000.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Annual heat pump maintenance and servicing allowance.",
+      "group": "cost",
+      "name": "hp_annual_maintenance",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.0,
+        2000.0
+      ],
+      "reasoning": "Annual heat pump maintenance and servicing allowance.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "EUR/year",
+      "value": 100.0
+    },
+    {
+      "bounds": [
+        0,
+        30
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Heat pump equipment replacement year (0 disables replacement).",
+      "group": "aging",
+      "name": "hp_replacement_year",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0,
+        30
+      ],
+      "reasoning": "Heat pump equipment replacement year (0 disables replacement).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "year",
+      "value": 0
+    },
+    {
+      "bounds": [
+        0.0,
+        30000.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Installed heat pump unit replacement cost in current euros (explicit placeholder).",
+      "group": "cost",
+      "name": "hp_replacement_cost",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.0,
+        30000.0
+      ],
+      "reasoning": "Installed heat pump unit replacement cost in current euros (explicit placeholder).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "placeholder",
+      "unit": "EUR",
+      "value": 6000.0
+    },
+    {
+      "bounds": null,
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Convert cooking from gas to induction/electric cooktop.",
+      "group": "heat_pump",
+      "name": "hp_electric_cooking",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Convert cooking from gas to induction/electric cooktop.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "boolean",
+      "value": false
+    },
+    {
+      "bounds": [
+        0.0,
+        10000.0
+      ],
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Induction hob / electric cooking equipment and installation cost.",
+      "group": "cost",
+      "name": "hp_cooking_capex",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": [
+        0.0,
+        10000.0
+      ],
+      "reasoning": "Induction hob / electric cooking equipment and installation cost.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "placeholder",
+      "unit": "EUR",
+      "value": 500.0
+    },
+    {
+      "bounds": null,
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Permanently disconnect gas utility meter and terminate gas service contract.",
+      "group": "heat_pump",
+      "name": "hp_disconnect_gas",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Permanently disconnect gas utility meter and terminate gas service contract.",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "boolean",
+      "value": false
+    },
+    {
+      "bounds": null,
+      "choices": null,
+      "confidence": "Example only; no household evidence",
+      "date_accessed": null,
+      "description": "Optional manufacturer equipment performance map JSON string (empty string uses provisional fallback map with hp_nominal_kw scaling).",
+      "group": "heat_pump",
+      "name": "hp_manufacturer_map_json",
+      "owner": "user / installer / tax adviser",
+      "plausible_range": null,
+      "reasoning": "Optional manufacturer equipment performance map JSON string (empty string uses provisional fallback map with hp_nominal_kw scaling).",
+      "source": "Neutral modeling example; profile-specific evidence required",
+      "status": "proposed",
+      "unit": "json",
+      "value": ""
+    }
+  ],
+  "calibration": {
+    "date": "2024-01-01",
+    "invoice": {
+      "kwh": 200.0,
+      "commodity_eur": 24.0,
+      "regulated_eur": 10.0,
+      "excise_eur": 4.54,
+      "fixed_eur": 16.0,
+      "vat_eur": 5.45,
+      "total_eur": 59.99,
+      "rounding": "Invoice components rounded to cents; annual dispatch billing retains precision."
+    },
+    "annual_kwh": 4260.0,
+    "annual_gas_smc": 910.0,
+    "annual_electric_bill_eur": 1114.1922,
+    "annual_gas_runrate_eur": 1233.4045999999998,
+    "marginal_import_eur_kwh": 0.21197,
+    "fixed_electric_eur_year": 211.20000000000002,
+    "original_cost_formula_6kwp_eur": 7000.0,
+    "calibrated_6kwp_eur": 7000.0,
+    "provided_capture_eur_kwh": 0.1,
+    "base_times_capture_eur_kwh": 0.1,
+    "capture_difference_eur_kwh": 0.0,
+    "roofs": [
+      {
+        "orientation": "south_exact",
+        "pvgis_unshaded": {
+          "min": 1314.0,
+          "median": 1315.8000000000002,
+          "mean": 1315.8000000000002,
+          "max": 1317.6000000000001,
+          "p10": 1314.3600000000001,
+          "p90": 1317.2400000000002
+        },
+        "pvgis_beam_shaded": {
+          "min": 1248.3,
+          "median": 1250.01,
+          "mean": 1250.01,
+          "max": 1251.72,
+          "p10": 1248.642,
+          "p90": 1251.378
+        },
+        "pvgis_all_light_shaded": {
+          "min": 1248.3,
+          "median": 1250.01,
+          "mean": 1250.01,
+          "max": 1251.72,
+          "p10": 1248.642,
+          "p90": 1251.378
+        },
+        "google_dc_kwh_kwp": null,
+        "google_ac_factors": {
+          "inverter_efficiency": 0.97,
+          "wiring": 0.98,
+          "soiling": 0.98,
+          "thermal": 0.93,
+          "other": 0.98,
+          "clipping": 1.0
+        },
+        "google_ac_status": "placeholder",
+        "google_ac_reason": "Illustrative DC-to-AC bridge; equipment efficiencies, temperature and clipping not measured. Do not apply again to PVGIS AC production.",
+        "google_ac_factor": 0.8490493032,
+        "google_ac_kwh_kwp": null,
+        "raster_annual_flux": null
+      },
+      {
+        "orientation": "west",
+        "pvgis_unshaded": {
+          "min": 1261.4399999999998,
+          "median": 1263.168,
+          "mean": 1263.168,
+          "max": 1264.896,
+          "p10": 1261.7856,
+          "p90": 1264.5503999999999
+        },
+        "pvgis_beam_shaded": {
+          "min": 1198.3679999999997,
+          "median": 1200.0095999999999,
+          "mean": 1200.0095999999999,
+          "max": 1201.6512,
+          "p10": 1198.6963199999998,
+          "p90": 1201.32288
+        },
+        "pvgis_all_light_shaded": {
+          "min": 1198.3679999999997,
+          "median": 1200.0095999999999,
+          "mean": 1200.0095999999999,
+          "max": 1201.6512,
+          "p10": 1198.6963199999998,
+          "p90": 1201.32288
+        },
+        "google_dc_kwh_kwp": null,
+        "google_ac_factors": {
+          "inverter_efficiency": 0.97,
+          "wiring": 0.98,
+          "soiling": 0.98,
+          "thermal": 0.93,
+          "other": 0.98,
+          "clipping": 1.0
+        },
+        "google_ac_status": "placeholder",
+        "google_ac_reason": "Illustrative DC-to-AC bridge; equipment efficiencies, temperature and clipping not measured. Do not apply again to PVGIS AC production.",
+        "google_ac_factor": 0.8490493032,
+        "google_ac_kwh_kwp": null,
+        "raster_annual_flux": null
+      },
+      {
+        "orientation": "east",
+        "pvgis_unshaded": {
+          "min": 1208.88,
+          "median": 1210.536,
+          "mean": 1210.536,
+          "max": 1212.192,
+          "p10": 1209.2112000000002,
+          "p90": 1211.8608
+        },
+        "pvgis_beam_shaded": {
+          "min": 1148.4360000000001,
+          "median": 1150.0092,
+          "mean": 1150.0092,
+          "max": 1151.5824,
+          "p10": 1148.7506400000002,
+          "p90": 1151.26776
+        },
+        "pvgis_all_light_shaded": {
+          "min": 1148.4360000000001,
+          "median": 1150.0092,
+          "mean": 1150.0092,
+          "max": 1151.5824,
+          "p10": 1148.7506400000002,
+          "p90": 1151.26776
+        },
+        "google_dc_kwh_kwp": null,
+        "google_ac_factors": {
+          "inverter_efficiency": 0.97,
+          "wiring": 0.98,
+          "soiling": 0.98,
+          "thermal": 0.93,
+          "other": 0.98,
+          "clipping": 1.0
+        },
+        "google_ac_status": "placeholder",
+        "google_ac_reason": "Illustrative DC-to-AC bridge; equipment efficiencies, temperature and clipping not measured. Do not apply again to PVGIS AC production.",
+        "google_ac_factor": 0.8490493032,
+        "google_ac_kwh_kwp": null,
+        "raster_annual_flux": null
+      },
+      {
+        "orientation": "dormer",
+        "pvgis_unshaded": {
+          "min": 1156.32,
+          "median": 1157.904,
+          "mean": 1157.904,
+          "max": 1159.4879999999998,
+          "p10": 1156.6368,
+          "p90": 1159.1711999999998
+        },
+        "pvgis_beam_shaded": {
+          "min": 1098.504,
+          "median": 1100.0087999999998,
+          "mean": 1100.0087999999998,
+          "max": 1101.5135999999998,
+          "p10": 1098.80496,
+          "p90": 1101.2126399999997
+        },
+        "pvgis_all_light_shaded": {
+          "min": 1098.504,
+          "median": 1100.0087999999998,
+          "mean": 1100.0087999999998,
+          "max": 1101.5135999999998,
+          "p10": 1098.80496,
+          "p90": 1101.2126399999997
+        },
+        "google_dc_kwh_kwp": null,
+        "google_ac_factors": {
+          "inverter_efficiency": 0.97,
+          "wiring": 0.98,
+          "soiling": 0.98,
+          "thermal": 0.93,
+          "other": 0.98,
+          "clipping": 1.0
+        },
+        "google_ac_status": "placeholder",
+        "google_ac_reason": "Illustrative DC-to-AC bridge; equipment efficiencies, temperature and clipping not measured. Do not apply again to PVGIS AC production.",
+        "google_ac_factor": 0.8490493032,
+        "google_ac_kwh_kwp": null,
+        "raster_annual_flux": null
+      },
+      {
+        "orientation": "flat",
+        "pvgis_unshaded": {
+          "min": 1103.7599999999998,
+          "median": 1105.272,
+          "mean": 1105.272,
+          "max": 1106.784,
+          "p10": 1104.0623999999998,
+          "p90": 1106.4816
+        },
+        "pvgis_beam_shaded": {
+          "min": 1048.5719999999997,
+          "median": 1050.0083999999997,
+          "mean": 1050.0083999999997,
+          "max": 1051.4448,
+          "p10": 1048.8592799999997,
+          "p90": 1051.15752
+        },
+        "pvgis_all_light_shaded": {
+          "min": 1048.5719999999997,
+          "median": 1050.0083999999997,
+          "mean": 1050.0083999999997,
+          "max": 1051.4448,
+          "p10": 1048.8592799999997,
+          "p90": 1051.15752
+        },
+        "google_dc_kwh_kwp": null,
+        "google_ac_factors": {
+          "inverter_efficiency": 0.97,
+          "wiring": 0.98,
+          "soiling": 0.98,
+          "thermal": 0.93,
+          "other": 0.98,
+          "clipping": 1.0
+        },
+        "google_ac_status": "placeholder",
+        "google_ac_reason": "Illustrative DC-to-AC bridge; equipment efficiencies, temperature and clipping not measured. Do not apply again to PVGIS AC production.",
+        "google_ac_factor": 0.8490493032,
+        "google_ac_kwh_kwp": null,
+        "raster_annual_flux": null
+      }
+    ],
+    "weather_count": 2,
+    "hour_count": 17544,
+    "research": {}
+  },
+  "audit": {
+    "fictional": true,
+    "annual_kwh": 4260.0,
+    "monthly_kwh": [
+      310.0,
+      280.0,
+      310.0,
+      300.0,
+      310.0,
+      450.0,
+      465.0,
+      465.0,
+      450.0,
+      310.0,
+      300.0,
+      310.0
+    ],
+    "pvgis_yields": {
+      "south_exact": {
+        "unshaded_annual": [
+          1314.0,
+          1317.6000000000001
+        ],
+        "beam_shaded_annual": [
+          1248.3,
+          1251.72
+        ],
+        "all_radiation_shaded_annual": [
+          1248.3,
+          1251.72
+        ]
+      },
+      "west": {
+        "unshaded_annual": [
+          1261.4399999999998,
+          1264.896
+        ],
+        "beam_shaded_annual": [
+          1198.3679999999997,
+          1201.6512
+        ],
+        "all_radiation_shaded_annual": [
+          1198.3679999999997,
+          1201.6512
+        ]
+      },
+      "east": {
+        "unshaded_annual": [
+          1208.88,
+          1212.192
+        ],
+        "beam_shaded_annual": [
+          1148.4360000000001,
+          1151.5824
+        ],
+        "all_radiation_shaded_annual": [
+          1148.4360000000001,
+          1151.5824
+        ]
+      },
+      "dormer": {
+        "unshaded_annual": [
+          1156.32,
+          1159.4879999999998
+        ],
+        "beam_shaded_annual": [
+          1098.504,
+          1101.5135999999998
+        ],
+        "all_radiation_shaded_annual": [
+          1098.504,
+          1101.5135999999998
+        ]
+      },
+      "flat": {
+        "unshaded_annual": [
+          1103.7599999999998,
+          1106.784
+        ],
+        "beam_shaded_annual": [
+          1048.5719999999997,
+          1051.4448
+        ],
+        "all_radiation_shaded_annual": [
+          1048.5719999999997,
+          1051.4448
+        ]
+      }
+    },
+    "roofs": [
+      {
+        "google_dc_kwh_kwp": null,
+        "annual_flux_kwh_kwp": null,
+        "segments": [
+          0
+        ],
+        "panels": 10
+      },
+      {
+        "google_dc_kwh_kwp": null,
+        "annual_flux_kwh_kwp": null,
+        "segments": [
+          1
+        ],
+        "panels": 10
+      },
+      {
+        "google_dc_kwh_kwp": null,
+        "annual_flux_kwh_kwp": null,
+        "segments": [
+          2
+        ],
+        "panels": 10
+      },
+      {
+        "google_dc_kwh_kwp": null,
+        "annual_flux_kwh_kwp": null,
+        "segments": [
+          3
+        ],
+        "panels": 10
+      },
+      {
+        "google_dc_kwh_kwp": null,
+        "annual_flux_kwh_kwp": null,
+        "segments": [
+          4
+        ],
+        "panels": 10
+      }
+    ],
+    "provenance": "Analytic synthetic legacy counterpart; no provider observations or real home"
+  },
+  "empirical_prices": {
+    "window": "oct2025_sep2026",
+    "window_meta": {
+      "dates_coverage": [
+        "2023-01-01",
+        "2024-01-01"
+      ],
+      "mean_csud_eur_kwh": 0.107
+    },
+    "market_reference_period": [
+      "2023-01-01",
+      "2024-01-01"
+    ],
+    "weather_years_label": "2023–2024",
+    "weather_count": 2,
+    "provenance": {
+      "source": "Synthetic GME-format analytic archives; not observed provider data",
+      "origin_url": "urn:synthetic:analytic-prices",
+      "retrieval": "generated offline",
+      "zone": "CSUD",
+      "units": "EUR/kWh",
+      "spill_handling": "Exact half-open Europe/Rome civil dates; fixed UTC+1 statistics"
+    },
+    "matrix_eur_kwh": [
+      [
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122
+      ],
+      [
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122
+      ],
+      [
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122
+      ],
+      [
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122
+      ],
+      [
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122
+      ],
+      [
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122
+      ],
+      [
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122
+      ],
+      [
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122
+      ],
+      [
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122
+      ],
+      [
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122
+      ],
+      [
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122
+      ],
+      [
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.102,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122,
+        0.122
+      ]
+    ],
+    "normalized_shape_12x24": [
+      [
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402
+      ],
+      [
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402
+      ],
+      [
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402
+      ],
+      [
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402
+      ],
+      [
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402
+      ],
+      [
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402
+      ],
+      [
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402
+      ],
+      [
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402
+      ],
+      [
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402
+      ],
+      [
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402
+      ],
+      [
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402
+      ],
+      [
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        0.9533,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402,
+        1.1402
+      ]
+    ],
+    "monthly_means_eur_kwh": [
+      0.10700000000000014,
+      0.10700000000000011,
+      0.10700000000000014,
+      0.10700000000000011,
+      0.10700000000000014,
+      0.10700000000000011,
+      0.10700000000000014,
+      0.10700000000000014,
+      0.10700000000000011,
+      0.10700000000000014,
+      0.10700000000000011,
+      0.10700000000000014
+    ],
+    "hourly_means_eur_kwh": [
+      0.1020000000000002,
+      0.1020000000000002,
+      0.1020000000000002,
+      0.1020000000000002,
+      0.1020000000000002,
+      0.1020000000000002,
+      0.1020000000000002,
+      0.1020000000000002,
+      0.1020000000000002,
+      0.1020000000000002,
+      0.1020000000000002,
+      0.1020000000000002,
+      0.1020000000000002,
+      0.1020000000000002,
+      0.1020000000000002,
+      0.1020000000000002,
+      0.1020000000000002,
+      0.1020000000000002,
+      0.1219999999999999,
+      0.1219999999999999,
+      0.1219999999999999,
+      0.1219999999999999,
+      0.1219999999999999,
+      0.1219999999999999
+    ],
+    "monthly_shapes": [
+      1.000000000000001,
+      1.000000000000001,
+      1.000000000000001,
+      1.000000000000001,
+      1.000000000000001,
+      1.000000000000001,
+      1.000000000000001,
+      1.000000000000001,
+      1.000000000000001,
+      1.000000000000001,
+      1.000000000000001,
+      1.000000000000001
+    ],
+    "hourly_shapes": [
+      0.9532710280373851,
+      0.9532710280373851,
+      0.9532710280373851,
+      0.9532710280373851,
+      0.9532710280373851,
+      0.9532710280373851,
+      0.9532710280373851,
+      0.9532710280373851,
+      0.9532710280373851,
+      0.9532710280373851,
+      0.9532710280373851,
+      0.9532710280373851,
+      0.9532710280373851,
+      0.9532710280373851,
+      0.9532710280373851,
+      0.9532710280373851,
+      0.9532710280373851,
+      0.9532710280373851,
+      1.1401869158878493,
+      1.1401869158878493,
+      1.1401869158878493,
+      1.1401869158878493,
+      1.1401869158878493,
+      1.1401869158878493
+    ]
+  }
+}

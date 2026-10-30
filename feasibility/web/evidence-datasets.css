@@ -1,0 +1,22 @@
+#datasetEvidence .dataset-tab-bar { display: flex; gap: 8px; margin: 10px 0; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+#datasetEvidence .evidence-meta, #datasetEvidence .evidence-empty-msg { font-size: 11px; color: var(--muted); margin: 3px 0; }
+#datasetEvidence .evidence-cov-card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 10px 0; }
+#datasetEvidence .evidence-cov-header { display: flex; gap: 8px; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+#datasetEvidence .evidence-badge { font-size: 10px; font-weight: 700; border: 1px solid currentColor; border-radius: 4px; padding: 2px 6px; letter-spacing: 0.5px; }
+#datasetEvidence .evidence-badge-ready { color: var(--green); background: var(--soft); }
+#datasetEvidence .evidence-badge-conflict, #datasetEvidence .evidence-badge-warning { color: var(--gold); border-color: currentColor; background: var(--surface); }
+#datasetEvidence .evidence-warning, #datasetEvidence .evidence-warning-list { color: var(--muted); font-size: 11px; margin: 4px 0; }
+#datasetEvidence .evidence-warning::before { content: "⚠ "; color: var(--gold); }
+#datasetEvidence .evidence-error { font-weight: 700; color: var(--ink); border-left: 3px solid var(--gold); padding-left: 6px; margin: 6px 0; }
+#datasetEvidence .evidence-filename { overflow-wrap: anywhere; word-break: break-word; font-weight: 600; color: var(--ink); }
+#datasetEvidence input[type="checkbox"].evidence-toggle-coverage { width: auto; min-height: unset; display: inline-block; vertical-align: middle; margin: 0 6px 0 0; accent-color: var(--green); }
+#datasetEvidence label { display: block; width: 100%; color: var(--ink); margin: 6px 0; }
+#datasetEvidence input[type="file"] { display: block; width: 100%; min-width: 0; padding: 6px 0; box-sizing: border-box; }
+#datasetEvidence input[type="text"] { width: 100%; min-width: 0; box-sizing: border-box; }
+#datasetEvidence .table-wrap { overflow-x: auto; width: 100%; max-width: 100%; margin-top: 10px; }
+#datasetEvidence table { width: 100%; border-collapse: collapse; }
+#datasetEvidence th, #datasetEvidence td { padding: 6px 8px; border-bottom: 1px solid var(--line); color: var(--ink); font-size: 12px; }
+#datasetEvidence .status-msg { font-size: 12px; font-weight: 600; color: var(--ink); margin-left: 8px; vertical-align: middle; }
+#datasetEvidence .status-msg.error { color: var(--gold); }
+#datasetEvidence .status-msg.success { color: var(--green); }
+#datasetEvidence .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 10px 0; }

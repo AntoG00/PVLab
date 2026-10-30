@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "id": "dddddddddddddddddddddddddddddddd",
+  "country": "IT",
+  "timezone": "Europe/Rome",
+  "location": {
+    "latitude": 45.0,
+    "longitude": 9.0
+  },
+  "consumption": {
+    "artifact_id": null,
+    "kind": "monthly",
+    "coverage": {
+      "start": "2023-01-01",
+      "end": "2024-01-01",
+      "complete": true
+    },
+    "projection_policy": "synthetic_v1",
+    "acknowledged": true
+  },
+  "roofs": [
+    {
+      "id": "p1",
+      "label": "Fictional plane 1",
+      "tilt_deg": 20.0,
+      "azimuth_deg": 90.0,
+      "max_kwp": 4.0,
+      "shading_fraction": 0.05
+    },
+    {
+      "id": "p2",
+      "label": "Fictional plane 2",
+      "tilt_deg": 20.0,
+      "azimuth_deg": 180.0,
+      "max_kwp": 4.0,
+      "shading_fraction": 0.05
+    }
+  ],
+  "thermal": {
+    "end_uses": [
+      {
+        "id": "space_heat",
+        "carrier": "gas",
+        "measured_input": 300.0,
+        "monthly_input": [
+          0,
+          10,
+          20,
+          30,
+          40,
+          50,
+          50,
+          40,
+          30,
+          20,
+          10,
+          0
+        ],
+        "unit": "smc",
+        "monthly_useful_kwh": null,
+        "efficiency": 0.8,
+        "cop": null,
+        "conversion_kwh_per_unit": 10.0,
+        "annual_fixed_cost": 60.0,
+        "annual_variable_cost": 300.0,
+        "annual_bill_eur": null,
+        "included_in_electric_load": false,
+        "action": "replace",
+        "artifact_id": null,
+        "coverage": {
+          "start": "2023-01-01",
+          "end": "2024-01-01",
+          "complete": true
+        },
+        "period_relation": "same"
+      }
+    ]
+  },
+  "market": {
+    "zone": "NORD",
+    "series": "NORD",
+    "window_start": "2023-01-01",
+    "window_end": "2024-01-01",
+    "valuation_mode": "flat",
+    "price_revision": null
+  },
+  "fiscal": {
+    "country": "IT",
+    "rule_revision": null,
+    "gas_region": null,
+    "parameters": {
+      "policy_version": "italy-fiscal-v1",
+      "confirmed": true,
+      "mode": "annual_bill",
+      "annual_bill_eur": 360.0,
+      "effective_from": "2020-01-01",
+      "effective_to": "2100-01-01",
+      "as_of": "2024-01-01",
+      "sources": [
+        "Fictional arithmetic scenario; not legal evidence"
+      ],
+      "electric_excise": 0.02,
+      "electric_vat": 0.1,
+      "pmg_price": 0.04,
+      "pmg_nominal_escalation": 0.0,
+      "gse_fee_eur_kw_year": 0.0,
+      "gse_fee_vat": 0.2,
+      "export_irpef": 0.2,
+      "regional_additional_tax": 0.0,
+      "municipal_additional_tax": 0.0,
+      "deduction_rate": 0.0
+    }
+  },
+  "default_settings": {
+    "baseline_cooling_kwh": 0.0,
+    "export_market_price": 0.1
+  }
+}

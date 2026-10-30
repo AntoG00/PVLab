@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "distribution": "source-code-only",
+  "project_classification": "source-available",
+  "country": "IT",
+  "hosted_service": false,
+  "hosted_operator_contact": "not-applicable",
+  "hosting_region": "not-applicable",
+  "default_host": "127.0.0.1",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "copyright_notice": "NOTICE",
+  "fiscal_review": "multiple-LLMs-only",
+  "independent_fiscal_specialist_review": false,
+  "specialist_review_release_blocker": false,
+  "no_current_legal_correctness_claim": true,
+  "bundled_provider_data": false,
+  "commercial_permission": "separate-explicit-written-permission",
+  "publication_authorized": false
+}

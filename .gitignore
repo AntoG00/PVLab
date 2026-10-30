@@ -1,0 +1,56 @@
+.agent-out/
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.nbc
+*.nbi
+.env
+.env.*
+*.log
+*.pid
+.relocation-manifest.json
+
+# Local inputs, private/live state, and external datasets
+/Consumption data/
+/MGP prezzi/
+/Solar API/*
+!/Solar API/fetch_solar.py
+/PVGIS-*.json
+/PVGIS-*.csv
+/Timeseries_*.csv
+/feasibility/data/
+/tests/fixtures/*.npz
+
+# Installed native libraries, generated outputs, and recovery archives
+/feasibility/vendor/
+/feasibility/reports/
+/backups/
+*.prof
+*.orig
+
+# Local agent instructions
+/AGENTS.md
+
+# Private runtime and audit material (tracked originals are retained)
+/private/
+/runtime/
+/uploads/
+/quarantine/
+/reports/
+/audit/
+/plan-state/
+/pv-lab-private/
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.dump
+*.pem
+*.key
+*.p12
+*.pfx
+/personal-patterns.txt
+/privacy-audit.json
+/gitleaks-*.json

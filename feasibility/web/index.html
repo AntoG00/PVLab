@@ -1,0 +1,1281 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#163d35">
+  <title>PV Lab</title>
+  <link rel="icon" type="image/png" href="/favicon.png?v=2">
+  <script>
+    (function(){
+      try{
+        var key='pv-lab-theme-v1';
+        var stored=null;
+        try{stored=localStorage.getItem(key)||localStorage.getItem('pv_lab_theme')||localStorage.getItem('theme');}catch(_){}
+        var prefersDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var isDark=stored==='dark'||(!stored&&prefersDark);
+        var theme=isDark?'dark':'light';
+        document.documentElement.setAttribute('data-theme',theme);
+        if(isDark){document.documentElement.classList.add('theme-dark');}else{document.documentElement.classList.remove('theme-dark');}
+      }catch(_){}
+    })();
+  </script>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/evidence-datasets.css">
+</head>
+<body>
+  <section id="householdOnboarding" aria-label="Household setup" hidden></section>
+  <header>
+    <div class="brand">
+      <img src="/favicon.png?v=2" alt="PV Lab" width="64" height="64">
+    </div>
+    <div class="header-center">
+      <a href="#assumptions" id="unconfirmedAssumptionsBadge" class="status-badge" data-view-target="assumptions" role="status">Checking assumptions…</a>
+      <div class="money-basis-wrap" title="Purchasing-power basis for displayed cash amounts">
+        <label>
+          <span class="money-label">Basis:</span>
+          <select id="moneyBasisSelect" aria-label="Currency presentation mode">
+            <option value="real" selected>Real € (constant purchasing power)</option>
+            <option value="nominal">Nominal € (inflated payment year)</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span id="status" role="status">Starting engine…</span>
+      <span id="syncStatus" role="status">Loading shared scenario…</span>
+      <button id="themeToggle" class="button theme-toggle-btn" type="button" role="switch" aria-checked="false" aria-pressed="false" aria-label="Night theme" title="Toggle night theme">
+        <span class="theme-icon" aria-hidden="true">🌙</span>
+        <span class="theme-label">Night</span>
+      </button>
+      <details id="scenarioMenu" class="header-menu-dropdown">
+        <summary class="button menu-summary-btn" aria-haspopup="menu">Scenario &amp; Export ▾</summary>
+        <div class="menu-dropdown-content" role="menu">
+          <button id="save" type="button" role="menuitem">Save scenario</button>
+          <button id="download" type="button" role="menuitem">Export JSON</button>
+          <label class="button file-menu-item" role="menuitem">Load JSON<input type="file" id="loadFile" accept="application/json" hidden></label>
+          <button id="onepage" type="button" role="menuitem">One-page summary</button>
+          <div class="menu-divider"></div>
+          <details id="settingsDevFold" class="dev-menu-fold">
+            <summary>Developer / Settings</summary>
+            <button id="reloadServer" type="button">Reload server</button>
+          </details>
+        </div>
+      </details>
+    </div>
+  </header>
+
+  <nav aria-label="Views">
+    <button class="active" data-view="summary" aria-current="page">Summary</button>
+    <button data-view="design" aria-current="false">System design</button>
+    <button data-view="financing" aria-current="false">Financing</button>
+    <button data-view="behavior" aria-current="false">How it behaves</button>
+    <button data-view="prices" aria-current="false">Prices &amp; market</button>
+    <button data-view="assumptions" aria-current="false">Assumptions &amp; evidence</button>
+    <button data-view="quote" aria-current="false">Contractor pitch</button>
+  </nav>
+
+  <dialog id="defaultConfirm" aria-labelledby="defaultConfirmTitle" aria-describedby="defaultConfirmDescription">
+    <form method="dialog">
+      <h2 id="defaultConfirmTitle">Save as shared default?</h2>
+      <p id="defaultConfirmDescription"></p>
+      <div class="dialog-actions">
+        <button type="submit" value="cancel">Cancel</button>
+        <button type="submit" value="save" class="confirm-save">Save default</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="solarHeatmapDialog" class="solar-heatmap-dialog" aria-labelledby="solarHeatmapDialogTitle">
+    <div class="heatmap-dialog-header">
+      <div class="heatmap-dialog-title-wrap">
+        <p class="eyebrow">JOINT CAPACITY SEARCH</p>
+        <h2 id="solarHeatmapDialogTitle">PV kWp × Battery kWh discounted NPV tradeoff heatmap</h2>
+      </div>
+      <button type="button" id="solarHeatmapDialogClose" class="action-btn-small" aria-label="Close expanded heatmap">Close ✕</button>
+    </div>
+    <div class="heatmap-dialog-body">
+      <div id="solarHeatmapDialogContent" class="chart heatmap-chart"></div>
+    </div>
+  </dialog>
+
+    <section id="profileResultsPanel" class="notice" style="margin:16px;display:block" hidden aria-label="Selected household result provenance">
+  <div id="profileResultHeader" aria-live="polite"></div>
+  <div id="profileRoofControls" class="form-grid"></div>
+  <div id="profileMarketMetadata"></div>
+  <fieldset><legend>Explicit scenario confirmations</legend>
+    <label><input type="checkbox" id="pmg_eligible_confirmed">I confirm PMG eligibility if I elect PMG remuneration</label>
+    <label><input type="checkbox" id="deduction_eligible_confirmed">I confirm eligibility and usable tax capacity for the selected investment deduction</label>
+    <label><input type="checkbox" id="unsupported_fiscal_year_acknowledged">I acknowledge applying the pinned fiscal assumptions to project years outside their supported dates</label>
+  </fieldset>
+  <div class="form-grid">
+  <label>Wholesale zone<select id="profileMarketZone"></select></label>
+  <label>Catalogue series<select id="profileMarketSeries"></select></label>
+  <label>Catalogue covered window<select id="profileMarketWindow"></select></label>
+  <label>Export valuation<select id="profileMarketValuation"></select></label>
+  </div>
+  <p>Market changes require saving and compiling a new household revision in setup. Then rerun calculations.</p>
+  <div class="inline" style="flex-wrap:wrap">
+  <button type="button" id="saveProfileMarket">Save market selection and reopen setup</button>
+  <button type="button" id="refreshProfileCatalog">Refresh catalogue metadata</button>
+  <button type="button" id="cancelProfileJob">Cancel owned job</button>
+  <button type="button" id="retryProfileJob">Rerun selected revision</button>
+  <button type="button" id="ownedReportHtml" disabled>HTML report</button>
+  <button type="button" id="ownedReportMarkdown" disabled>Markdown report</button>
+  <button type="button" id="ownedReportCsv" disabled>CSV report</button>
+  </div>
+</section>
+  <div class="layout">
+    <aside>
+      <div class="aside-head">
+        <div class="aside-title-wrap">
+          <h2>Scenario inputs</h2>
+          <span id="modifiedCountBadge" class="tag">0 modified</span>
+        </div>
+        <div class="aside-head-actions">
+          <button id="toggleInputs" class="mobile-input-toggle" aria-expanded="false">Inputs</button>
+          <button id="reset" class="quiet">Reset</button>
+        </div>
+      </div>
+      <p class="muted aside-note">Edits save automatically and sync across devices. Reset restores defaults.</p>
+
+      <input id="search" type="search" placeholder="Find an assumption…" aria-label="Search assumptions">
+
+      <div id="sidebarFilterMode" class="sidebar-mode-selector" role="radiogroup" aria-label="Input filter mode">
+        <button type="button" role="radio" aria-checked="true" tabindex="0" data-mode="all" class="sidebar-mode-btn active" id="modeAll">All inputs</button>
+        <button type="button" role="radio" aria-checked="false" tabindex="-1" data-mode="view" class="sidebar-mode-btn" id="modeView">This view</button>
+        <button type="button" role="radio" aria-checked="false" tabindex="-1" data-mode="modified" class="sidebar-mode-btn" id="modeModified">Modified</button>
+      </div>
+
+      <div id="sidebarSearchHint" class="sidebar-search-hint muted" hidden>Searching all inputs</div>
+
+      <div id="sidebarFilterStatus" class="sidebar-filter-status" role="status" aria-live="polite"></div>
+
+      <div id="sidebarEmptyState" class="sidebar-empty-state muted" hidden></div>
+      
+      <div id="pinnedAssumptions" class="common-inputs-panel">
+        <div class="pinned-header">
+          <h3>Common inputs</h3>
+          <span id="activeTabAssumptionsPill" class="tag active-tab-tag" style="display:none" hidden>Summary</span>
+        </div>
+        <div id="pinnedControlsList" class="pinned-controls-list"></div>
+      </div>
+
+      <div id="systemSummary" class="current-system-summary">
+        <div class="system-summary-title">Current system</div>
+        <div class="system-summary-rows">
+          <div class="system-summary-row">
+            <span class="system-summary-label">Solar PV</span>
+            <span class="system-summary-value" id="summarySolarPanels">—</span>
+          </div>
+          <div class="system-summary-row">
+            <span class="system-summary-label">Active roofs</span>
+            <span class="system-summary-value" id="summaryActiveRoofs">—</span>
+          </div>
+          <div class="system-summary-row">
+            <span class="system-summary-label">Usable storage</span>
+            <span class="system-summary-value" id="summaryStorage">—</span>
+          </div>
+        </div>
+        <a href="#design" data-view-target="design" class="system-summary-link">Configure system →</a>
+      </div>
+
+      <div id="controls"></div>
+    </aside>
+
+
+<main>
+      <div id="error" role="alert" hidden></div>
+
+      <!-- TAB 1: SUMMARY (THE ANSWER) -->
+      <section id="summary" class="view">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">INVESTMENT VERDICT · THE ANSWER</p>
+            <h1 id="systemTitle">Calculating…</h1>
+            <p id="systemSubtitle" class="system-subtitle muted"></p>
+          </div>
+        </div>
+        <div class="pills" id="systemTags"></div>
+
+        <div id="hpContextNoticeSummary" class="hp-notice-card" hidden></div>
+        <div id="hpBaselineNoticeSummary" class="hp-baseline-notice-card" hidden></div>
+
+        <!-- Compact Verdict Strip -->
+        <article class="verdict-strip-article" id="verdictStrip">
+          <div class="verdict-header-row">
+            <div>
+              <p class="eyebrow">EXECUTIVE VERDICT</p>
+              <h2>Key performance indicators</h2>
+            </div>
+            <div class="verdict-controls">
+              <div class="toggle-group" role="group" aria-label="Analysis scope">
+                <span class="toggle-label">Scope:</span>
+                <button type="button" class="toggle-btn active" id="scopeSolarBtn" data-scope="solar">Solar + battery only</button>
+                <button type="button" class="toggle-btn" id="scopePackageBtn" data-scope="package">Whole project (incl. electrification)</button>
+              </div>
+              <div class="toggle-group" role="group" aria-label="Cash payment basis">
+                <span class="toggle-label">Cash basis:</span>
+                <button type="button" class="toggle-btn active" id="cashBeforeBtn" data-cash="cash">Before loan (cash)</button>
+                <button type="button" class="toggle-btn" id="cashAfterBtn" data-cash="loan">After loan repayments</button>
+              </div>
+            </div>
+          </div>
+          <div class="cards verdict-cards" id="metrics"></div>
+          <p id="summaryScopeNote" class="muted verdict-note"></p>
+        </article>
+
+        <!-- Cumulative Cash Chart (The ONLY ordinary cumulative cash chart in the app) -->
+        <article id="cashFlowArticle">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">INVESTMENT RECOVERY</p>
+              <h2 id="cashFlowHeading">Your cash impact over time</h2>
+            </div>
+            <div class="toggle-group" role="group" aria-label="Curve basis">
+              <span class="toggle-label">Curve basis:</span>
+              <button type="button" class="toggle-btn active" id="curveUndiscountedBtn" data-curve-basis="undiscounted">Undiscounted cash</button>
+              <button type="button" class="toggle-btn" id="curveDiscountedBtn" data-curve-basis="discounted">Discounted (NPV)</button>
+            </div>
+            <label class="cash-view-label" style="display:none;">
+              View
+              <select id="cashFlowBasis" aria-label="Cash-flow view">
+                <option value="pv_incremental" selected>Solar project before financing</option>
+                <option value="whole_package">Whole-house versus historic bills</option>
+                <option value="solar_equity">Solar + storage after loan repayments</option>
+                <option value="package_equity">Whole-house after loan repayments</option>
+                <option value="financed">Full cost + loan interest</option>
+              </select>
+            </label>
+          </div>
+          <p id="cashFlowDescription" class="muted">Cumulative cash impact versus making no investment. Starts with upfront capital outlay; yearly savings bring the curve back toward zero. Clearly distinguishes undiscounted cumulative cash from discounted NPV.</p>
+          <p id="cashFlowBasisNote" class="cash-basis-note"></p>
+          <div id="cashInsights" class="cash-insights"></div>
+          <div class="cash-legend">
+            <span><i class="cash-line-key"></i><span id="cashLegendLine">Cumulative cash impact</span></span>
+            <span><i class="cash-zero-key"></i>Break-even threshold</span>
+            <span><i class="cash-annual-key"></i><span id="cashLegendAnnual">Annual net cash flow</span></span>
+            <span><i class="cash-weather-key"></i>Historical weather scenarios</span>
+          </div>
+          <div id="cashChart" class="chart cash-chart"></div>
+          <details class="cash-method-details" ontoggle="this.querySelector('summary').setAttribute('aria-expanded',this.open?'true':'false')">
+            <summary class="cash-method-summary" aria-expanded="false"><span class="cash-info-icon" aria-hidden="true">ⓘ</span> Chart notes &amp; weather traces</summary>
+            <p class="cash-note">Each thin trace tracks one historical PVGIS weather year repeated across the asset horizon. The bold line is the historical-weather ensemble mean; the shaded band shows the min–max of complete weather paths in the selected currency basis (real inflation-adjusted or nominal year-of-payment). Headline payback is persistent recovery of the ensemble-mean cash flows; individual weather paybacks remain separate diagnostics. Hover or focus a year to inspect yearly cash and discounted contribution.</p>
+          </details>
+          <div class="cash-disclosure-wrap">
+            <div class="cash-disclosure-bar">
+              <details id="cashFlowDetails" class="cash-flow-details">
+                <summary id="cashFlowSummary" class="cash-flow-summary" aria-expanded="false">
+                  <span class="cash-summary-title">Annual cash flows &amp; discounting method · Historical-weather ensemble mean</span>
+                  <span class="cash-chevron" aria-hidden="true">▾</span>
+                </summary>
+                <div class="cash-disclosure-body">
+                  <div class="cash-table-toolbar">
+                    <span class="cash-table-mode-caption" id="cashTableModeCaption">Historical-weather ensemble mean</span>
+                    <div class="toggle-group cash-table-mode-toggle" role="group" aria-label="Table display mode">
+                      <button type="button" class="toggle-btn active" id="cashTableMeanBtn">Mean</button>
+                      <button type="button" class="toggle-btn" id="cashTableRangeBtn">Range</button>
+                    </div>
+                  </div>
+                  <div id="cashTable" class="table-wrap cash-flow-table-wrap"></div>
+                  <div id="method"></div>
+                </div>
+              </details>
+              <button type="button" id="exportCashCsvBtn" class="action-btn-small quiet cash-export-csv-btn">Export CSV</button>
+            </div>
+          </div>
+        </article>
+
+        <!-- Your config vs recommended tile -->
+        <article id="configVsRecArticle">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">OPTIMIZATION BENCHMARK</p>
+              <h2>Your configuration vs recommended</h2>
+            </div>
+            <button type="button" class="quiet link-action" data-view-target="design">Explore in System design ↗</button>
+          </div>
+          <div id="configVsRecContent" class="config-vs-rec-grid"></div>
+        </article>
+
+        <!-- Sensitivity Analysis: active inputs and selected scope/cash -->
+        <article id="summarySensitivityArticle">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">ROBUSTNESS &amp; SENSITIVITY</p>
+              <h2>NPV sensitivity tornado across key drivers</h2>
+            </div>
+            <div class="summary-sensitivity-header-actions">
+              <span id="summarySensitivityBadge" class="summary-sensitivity-badge" style="display:none;">✓ Up to date</span>
+              <button id="runSummarySensitivityBtn" type="button" class="action-btn-small">Update sensitivity</button>
+            </div>
+          </div>
+          <p class="muted">ΔNPV across key economic, technical and weather drivers for the selected scope and cash basis.</p>
+          <div id="summarySensitivityContent" class="sensitivity-content"></div>
+        </article>
+
+        <!-- Prominently displayed saved scenarios comparison -->
+        <article id="savedScenariosArticle">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">SCENARIO COMPARISONS</p>
+              <h2>Saved scenarios side by side</h2>
+            </div>
+            <button id="clearSaved" class="quiet">Clear saved</button>
+          </div>
+          <p class="muted">Compare saved alternatives side by side across capital cost, NPV, payback, autarky, and system specs.</p>
+          <div id="saved"></div>
+        </article>
+      </section>
+
+      <!-- TAB 2: SYSTEM DESIGN (SOLAR + BATTERY SIZING MERGED) -->
+      <section id="design" class="view" hidden>
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">SYSTEM DESIGN · PHOTOVOLTAIC &amp; STORAGE OPTIMIZATION</p>
+            <h1>Find your optimal solar array &amp; storage configuration</h1>
+          </div>
+          <div class="sizing-action-bar">
+            <button id="runSolarSizing" type="button" class="action-btn">Run sizing analysis</button>
+            <span id="solarStatus" role="status" class="muted"></span>
+            <button id="runBatterySizing" type="button" style="display:none;">Run battery sizing</button>
+            <span id="batStatus" role="status" style="display:none;"></span>
+          </div>
+        </div>
+        <div id="hpContextNoticeDesign" class="hp-notice-card" hidden></div>
+        <div id="solarRecommendedBanner" class="pills"></div>
+        <div id="batEconomicsBanner" class="pills" style="display:none;"></div>
+
+        <div id="solarResultsWrap">
+          <!-- Top: Current system + 4 Recommendation cards (Best return, Balanced, Budget, Lower-cost alternative) -->
+          <article id="solarChoicesArticle">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">SIZING RECOMMENDATIONS</p>
+                <h2>Recommendation choices</h2>
+              </div>
+              <div class="recommendation-basis-controls">
+                <label for="solarFinancialBasis">
+                  <span class="control-label">Financial basis:</span>
+                  <select id="solarFinancialBasis" aria-label="Financial basis for ranking and sizing">
+                    <option value="project" selected>Project investment</option>
+                    <option value="after_financing">After financing</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            <p class="muted solar-choices-intro">Compare your active configuration with the recommended balanced system and alternative sizing choices.</p>
+            <details class="basis-explanation-details muted" id="solarBasisExplainer">
+              <summary>How the financial basis affects ranking</summary>
+              <div class="basis-explanation-content">
+              <small><strong>Project investment</strong> evaluates full turnkey installation cash outflows against utility savings. <strong>After financing</strong> ranks by discounted equity cash flows (initial owner cash contribution, loan proceeds, debt service repayments, and terminal debt balance under fixed borrowing rules), isolating the solar-only owner equity position.</small>
+              </div>
+            </details>
+            <div id="solarChoiceCards" class="solar-choices-grid"></div>
+            <div class="recommended-card" id="solarRecCardArticle" style="display:none;">
+              <h2 id="solarRecTitle">Recommended System</h2>
+              <div class="solar-apply-wrap">
+                <button id="applySolarSystem" type="button" class="action-btn confirm-save">Apply recommended system</button>
+                <span id="solarApplyStatus" role="status" class="muted"></span>
+              </div>
+              <div class="cards" id="solarRecCards"></div>
+              <p id="solarPricingNote" class="muted"></p>
+            </div>
+          </article>
+
+          <!-- ONE unified comparison table for the 5 key configurations -->
+          <article id="designComparisonArticle">
+            <details class="technical-folds">
+              <summary>View full tabular comparison (5 configurations)</summary>
+              <div class="section-head">
+                <div>
+                  <p class="eyebrow">FIVE-CONFIGURATION BENCHMARK</p>
+                  <h2>Configuration comparison table</h2>
+                </div>
+              </div>
+              <p class="muted">Compare your current configuration, best return (financial), balanced, budget, and lower-cost alternative configurations across turnkey capex, initial equity, loan principal, project NPV, equity NPV, payback, and autarky.</p>
+              <div id="designUnifiedComparisonTable" class="table-wrap"></div>
+              <!-- Keep hidden containers to satisfy any legacy selector lookups -->
+              <div id="solarComparisonsTable" style="display:none;"></div>
+              <div id="solarAlternativesTable" style="display:none;"></div>
+            </details>
+          </article>
+
+          <!-- On-demand Economic Assumptions Comparison Fold -->
+          <article id="sensitivityAnalysisArticle">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">ROBUSTNESS CHECK · 5 ECONOMIC SCENARIOS</p>
+                <h2>Compare economic assumptions</h2>
+              </div>
+              <div class="sensitivity-action-bar">
+                <button id="runSolarSensitivity" type="button" class="action-btn">Run economic sensitivity</button>
+                <span id="solarSensitivityStatus" role="status" class="muted"></span>
+              </div>
+            </div>
+            <p class="muted">Stress test optimal solar and storage configurations against 4 editable economic perturbations (lower export prices, higher installed capital costs, lower household consumption, and higher borrowing interest rates) evaluated across historical PVGIS weather analogues.</p>
+            <details id="sensitivityParametersFold" class="technical-folds" open>
+              <summary>Economic stress test parameters</summary>
+              <div class="form-grid sensitivity-controls">
+                <label>Lower export price reduction (%)<input id="sensExportDelta" type="number" min="0" max="100" step="1" value="20"><small>Export market price lowered by X% (PMG minimum price floor applies if elected).</small></label>
+                <label>Higher installed capital cost (%)<input id="sensCostDelta" type="number" min="0" max="100" step="1" value="20"><small>Turnkey PV fixed cost, €/kWp, battery €/kWh, extras &amp; quotes increased by X%.</small></label>
+                <label>Lower baseline electricity consumption (%)<input id="sensConsDelta" type="number" min="0" max="50" step="1" value="10"><small>Perturbation acts exclusively on measured baseline electricity load.</small></label>
+                <label>Higher borrowing APR (+percentage points)<input id="sensAprDelta" type="number" min="0" max="20" step="0.5" value="2.0"><small>Borrowing interest rate increased by X pp; debt rules and maturity held fixed.</small></label>
+              </div>
+              <p class="muted sensitivity-explanation-note">
+                <small><strong>Economic modeling rules:</strong> Baseline consumption reduction perturbs measured load only; heat pump or EV electrification schedules remain structurally intact. Minimum guaranteed price (PMG) floor provides downside cushion against market export drops. Equipment replacements in project years 10–15 are held fixed in current euros to isolate upfront capital risk. Debt financing fraction and loan maturity rules remain fixed, varying principal proportionally with candidate capital cost.</small>
+              </p>
+            </details>
+            <div id="solarSensitivityResultsWrap" style="display:none;">
+              <div id="solarSensitivityScenariosGrid" class="solar-robustness-verdict"></div>
+              <div id="solarSensitivityComparisonTable" class="table-wrap"></div>
+            </div>
+          </article>
+
+          <!-- PV size curve with marginal returns toggle -->
+          <article id="solarCurveArticle">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">ARRAY CAPACITY</p>
+                <h2 id="solarSizeCurveTitle">Solar size curve · Net present value &amp; energy metrics by panel count</h2>
+              </div>
+              <div class="curve-toggle-wrap">
+                <button id="toggleSolarCurveView" type="button" class="toggle-btn" aria-pressed="false">Show marginal returns (ΔNPV/panel)</button>
+              </div>
+            </div>
+            <p class="muted">Historical-weather ensemble mean discounted net present value for the top candidate under the selected objective. Shaded band shows historical weather spread (min–max).</p>
+            <div class="chart-legend" id="solarSizeLegend">
+              <span style="--series:#217a61">Mean discounted NPV (€)</span>
+              <span style="--series:#6285bd">Self-sufficiency / autarky (%)</span>
+              <span style="--series:#bd8334">Self-consumption (%)</span>
+              <span style="--series:#183b33">Recommended size marker</span>
+            </div>
+            <div id="solarChart1" class="chart"></div>
+            <div id="solarChart2Wrap" hidden>
+              <div class="chart-legend" id="solarMarginalLegend">
+                <span style="--series:#217a61">Incremental NPV (€ / added panel)</span>
+                <span style="--series:#bd8334">Incremental NPV (€ / added kWp)</span>
+                <span style="--series:#b94c37">Zero marginal return line</span>
+              </div>
+              <div id="solarChart2" class="chart"></div>
+              <div id="solarDiminishingNotice" class="notice"></div>
+            </div>
+            <details>
+              <summary>Solar size curve and marginal return data tables</summary>
+              <div id="solarTable1" class="table-wrap"></div>
+              <div id="solarTable2" class="table-wrap"></div>
+            </details>
+          </article>
+
+          <!-- Battery curve: marginal savings vs marginal cost with genuine optimum band -->
+          <article id="batteryCurveArticle">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">STORAGE CAPACITY</p>
+                <h2 id="batMarginalTitle">Marginal battery savings (€/usable kWh/yr) vs annualized installed battery cost</h2>
+              </div>
+            </div>
+            <p class="muted">True incremental bill savings for each additional kWh compared against annualized marginal battery cost. Shaded area marks the annualized first-year marginal-savings heuristic band where first-year unit savings exceed annualized unit battery capex, distinct from full lifetime discounted NPV.</p>
+            <div class="chart-legend">
+              <span style="--series:#217a61">Incremental savings (€/kWh/yr) · Historical weather range</span>
+              <span style="--series:#183b33">Ensemble mean incremental savings</span>
+              <span style="--series:#bd8334">Annualized marginal battery cost (net deduction)</span>
+              <span style="--series:#7b827c">Annualized marginal battery cost (gross)</span>
+            </div>
+            <div id="batChart2" class="chart"></div>
+            <div id="batOptimumCallout" class="notice"></div>
+            <details>
+              <summary>Incremental marginal savings data table</summary>
+              <div id="batTable2" class="table-wrap"></div>
+            </details>
+          </article>
+
+          <!-- ONE PV × battery heatmap -->
+          <article id="pvBatHeatmapArticle">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">JOINT CAPACITY SEARCH</p>
+                <h2>PV kWp × Battery kWh discounted NPV tradeoff heatmap</h2>
+              </div>
+              <div class="heatmap-header-actions">
+                <button type="button" id="solarHeatmapExpandBtn" class="action-btn-small" aria-haspopup="dialog" aria-expanded="false" title="Open expanded heatmap view">
+                  <span aria-hidden="true">⛶</span> Expanded view
+                </button>
+              </div>
+            </div>
+            <p class="muted">Matrix of evaluated PV system sizes and paired battery storage capacities, displaying historical-weather ensemble mean discounted net present value over the simulation horizon under the selected financial basis. Current configuration and optimum are marked.</p>
+            <div id="solarChart3" class="chart heatmap-chart"></div>
+            <div id="batChart4" class="chart heatmap-chart" style="display:none;"></div>
+            <p id="batRoofMixNote" class="muted" style="display:none;"></p>
+            <details>
+              <summary>PV × Battery tradeoff data table</summary>
+              <div id="solarTable3" class="table-wrap"></div>
+              <div id="batTable4" class="table-wrap" style="display:none;"></div>
+            </details>
+          </article>
+
+          <!-- Side-by-side Roof layout, roof capacity limits and orientation yield comparison -->
+          <div class="two design-roof-row">
+            <article id="roofYieldArticle">
+              <p class="eyebrow">ORIENTATION COMPARISON</p>
+              <h2>Roof yield comparison</h2>
+              <p id="roofModelContext" class="muted"></p>
+              <div id="roofChart" class="chart"></div>
+              <div class="chart-legend">
+                <span style="--series:#217a61">Selected PVGIS AC · model input</span>
+                <span style="--series:#7eac93">Default beam-shaded AC</span>
+                <span style="--series:#a3a9ad">All-light-shaded AC</span>
+                <span style="--series:#bd8334">Google annual DC · comparison only</span>
+                <span style="--series:#a2739a">Illustrative Google AC · comparison only</span>
+              </div>
+              <div id="roofCheck" class="table-wrap"></div>
+            </article>
+
+            <article id="roofLimitsArticle">
+              <p class="eyebrow">PHYSICAL FIT CHECK</p>
+              <h2>Roof capacity limits &amp; layout</h2>
+              <p class="muted">Estimated maximum panel counts by roof section used as advisory physical layout checks. Conceptual schematic, not a surveyed placement.</p>
+              <div class="form-grid roof-limit-controls">
+                <label>South (estimated max)<input id="maxSouth" type="number" min="0" step="1"></label>
+                <label>West (estimated max)<input id="maxWest" type="number" min="0" step="1"></label>
+                <label>East (estimated max)<input id="maxEast" type="number" min="0" step="1"></label>
+                <label>Dormer (estimated max)<input id="maxDormer" type="number" min="0" step="1"></label>
+                <label>Flat roof (estimated max)<input id="maxFlat" type="number" min="0" step="1"></label>
+                <label>Secondary south (estimated max)<input id="maxSecondarySouth" type="number" min="0" step="1"></label>
+              </div>
+              <div class="roof-limits-actions">
+                <button id="resetRoofLimits" type="button" class="quiet">Reset to estimated limits</button>
+                <span id="roofLimitsStatus" class="muted" role="status"></span>
+              </div>
+              <h3>Current scenario vs estimated limits</h3>
+              <div id="roofLimitsComparison" class="roof-limits-comparison" aria-live="polite"></div>
+              <h3>Current roof panel allocation</h3>
+              <div class="pills" id="solarRoofPills"></div>
+            </article>
+          </div>
+
+          <!-- Technical detail folds (closed initially) -->
+          <div class="technical-folds">
+            <details id="searchMethodologyFold">
+              <summary>Technical detail · Search methodology, boundaries &amp; unit costs</summary>
+              <div class="form-grid solar-controls" id="solarControlsWrap">
+                <label>Household scenario<select id="solarScenario"><option value="baseline">Historical electricity</option><option value="electrified" selected>Electrified · gas eliminated</option><option value="ev">Electrified + EV</option></select><small>EV charging activates based on ev_start_year setting.</small></label>
+                <label>Optimization objective<select id="solarObjective"><option value="npv_eur" selected>Maximize net present value (NPV € mean)</option><option value="autarky">Maximize self-sufficiency / autarky (%)</option><option value="self_consumption">Maximize self-consumption (%)</option><option value="payback_years">Minimize simple payback (years)</option><option value="discounted_payback_years">Minimize discounted payback (years)</option></select><small>Ties broken by lower capex then smaller system/storage.</small></label>
+                <label>PV / battery coupling<select id="solarTopologyMode"><option value="auto" selected>Optimize AC or DC coupling</option><option value="fixed">Keep scenario topology</option><option value="ac_equivalent">AC coupled</option><option value="dc_coupled">DC coupled</option></select><small>Enforces ILR, annual clipping, battery SoC and C-rate limits. Edit limits under System.</small></label>
+                <label>Storage sizing mode<select id="solarBatteryMode"><option value="joint" selected>Joint sizing (find best solar + storage pair)</option><option value="fixed">Keep current battery (fixed capacity)</option></select><small>Joint tests paired capacities; fixed preserves exact current capacity.</small></label>
+                <label>Storage costing basis<select id="solarBatteryCostMode"><option value="purchased" selected>New purchase (marginal battery capex)</option><option value="existing">Existing storage (sunk cost / €0 capex)</option></select><small>Applies in fixed storage mode: existing storage has €0 added capex.</small></label>
+                <label>Storage capacity range (kWh)<div class="range-inputs" style="display:flex;gap:6px;"><input id="solarBatteryMin" type="number" min="0" max="50" step="1" value="0" placeholder="Min"><input id="solarBatteryMax" type="number" min="0" max="50" step="1" value="20" placeholder="Max"></div><small>Capacity sweep bounds in joint sizing mode (includes 0 kWh).</small></label>
+                <label id="solarBatteryStepLabel">Storage step (kWh)<select id="solarBatteryStep" disabled><option value="2.35" selected>2.35 kWh per module</option></select><small id="solarBatteryStepHelp">Follows battery module capacity from left menu.</small></label>
+                <label>Experimental roofs<select id="solarIncludeTheoretical"><option value="true" selected>Include all configured planes</option><option value="false">Restricted legacy reference layouts</option></select><small>Restricted mode enforces physical 20 kWp threshold.</small></label>
+                <label>Tax deduction<select id="solarDeduction"><option value="0.5" selected>50% deduction (10-yr schedule)</option><option value="0.36">36% deduction (10-yr schedule)</option><option value="0">0% (no tax deduction)</option></select><small>Incremental PV of deduction capped by tax capacity.</small></label>
+                <div>
+                  <label>Optimization weather basis
+                    <div class="solar-weather-basis">Historical weather ensemble average</div>
+                    <small>Recommendations and headline metrics use the full historical-weather ensemble.</small>
+                  </label>
+                  <input id="solarRepresentative" type="hidden" value="median">
+                </div>
+                <label>NPV sacrifice for balanced choice (%)<div class="preset-input-wrap"><input id="solarNpvSacrifice" type="number" min="0" max="100" step="0.1" value="5"><div class="preset-pills"><button type="button" class="preset-chip" data-target="solarNpvSacrifice" data-value="1">1%</button><button type="button" class="preset-chip" data-target="solarNpvSacrifice" data-value="5">5%</button><button type="button" class="preset-chip" data-target="solarNpvSacrifice" data-value="10">10%</button></div></div><small>Eligible configs retain ≥(100−X)% max NPV; picks highest coverage.</small></label>
+                <label>Budget choice coverage target (%)<div class="preset-input-wrap"><input id="solarCoverageTarget" type="number" min="0" max="100" step="0.1" value="70"><div class="preset-pills"><button type="button" class="preset-chip" data-target="solarCoverageTarget" data-value="60">60%</button><button type="button" class="preset-chip" data-target="solarCoverageTarget" data-value="70">70%</button><button type="button" class="preset-chip" data-target="solarCoverageTarget" data-value="80">80%</button></div></div><small>Lowest installed capex meeting target coverage with positive NPV.</small></label>
+                <label>Profit retained by lower-cost alternative (%)<div class="preset-input-wrap"><input id="solarRetainedProfit" type="number" min="50" max="100" step="0.5" value="95"><div class="preset-pills"><button type="button" class="preset-chip" data-target="solarRetainedProfit" data-value="90">90%</button><button type="button" class="preset-chip" data-target="solarRetainedProfit" data-value="95">95%</button><button type="button" class="preset-chip" data-target="solarRetainedProfit" data-value="98">98%</button></div></div><small>Smaller system choice requires retaining at least X% of financial best return while minimizing installed capital expenditure.</small></label>
+                <label>Max annual clipping cap · DC-coupled (%)<div class="preset-input-wrap"><input id="solarClippingDcMax" type="number" min="0" max="100" step="0.1" value="4.0"><div class="preset-pills"><button type="button" class="preset-chip" data-target="solarClippingDcMax" data-value="3">3%</button><button type="button" class="preset-chip" data-target="solarClippingDcMax" data-value="4">4%</button><button type="button" class="preset-chip" data-target="solarClippingDcMax" data-value="5">5%</button><button type="button" class="preset-chip" data-target="solarClippingDcMax" data-value="7">7%</button></div></div><small>Enforces post-battery annual curtailment ceiling (forum consensus: ≤2–3% AC-coupled, ≤4% DC-coupled on 6 kW single-phase).</small></label>
+              </div>
+              <div class="form-grid battery-controls" style="display:none;">
+                <select id="batScenario"><option value="baseline">Historical electricity</option><option value="electrified" selected>Electrified · gas eliminated</option><option value="ev">Electrified + EV</option></select>
+                <input id="batRepresentative" type="hidden" value="median">
+                <select id="batStep"><option value="1" selected>1 kWh</option><option value="2">2 kWh</option></select>
+                <input id="batMaxCapacity" type="number" value="25">
+                <input id="batQuote10" type="number">
+                <input id="batQuote15" type="number">
+                <input id="batLifetime" type="number" value="12">
+                <input id="batDegradation" type="number" value="1.5">
+                <select id="batDeduction"><option value="0.5" selected>50%</option><option value="0.36">36%</option><option value="0">0%</option></select>
+                <input id="batCostSens" type="number" value="0">
+                <input id="batSpreadDelta" type="number" value="0">
+              </div>
+              <h3>Source assumptions &amp; benchmark unit costs</h3>
+              <div id="solarSourceVsScenario" class="table-wrap"></div>
+              <div id="batSourceVsScenario" class="table-wrap" style="display:none;"></div>
+              <p id="batLoadNote" class="muted" style="display:none;"></p>
+              <div class="cards" id="solarSearchSummaryCards"></div>
+              <ul id="solarLimitationsList"></ul>
+            </details>
+
+            <details id="batterySweepFold">
+              <summary>Technical detail · Storage capacity sweep 0–25 kWh autarky &amp; imports</summary>
+              <div id="batResultsWrap">
+                <div class="chart-legend">
+                  <span style="--series:#217a61">Self-sufficiency / autarky (%)</span>
+                  <span style="--series:#6285bd">Self-consumption (%)</span>
+                  <span style="--series:#df8a54">Annual grid imports (kWh/yr)</span>
+                </div>
+                <div id="batChart1" class="chart"></div>
+                <div id="batTable1" class="table-wrap"></div>
+              </div>
+            </details>
+
+            <details id="efcBreakEvenFold">
+              <summary>Technical detail · Equivalent full cycles (EFC) &amp; break-even formula</summary>
+              <div id="batBreakevenFormula" class="formula-box"></div>
+              <div class="chart-legend">
+                <span style="--series:#217a61">Physical cell EFC/year (ensemble mean)</span>
+                <span style="--series:#6285bd">Delivered EFC/year (ensemble mean)</span>
+                <span style="--series:#8e60aa">Charge-input EFC/year (ensemble mean)</span>
+                <span style="--series:#bd8334">Break-even required cycles (net deduction)</span>
+                <span style="--series:#7b827c">Break-even required cycles (gross)</span>
+              </div>
+              <div id="batChart3" class="chart"></div>
+              <div id="batTable3" class="table-wrap"></div>
+            </details>
+
+            <details id="neededCdfFold">
+              <summary>Technical detail · Daily single-cycle needed capacity CDF · historical-weather ensemble</summary>
+              <p class="muted" id="batCdfHeuristic"></p>
+              <div class="cards" id="batCdfPercentiles"></div>
+              <div id="batChart5" class="chart"></div>
+              <div id="batTable5" class="table-wrap"></div>
+            </details>
+
+            <details id="socHeatmapFold">
+              <summary>Technical detail · Full-year Day × Hour state of charge (SOC) · ensemble-mean heatmap</summary>
+              <div id="batSocNotice" class="notice" hidden></div>
+              <div class="cards" id="batSocFractions"></div>
+              <div id="batChart6" class="chart soc-heatmap-chart"></div>
+              <div id="batTable6" class="table-wrap"></div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: FINANCING -->
+      <section id="financing" class="view" hidden>
+        <p class="eyebrow">FINANCING SCENARIO</p>
+        <h1>Loan options &amp; cost of financing</h1>
+        <p class="muted">Examine the financial consequences of financing your solar or electrification project. Inputs on the left configure the loan; outcomes on the right reflect monthly commitments and true financing costs.</p>
+
+        <div class="two financing-main-grid">
+          <!-- Left: Loan inputs & solver -->
+          <article class="financing-inputs-article">
+            <h2>Loan parameters</h2>
+            <div class="form-grid loan-controls">
+              <label>Net loan amount (€)<input id="loanAmountControl" type="number" min="0" step="any" inputmode="decimal"></label>
+              <label id="loanFractionWrap" hidden>Eligible cost share (%)<input id="loanFractionControl" type="number" min="0" max="100" step="any"></label>
+              <label>Amount based on<select id="loanModeControl"><option value="amount">Requested euros</option><option value="fraction">Share of eligible cost</option></select></label>
+              <label>Nominal rate · TAN (%)<input id="loanAprControl" type="number" min="0" max="30" step="any"></label>
+              <label>Repayment term · years<input id="loanYearsControl" type="number" min="1" max="30" step="1"></label>
+              <label title="e.g. €16 imposta di bollo added to amortized balance (€15,015.72); raises effective TAEG to ~5.25%">Financed tax / stamp duty (€)<input id="loanFeesControl" type="number" min="0" step=".01" inputmode="decimal" placeholder="0.00" title="e.g. €16 imposta di bollo added to amortized balance (€15,015.72); raises effective TAEG to ~5.25%"></label>
+              <label id="loanScopeWrap">Loan covers<select id="loanScopeControl"><option value="solar">Solar investment</option><option value="solar_and_conversion">Solar + electrification</option></select></label>
+              <label title="Blank means no limit; applies to scheduled instalment.">Maximum monthly payment (€)<input id="loanMaxMonthlyPaymentControl" type="number" min="0" max="100000" step="any" inputmode="decimal" placeholder="No limit" title="Blank means no limit; applies to scheduled instalment."></label>
+              <div class="loan-rates-nested-grid">
+                <label>Inflation (%)<input id="loanInflationControl" type="number" min="0" max="15" step="any"></label>
+                <label>Real discount rate (%)<input id="loanDiscountControl" type="number" min="0" max="20" step="any"></label>
+              </div>
+              <div id="loanScopeContext" class="loan-scope-context muted"></div>
+            </div>
+            <p id="loanAssumptions" class="muted"></p>
+            <div class="loan-solver">
+              <button id="solveLoanAmount" type="button">Find quickest recovery</button>
+              <p id="loanSolveStatus" class="muted" role="status"></p>
+              <div id="loanSolveResult"></div>
+            </div>
+            <div id="loanReconciliation" class="loan-reconciliation" role="status"></div>
+          </article>
+
+          <!-- Right: Four key loan outcomes & recovery definitions -->
+          <article class="financing-outcomes-article">
+            <h2>Loan outcomes &amp; financing cost</h2>
+            <div id="loanPayment" class="loan-payment" role="status"></div>
+            <div class="cards loan-metric-cards" id="loanMetricCards"></div>
+            <div class="recovery-definitions-box">
+              <h3>Recovery definitions</h3>
+              <div class="recovery-def-item">
+                <strong>Personal cash recovery:</strong>
+                <span>Counts your upfront cash outlay after loan proceeds, and deducts actual debt service repayments (principal + interest). Reaches zero when your personal cash is recovered.</span>
+              </div>
+              <div class="recovery-def-item">
+                <strong>Unlevered cash payback:</strong>
+                <span>Counts the entire investment capex paid upfront with zero debt service, measuring pure operational asset payback from energy savings independent of financing.</span>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <!-- Matched comparison chart: Loan vs paying cash -->
+        <article id="loanCashArticle">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">MATCHED CASH COMPARISON</p>
+              <h2>Position with loan vs paying cash upfront</h2>
+            </div>
+            <div class="toggle-group" id="loanCurveBasis" role="group" aria-label="Curve basis">
+              <span class="toggle-label">Curve basis:</span>
+              <button type="button" class="toggle-btn" id="loanCurveUndiscounted" data-curve-basis="undiscounted" aria-pressed="false">Undiscounted cash</button>
+              <button type="button" class="toggle-btn active" id="loanCurveDiscounted" data-curve-basis="discounted" aria-pressed="true">Discounted (NPV)</button>
+            </div>
+          </div>
+          <p class="muted">Direct comparison holding scope, equipment quote, weather analogues and inflation basis identical. Zero loan exhibits zero cost of financing.</p>
+          <div class="cash-insights" id="loanInsights"></div>
+          <div class="cash-legend">
+            <span><i class="cash-line-key"></i>With loan (after repayments)</span>
+            <span><i class="cash-zero-key"></i>Paying cash upfront</span>
+            <span><i class="cash-annual-key"></i>Annual net cash flow</span>
+            <span><i class="cash-weather-key"></i>Historical weather scenarios</span>
+          </div>
+          <div id="loanCashChart" class="chart cash-chart"></div>
+          <p class="cash-note">Thin lines show individual historical weather scenarios. The bold line is the historical-weather ensemble mean and the shaded range shows historical min–max in the selected currency basis. The chart marker indicates persistent recovery of the drawn ensemble-mean cash flows; loan comparison metrics use the mean discounted trajectory. Each historical weather profile repeats throughout the horizon.</p>
+        </article>
+
+        <!-- Saved loan simulations table -->
+        <article>
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">SIMULATION ARCHIVE</p>
+              <h2>Compare loan simulations</h2>
+            </div>
+          </div>
+          <p class="muted">Compare saved financing alternatives with best values highlighted per metric row. Handles unrecovered horizons and stale snapshots cleanly.</p>
+          <div class="loan-save-row">
+            <label>Simulation name<input id="loanSaveName" maxlength="80" placeholder="e.g. 10-year loan at 5% APR"></label>
+            <button id="saveLoanSimulation" type="button">Save this loan simulation</button>
+          </div>
+          <p id="loanSaveStatus" class="muted" role="status"></p>
+          <div id="loanPivot" class="table-wrap"></div>
+        </article>
+      </section>
+
+      <!-- TAB 4: HOW IT BEHAVES (DAY & HOUR + ENERGY BALANCE MERGED) -->
+      <section id="behavior" class="view" hidden>
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">ENERGY DISPATCH &amp; BEHAVIOR</p>
+            <h1>How the system behaves across hours, days and seasons</h1>
+          </div>
+          <!-- ONE Common Household Scenario Toggle -->
+          <div class="household-scenario-bar">
+            <span class="toggle-label">Household scenario:</span>
+            <div class="toggle-pills">
+              <button type="button" class="toggle-btn" data-behavior-scen="baseline" aria-pressed="false">Historical electricity</button>
+              <button type="button" class="toggle-btn active" data-behavior-scen="electrified" aria-pressed="true">Electrified · gas eliminated</button>
+              <button type="button" class="toggle-btn" data-behavior-scen="ev" aria-pressed="false">Electrified + EV</button>
+            </div>
+          </div>
+        </div>
+        <p class="muted">Hourly physical dispatch over historical PVGIS weather analogues. Shows annual energy balances, seasonal typical-day profiles, and time-of-day grid import/export heatmaps under a unified household scenario.</p>
+
+
+        <!-- Annual Energy Flow Visual (Stacked / Sankey Conservation) -->
+        <article id="annualEnergyFlowArticle">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">ANNUAL BALANCE CONSERVATION</p>
+              <h2>Annual energy flow · generation vs demand</h2>
+            </div>
+            <div class="balance-view-selector">
+              <button type="button" class="toggle-btn active" data-balance-view="annual" aria-pressed="true">Annual Sankey</button>
+              <button type="button" class="toggle-btn" data-balance-view="monthly" aria-pressed="false">Monthly Balance (Jan–Dec)</button>
+            </div>
+          </div>
+          <p id="annualFlowMeta" class="muted annual-flow-meta"></p>
+          <div id="annualEnergyFlowVisual" class="energy-flow-visual"></div>
+          <div id="monthlyBalanceVisual" class="chart" hidden></div>
+          <div id="energyBalance" style="display:none;"></div>
+          <div id="comparisons" style="display:none;"></div>
+        </article>
+
+        <!-- A SINGLE Typical-day chart with season selector & dual axes -->
+        <article id="typicalDayArticle">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">24-HOUR HOURLY PROFILE</p>
+              <h2 id="typicalDayHeading">Average-day dispatch · solar, load &amp; battery state of charge</h2>
+            </div>
+            <div class="season-selector-pills" id="seasonSelectorPills">
+              <button type="button" class="toggle-btn" data-season="annual" aria-pressed="false">Annual</button>
+              <button type="button" class="toggle-btn" data-season="spring" aria-pressed="false">Spring</button>
+              <button type="button" class="toggle-btn active" data-season="summer" aria-pressed="true">Summer</button>
+              <button type="button" class="toggle-btn" data-season="autumn" aria-pressed="false">Autumn</button>
+              <button type="button" class="toggle-btn" data-season="winter" aria-pressed="false">Winter</button>
+            </div>
+          </div>
+          <p class="muted">Hourly flows and battery state of charge are averaged across days and all historical weather years for the selected annual or seasonal period. The left axis shows power (kW); the right axis shows stored energy (kWh). Usable PV is modeled PV retained after curtailment and can include PV routed to battery charging in DC-coupled approximation mode. Shaded bands show P10–P90 variation between weather years’ average-day profiles, not daily extremes or confidence intervals. Plotted in fixed UTC+1 standard time; local civil DST schedules (Europe/Rome) shift by +1 hour during summer daylight saving time.</p>
+          <div class="chart-legend">
+            <span style="--series:#6285bd">Usable PV (AC-equivalent kW)</span>
+            <span style="--series:#bd8334">Household demand (kW)</span>
+            <span style="--series:#217a61">Direct PV use (kW)</span>
+            <span style="--series:#e6b65b">Battery state of charge (kWh)</span>
+            <span style="--series:#9865a8">Grid import (kW)</span>
+            <span style="--series:#81929e">Grid export (kW)</span>
+          </div>
+          <div id="typicalDayChart" class="chart"></div>
+        </article>
+
+        <article id="pvClippingArticle">
+          <section id="pvClippingBreakdown" class="pv-clipping-breakdown" aria-live="polite">
+            <h3>PV inverter clipping &amp; seasonal schedule profile</h3>
+            <p id="pvClippingMethodNote" class="muted">AC-equivalent mode: hourly modeled PV above the inverter AC limit is curtailed before household loads, battery charging, and export.</p>
+            <div id="pvClippingTable"></div>
+          </section>
+        </article>
+
+        <article id="switchHourOptimizer" class="card" aria-live="polite">
+          <p class="muted">Switch-hour trade-off · Waiting for dispatch simulation.</p>
+        </article>
+
+        <!-- Month × Hour Heatmap for grid import and export -->
+        <article id="monthHourHeatmapArticle">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">TIME-OF-DAY HEATMAP</p>
+          <h2>Month × Hour dispatch heatmap</h2>
+            </div>
+            <div class="heatmap-metric-selector">
+              <button type="button" class="toggle-btn active" data-heatmap-metric="import" aria-pressed="true">Grid Import (kWh/h)</button>
+              <button type="button" class="toggle-btn" data-heatmap-metric="export" aria-pressed="false">Grid Export (kWh/h)</button>
+              <button type="button" class="toggle-btn" data-heatmap-metric="clipping" aria-pressed="false">PV clipping (kWh/h)</button>
+              <button type="button" class="toggle-btn" data-heatmap-metric="soc" aria-pressed="false">Battery SoC (kWh)</button>
+            </div>
+          </div>
+          <p id="monthHourHeatmapNote" class="muted">Hourly averages by calendar month across all 24 clock hours in fixed UTC+1 standard time (civil DST schedule labels shift during summer). Select PV clipping to see when the selected dispatch topology curtails modeled PV.</p>
+          <div id="monthHourHeatmap" class="chart heatmap-chart"></div>
+        </article>
+
+        <!-- Advanced fold: Hour-by-hour calendar explorer -->
+        <details id="dayhourExplorerFold">
+          <summary>Hour-by-hour calendar explorer (Day &amp; Month detailed simulation)</summary>
+          <p class="muted dayhour-clock-note" style="margin-top:8px;"><small>Hourly series plot in fixed UTC+1 standard time. When civil local time (Europe/Rome) is active, DST introduces a 1-hour offset in summer. Minute-level schedule bounds govern permitted duration and partial-hour energy allocation without sub-hourly PV coincidence.</small></p>
+          <p class="eyebrow" id="dayhourEyebrow" style="margin-top:12px;">FIRST OPERATING YEAR WEATHER SCENARIOS</p>
+          <div class="form-grid dayhour-controls">
+            <label>View<select id="dayhourMode"><option id="dayhourModeForecastOption" value="forecast_2027" selected>Forecast first year · 2027</option><option value="historical">Historical weather year</option></select></label>
+            <label>Period<select id="dayhourPeriod"><option value="day" selected>Selected day</option><option value="month">Monthly average</option></select></label>
+            <label>Electricity scenario<select id="dayhourScenario"><option value="baseline">Historical electricity</option><option value="electrified" selected>Electrified · gas eliminated</option><option value="ev">Electrified + EV</option></select></label>
+            <label id="representativeControl">Weather statistics<select id="weatherRepresentative"><option value="mean" selected>Historical arithmetic mean · P10–P90 spread</option><option value="low">Low PV · P10 analogue</option><option value="median">Median PV · P50 analogue</option><option value="high">High PV · P90 analogue</option></select></label>
+            <label id="weatherYearControl" hidden>Historical weather year<select id="weatherYear"></select></label>
+            <label id="dayPickerControl">Local calendar day<input id="weatherDate" type="date" value="2027-01-01"></label>
+            <label id="monthPickerControl" hidden>Calendar month<select id="dayhourMonth"><option value="1" selected>January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select></label>
+            <label class="hour-control">Selected hour · <span id="selectedHourLabel">00:00–01:00</span><input id="hourSlider" type="range" min="0" max="23" step="1" value="12" aria-label="Select hour of day"></label>
+            <div class="hour-buttons"><button id="previousHour" type="button" aria-label="Previous hour">← Previous</button><button id="nextHour" type="button" aria-label="Next hour">Next →</button></div>
+          </div>
+          <p id="dayhourStatus" class="muted" role="status"></p>
+          <div class="cards dayhour-cards" id="hourSummary"></div>
+          <div id="dayhourUncertainty" class="table-wrap"></div>
+          
+          <h3 id="solarFlowTitle">PV generation and household use · kWh per hour</h3>
+          <div id="dailySolarFlow" class="chart day-chart"></div>
+          <h3 id="gridBatteryTitle">Battery and grid flows · kWh per hour</h3>
+          <div id="dailyGridBattery" class="chart day-chart"></div>
+          <h3 id="socTitle">Battery state of charge · kWh stored at end of hour</h3>
+          <div id="dailySoc" class="chart day-chart"></div>
+          <div id="dayTotals" class="table-wrap"></div>
+
+          <!-- Heat pump hourly dispatch explorer -->
+          <div id="dayhourHpSection" class="dayhour-hp-section" hidden>
+            <div class="section-head" style="margin-top:16px;">
+              <div>
+                <p class="eyebrow">HEAT PUMP DISPATCH</p>
+                <h3 id="dayhourHpTitle" style="margin:2px 0 4px;">Hourly heat pump dispatch &amp; thermal telemetry</h3>
+              </div>
+            </div>
+            <p id="dayhourHpStatus" class="muted">Hourly dispatch breakdown for space heating, domestic hot water, backup resistance, and auxiliary electricity.</p>
+            <div class="cards dayhour-cards" id="dayhourHpHourCards"></div>
+            <details id="dayhourHpTableFold" class="control-details hp-table-fold">
+              <summary>24-hour heat pump dispatch &amp; temperatures table</summary>
+              <div id="dayhourHpTable" class="table-wrap"></div>
+            </details>
+          </div>
+
+          <h2 id="dayChartTitle" style="display:none;">Daily or monthly energy flows</h2>
+          <div id="annualConsumption" style="display:none;"></div>
+          <div id="monthlyConsumption" style="display:none;"></div>
+          <div id="consumptionTable" style="display:none;"></div>
+          <p id="consumptionContext" style="display:none;"></p>
+        </details>
+
+        <details id="hvacLoadDrawer" class="control-details">
+          <summary id="hvacLoadSummary">Electrified HVAC load model</summary>
+          <div id="hpContextNoticeBehavior" class="hp-notice-card" hidden></div>
+          <div id="hpBaselineNoticeBehavior" class="hp-baseline-notice-card" hidden></div>
+          <div id="heatPumpReportPanel" class="hp-report-panel" hidden></div>
+          <article id="acHeatingComparisonArticle" class="ac-heating-comparison-article" hidden>
+            <div id="acHeatingComparisonPanel" class="ac-heating-comparison-panel"></div>
+          </article>
+        </details>
+      </section>
+
+      <!-- TAB 5: PRICES & MARKET -->
+      <section id="prices" class="view" hidden>
+        <p class="eyebrow">MARKET DATA &amp; COMMODITY PRICES</p>
+        <h1>Wholesale market curves, export capture &amp; tariff valuation</h1>
+        <p class="muted">Transparent wholesale market clearing prices for the selected wholesale series, hourly solar export capture factors, adjacent retail and gas tariff assumptions, and Levelized Cost of Electricity.</p>
+
+        <!-- Adjacent import tariffs and export prices -->
+        <article id="tariffsAdjacentArticle">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">TARIFF BENCHMARK</p>
+              <h2>Import tariffs, gas price and export remuneration</h2>
+            </div>
+          </div>
+          <p class="muted">Side-by-side view of retail electricity and gas costs against modeled solar export capture prices under current assumptions.</p>
+          <div id="adjacentPricesContent" class="two"></div>
+        </article>
+
+        <!-- Auditable natural gas bill and progressive statutory taxes -->
+        <article id="gasCostsArticle">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">AUDITABLE GAS BILL &amp; TAXATION</p>
+              <h2>First-year gas costs, statutory taxes &amp; invoice reconciliation</h2>
+            </div>
+          </div>
+          <p class="muted">First-year natural gas bills, progressive annual tax bands, and utility invoice reconciliation under current tariffs and statutory tax rates.</p>
+          <div id="gasCostsContent"></div>
+        </article>
+
+        <!-- LCOE vs Grid electricity price -->
+        <article id="lcoeComparisonArticle">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">LEVELIZED COST OF ELECTRICITY</p>
+              <h2>LCOE vs Retail Grid Electricity Tariff</h2>
+            </div>
+          </div>
+          <p class="muted">Gross LCOE (total lifetime costs divided by discounted generation) and net LCOE (after 50% or 36% tax deduction) compared directly against your retail electricity price.</p>
+          <div id="lcoeContent" class="cards"></div>
+        </article>
+
+        <!-- Wholesale export price & solar capture -->
+        <article id="exportValuationArticle">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">WHOLESALE MARKET VALUATION</p>
+              <h2>Wholesale export price &amp; solar capture factor</h2>
+            </div>
+          </div>
+          <div class="cards" id="exportValuationCards"></div>
+          <div id="exportSensitivityComparison"></div>
+          <p id="exportValuationNote" class="muted"></p>
+        </article>
+
+        <!-- Official GME Wholesale Market Curve · CSUD Zone -->
+        <article id="marketCurveArticle">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">OFFICIAL GME MARKET DATA</p>
+              <h2>Wholesale market price curve · selected series</h2>
+            </div>
+            <div class="inline">
+              <label>Data window
+                <select id="marketCurveWindow">
+                  <option value="oct2025_sep2026" selected>Oct 2025 – Sep 2026 (Recent 12 months)</option>
+                  <option value="calendar_2025">Calendar 2025</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <p id="marketCurveProvenance" class="muted"></p>
+          <div class="chart-legend">
+            <span style="--series:#217a61">Spring (Mar–May)</span>
+            <span style="--series:#df8a54">Summer (Jun–Aug) · Midday solar dip</span>
+            <span style="--series:#bd8334">Autumn (Sep–Nov)</span>
+            <span style="--series:#6285bd">Winter (Dec–Feb)</span>
+            <span style="--series:#163d35">Annual 24h average</span>
+          </div>
+          <p class="muted">Hourly prices reflect raw historical GME MGP Day-Ahead clearing prices for the selected wholesale series in fixed UTC+1 standard time. Midday solar supply depresses wholesale clearing prices between 11:00 and 15:00.</p>
+          <h3>Seasonal 24-hour price profile · EUR / MWh</h3>
+          <div id="marketSeasonalChart" class="chart"></div>
+          <details>
+            <summary>12-Month × 24-Hour price table (EUR/MWh &amp; EUR/kWh)</summary>
+            <div id="marketCurveTable" class="table-wrap"></div>
+          </details>
+        </article>
+      </section>
+
+      <!-- TAB 6: ASSUMPTIONS & EVIDENCE -->
+      <section id="assumptions" class="view" hidden>
+        <p class="eyebrow">TRACEABLE INPUTS &amp; AUDIT TRAIL</p>
+        <h1>Assumptions, calibration &amp; evidence register</h1>
+        <p class="muted">Audit register of all model inputs, provenance status, contractor confirmation checklist, and calibration checks.</p>
+
+        <!-- User-supplied solar datasets -->
+        <article id="datasetEvidence">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">USER DATASETS</p>
+              <h2>User-supplied solar datasets</h2>
+        <p id="activeWeatherCoverage" class="muted" role="status"></p>
+            </div>
+          </div>
+          <p class="muted">Files stored in project folder and reused offline; active calculations stay unchanged until validated import.</p>
+
+          <details open>
+            <summary>PVGIS solar datasets (v6 &amp; v5.3)</summary>
+            <div class="dataset-tab-bar" role="tablist" aria-label="PVGIS version selection">
+              <button type="button" class="toggle-btn active" role="tab" id="datasetTabV6" data-dataset-tab="pvgis6" aria-selected="true" aria-controls="datasetPanelV6">PVGIS 6</button>
+              <button type="button" class="toggle-btn" role="tab" id="datasetTabV53" data-dataset-tab="pvgis53" aria-selected="false" aria-controls="datasetPanelV53">PVGIS 5.3</button>
+            </div>
+            <div id="datasetPanelV6" role="tabpanel" aria-labelledby="datasetTabV6">
+              <label>PVGIS 6 files (.csv, .json)<input type="file" id="datasetFilesV6" accept=".csv,.json" multiple></label>
+            </div>
+            <div id="datasetPanelV53" role="tabpanel" aria-labelledby="datasetTabV53" hidden>
+              <label>PVGIS 5.3 files (.csv, .json)<input type="file" id="datasetFilesV53" accept=".csv,.json" multiple></label>
+            </div>
+            <div class="form-grid">
+              <label for="datasetSeriesLabel">Roof plane / series label
+                <input type="text" id="datasetSeriesLabel" value="South" maxlength="80">
+                <small class="muted">Use the same label for the v6 and v5.3 files of one roof plane. Use a different label for a different orientation.</small>
+              </label>
+            </div>
+            <p class="muted">PVGIS 6 supplies covered hours; PVGIS 5.3 fills only uncovered hours. Matching configurations are required.</p>
+          </details>
+
+          <details>
+            <summary>Google Solar datasets</summary>
+            <div class="form-grid">
+              <label>Google Solar files (.json, .tif, .tiff)<input type="file" id="datasetFilesGoogle" accept=".json,.tif,.tiff" multiple></label>
+            </div>
+          </details>
+
+          <div class="form-grid">
+            <button type="button" id="datasetUpload">Stage datasets</button>
+            <span id="datasetUploadStatus" role="status" aria-live="polite" class="muted"></span>
+          </div>
+
+          <div id="datasetCoverage" role="status" class="muted"></div>
+
+          <div class="table-wrap">
+            <table class="flow-data-table" aria-label="User datasets register">
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th>File</th>
+                  <th>Series</th>
+                  <th>Coverage</th>
+                  <th>Validation</th>
+                </tr>
+              </thead>
+              <tbody id="datasetRows"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <!-- Installer confirmation checklist -->
+        <article id="installerChecklistArticle">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">ON-SITE VERIFICATION</p>
+              <h2>Installer site-survey confirmation checklist</h2>
+            </div>
+          </div>
+          <p class="muted">Items requiring physical verification during installer site inspection prior to procurement.</p>
+          <div id="installerChecklist" class="checklist-grid"></div>
+        </article>
+
+        <!-- Input register with status chips -->
+        <article>
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">REGISTER OF INPUTS</p>
+              <h2>Traceable input ledger</h2>
+            </div>
+          </div>
+          <p class="muted">Every record carries status, source, access date, parameter bounds and provenance. User edits remain scenario values; editing does not imply installer validation.</p>
+          <div id="ledger" class="table-wrap"></div>
+        </article>
+
+        <!-- Calibration checks & Conflicts retained in plain language -->
+        <article>
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">MODEL CALIBRATION</p>
+              <h2>Calibration checks</h2>
+            </div>
+          </div>
+          <div id="calibration" class="table-wrap"></div>
+        </article>
+
+        <article>
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">TRANSPARENT LIMITATIONS</p>
+              <h2>Conflicts retained</h2>
+            </div>
+          </div>
+          <ul>
+            <li>Local research reports no CER; an earlier POD-based GSE map lookup returned configurations. CER revenue is disabled. Availability remains disputed.</li>
+            <li>The local cost formula and package benchmark differ. Default costs are calibrated to the package benchmark; the original formula is a sensitivity.</li>
+            <li>The supplied capture price and baseload × capture factor differ. Both are modeled without applying capture twice.</li>
+            <li>The dormer annual yield and shade-mask result conflict. Dormer and flat-rack layouts remain experimental.</li>
+          </ul>
+        </article>
+
+        <!-- Anchored Metric Definitions -->
+        <article id="metricDefinitionsArticle">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">CORE DEFINITIONS</p>
+              <h2>Key financial and energy metric definitions</h2>
+            </div>
+          </div>
+          <p class="muted">Authoritative definitions of primary metrics across the lab, anchored to discounted cash-flow conventions and physical dispatch simulation.</p>
+          <div class="metric-definitions-grid">
+            <div class="metric-definition-card" id="def-npv">
+              <h3>Discounted Net Present Value (NPV)</h3>
+              <p>The net economic surplus of the investment over the configured project horizon in present purchasing power, discounted at the nominal hurdle rate (or equivalent real rate). Compares the solar/package system directly against remaining on grid supply. Invariant across real and nominal display modes.</p>
+            </div>
+            <div class="metric-definition-card" id="def-payback">
+              <h3>Discounted Payback Period</h3>
+              <p>The earliest operational year in which cumulative discounted net cash flows permanently exceed the initial turnkey capex and loan financing expenses, verified across individual weather analogue paths.</p>
+            </div>
+            <div class="metric-definition-card" id="def-autarky">
+              <h3>Autarky (Household Demand Coverage)</h3>
+              <p>The fraction of annual household electricity consumption supplied directly by solar PV or discharged from the paired battery (1 − Grid Imports / Household Demand). Measures self-sufficiency.</p>
+            </div>
+            <div class="metric-definition-card" id="def-self-consumption">
+              <h3>Self-Consumption Rate</h3>
+              <p>The fraction of total annual solar PV generation consumed on-site—either immediately by domestic loads or routed to charge the battery (1 − Grid Exports / Total PV Generation). Measures solar utilization.</p>
+            </div>
+            <div class="metric-definition-card" id="def-year1">
+              <h3>Year-1 Net Cash Flow</h3>
+              <p>Net pocket cash benefit in the first operational year, consisting of avoided electric bills and net export earnings, plus the first annual IRPEF tax deduction installment, minus loan debt service (principal and interest). Deflated to installation purchasing power when viewed in real euros.</p>
+            </div>
+            <div class="metric-definition-card" id="def-lcoe">
+              <h3>Levelized Cost of Electricity (LCOE)</h3>
+              <p>Total lifetime lifecycle costs (turnkey capex, inverter and battery replacements, plus routine O&amp;M, discounted over the configured project horizon) divided by total lifetime AC electricity generation. Signed LCOE advantage represents the direct discount per kWh relative to grid retail tariffs.</p>
+            </div>
+          </div>
+        </article>
+
+        <!-- Closed folds for Model Boundaries and Data Processing -->
+        <details id="modelBoundariesFold">
+          <summary>Model boundaries &amp; honest limitations</summary>
+          <ul id="limitations"></ul>
+        </details>
+
+        <details id="dataProcessingFold">
+          <summary>Data processing &amp; verification details</summary>
+          <div id="dataNotes"></div>
+          <p><a href="/verification.json" target="_blank">Machine-readable verification json ↗</a></p>
+        </details>
+      </section>
+
+      <!-- TAB 7: CONTRACTOR PITCH -->
+      <section id="quote" class="view" hidden>
+        <p class="eyebrow">CONTRACTOR PITCH &amp; NEGOTIATION</p>
+        <h1>Contractor pitch, quote itemization &amp; questions</h1>
+        <p class="muted">Tooling to evaluate incoming contractor proposals, itemize quotes with VAT separation, verify promised performance claims against physical simulation, and solve maximum supportable prices.</p>
+
+        <!-- One-page quote comparison sheet -->
+        <article class="pitch-sheet-article" id="contractorComparisonSheet">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">PROPOSAL EVALUATION SHEET</p>
+              <h2>One-page quote evaluation &amp; negotiation sheet</h2>
+            </div>
+            <button id="printPitchBtn" type="button" class="action-btn-small">Print / Save PDF</button>
+          </div>
+          <div id="quoteComparisonSheetContent" class="quote-sheet-content"></div>
+          <div id="contractorQuestionsBox" class="questions-box">
+            <h3>Essential questions to ask your installer</h3>
+            <ol>
+              <li><strong>Module model &amp; degradation:</strong> What is the exact panel model, first-year loss guarantee, and annual degradation warranty?</li>
+              <li><strong>Inverter clipping &amp; hybrid rating:</strong> Is the inverter continuous AC rating matched to the kWp array, and does it support simultaneous full battery discharge?</li>
+              <li><strong>Usable vs Nameplate storage:</strong> What is the certified usable kWh, Depth-of-Discharge (DoD), roundtrip efficiency (RTE), and warranted cycle count/throughput?</li>
+              <li><strong>Roof layout &amp; setbacks:</strong> Has an installer verified physical dimensions on each selected roof plane including fire and eaves setbacks?</li>
+              <li><strong>Itemized turnkey breakdown:</strong> Are scaffolding, electrical panel modifications, GSE connection bureaucracy, and VAT explicitly listed?</li>
+              <li><strong>Tax deduction documentation:</strong> Is the invoice split into compliant deduction categories under current Italian fiscal guidelines?</li>
+            </ol>
+          </div>
+        </article>
+
+        <!-- Detailed offer inputs & evidence (Behind useful detail folds) -->
+        <details id="contractorItemizedFold">
+          <summary>Itemized offer lines &amp; contractor specs</summary>
+          <article>
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">CONTRACTOR QUOTE</p>
+                <h2>Itemized offer lines</h2>
+              </div>
+            </div>
+            <p class="muted">Net line amount × quantity, with VAT entered separately. Populated lines override the turnkey quote control.</p>
+            <div id="quoteLines"></div>
+            <button id="addLine">Add line item</button>
+            <p id="quoteTotal"></p>
+            <div id="quoteFields" class="form-grid"></div>
+          </article>
+        </details>
+
+        <details id="contractorClaimsFold">
+          <summary>Contractor promised claims vs physical simulation</summary>
+          <article>
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">CLAIM AUDIT</p>
+                <h2>Claims versus simulation</h2>
+              </div>
+            </div>
+            <div class="form-grid">
+              <label>Promised annual PV yield (kWh)<input type="number" data-quote="claimed_yield_kwh" min="0"></label>
+              <label>Promised self-consumption (%)<input type="number" data-quote="claimed_self_consumption_pct" min="0" max="100"></label>
+              <label>Promised simple payback (years)<input type="number" data-quote="claimed_payback_years" min="0" step=".1"></label>
+            </div>
+            <div id="claims"></div>
+          </article>
+        </details>
+
+        <details id="contractorSolverFold">
+          <summary>Maximum economically supportable price solver</summary>
+          <article>
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">PRICE CEILING SOLVER</p>
+                <h2>Maximum economically supportable price</h2>
+              </div>
+            </div>
+            <p class="muted">Solves the maximum upfront turnkey cost (VAT included) that satisfies your target return or payback constraint.</p>
+            <div class="inline">
+              <label>Target metric
+                <select id="fairMetric">
+                  <option value="npv">NPV (€)</option>
+                  <option value="simple_payback">Maximum simple payback (years)</option>
+                  <option value="discounted_payback">Maximum discounted payback (years)</option>
+                  <option value="irr">Required return (fraction)</option>
+                  <option value="lcoe">Maximum LCOE (EUR/kWh)</option>
+                </select>
+              </label>
+              <label>Target<input type="number" id="fairTarget" value="0" step="any"></label>
+              <button id="solve">Solve price</button>
+            </div>
+            <div id="fairResult"></div>
+          </article>
+        </details>
+
+        <details id="contractorBenchmarkFold">
+          <summary>Price evidence &amp; market benchmark data</summary>
+          <article>
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">BENCHMARK DATA</p>
+                <h2>Price evidence &amp; benchmark ranges</h2>
+              </div>
+            </div>
+            <p class="muted">Market benchmark inputs from regional research. Scenario ranges, not a commercial quotation.</p>
+            <div id="market" class="table-wrap"></div>
+          </article>
+        </details>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    PV Lab · Python simulation · local data · October 2026 <span id="latency"></span>
+  </footer>
+
+  <script src="/sync.js"></script>
+  <script src="/restart.js"></script>
+  <script src="/onboarding.js"></script>
+  <script src="/app.js"></script>
+  <script src="/schedule.js"></script>
+  <script src="/evidence-datasets.js"></script>
+</body>
+</html>
