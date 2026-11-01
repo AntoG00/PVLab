@@ -104,6 +104,10 @@ def _plain(value):
                 del result['gas_allocation']
             if not result['electric_loads']:
                 del result['electric_loads']
+        elif isinstance(value, Consumption):
+            for key in ('annual_kwh', 'monthly_totals'):
+                if result[key] is None:
+                    del result[key]
         return result
     if isinstance(value, Mapping):
         if any(type(k) is not str for k in value):
@@ -161,6 +165,8 @@ class Consumption:
     coverage: Coverage
     projection_policy: str
     acknowledged: bool
+    annual_kwh: float | None = None
+    monthly_totals: tuple[float, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -347,7 +353,9 @@ def parse_profile(payload: dict) -> HouseholdProfileV1:
     loc = object_fields(v['location'], ('latitude', 'longitude'))
     v['location'] = Location(number(loc['latitude'], 'latitude', -90, 90),
                              number(loc['longitude'], 'longitude', -180, 180))
-    c = dict(object_fields(v['consumption'], [f.name for f in fields(Consumption)]))
+    optional = ('annual_kwh', 'monthly_totals')
+    required = [f.name for f in fields(Consumption) if f.name not in optional]
+    c = dict(object_fields(v['consumption'], required, optional))
     identifier(c['artifact_id'], 'consumption.artifact_id', opaque=True, nullable=True)
     choice(c['kind'], ('interval', 'monthly', 'annual'), 'consumption.kind')
     choice(c['projection_policy'], ('none', 'civil_month_hour', 'standard_month_hour',
@@ -361,6 +369,15 @@ def parse_profile(payload: dict) -> HouseholdProfileV1:
     if complete and start is None:
         raise ValueError('Complete coverage requires dates')
     c['coverage'] = Coverage(start, end, complete)
+    if c.get('annual_kwh') is not None:
+        c['annual_kwh'] = number(c['annual_kwh'], 'consumption.annual_kwh')
+    else:
+        c['annual_kwh'] = None
+    if c.get('monthly_totals') is not None:
+        months = sequence(c['monthly_totals'], 'consumption.monthly_totals', 12, 12)
+        c['monthly_totals'] = tuple(number(x, 'consumption.monthly_totals') for x in months)
+    else:
+        c['monthly_totals'] = None
     v['consumption'] = Consumption(**c)
     roofs = []
     for r in sequence(v['roofs'], 'roofs', 12):

@@ -1,7 +1,10 @@
 'use strict';
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 function getCompass(deg) {
-  return COMPASS[Math.round((((Number(deg) % 360) + 360) % 360) / 45) % 8];
+  if (deg == null || (typeof deg === 'string' && !deg.trim())) return '';
+  const n = Number(deg);
+  if (!Number.isFinite(n)) return '';
+  return COMPASS[Math.round((((n % 360) + 360) % 360) / 45) % 8];
 }
 
 class RoofListEditor {
@@ -64,6 +67,7 @@ class RoofListEditor {
     this.listEl.textContent = '';
     this.roofs.forEach((r, idx) => {
       const row = d.createElement('fieldset');
+      row.className = 'roof-plane';
       row.setAttribute('data-id', r.id);
       const leg = d.createElement('legend');
       leg.textContent = r.label || ('Roof ' + (idx + 1));
@@ -74,7 +78,7 @@ class RoofListEditor {
         lbl.textContent = txt + ': ';
         const inp = d.createElement('input');
         inp.type = type;
-        inp.value = val;
+        inp.value = type === 'number' && !Number.isFinite(val) ? '' : val;
         if (min != null) inp.min = String(min);
         if (max != null) inp.max = String(max);
         if (step != null) inp.step = String(step);
@@ -93,10 +97,16 @@ class RoofListEditor {
         this.onChange(this.getRoofs());
       }));
       const hint = d.createElement('span');
-      hint.textContent = ' (' + getCompass(r.azimuth_deg) + ')';
+      hint.className = 'compass-hint';
+      const updateCompass = deg => {
+        const c = getCompass(deg);
+        hint.textContent = c ? ' (' + c + ')' : '';
+        hint.hidden = !c;
+      };
+      updateCompass(r.azimuth_deg);
       const azLbl = field('Azimuth (°)', 'number', r.azimuth_deg, 0, 359.99, 0.01, v => {
         r.azimuth_deg = v.trim()===''?NaN:Number(v);
-        hint.textContent = ' (' + getCompass(r.azimuth_deg) + ')';
+        updateCompass(r.azimuth_deg);
         this.onChange(this.getRoofs());
       });
       azLbl.appendChild(hint);
@@ -112,10 +122,14 @@ class RoofListEditor {
 
       const del = d.createElement('button');
       del.type = 'button';
+      del.className = 'danger roof-remove-btn';
       del.textContent = 'Remove ' + r.label;
       del.setAttribute('aria-label', 'Remove ' + r.label);
       del.addEventListener('click', () => this.removeRoof(r.id));
-      row.appendChild(del);
+      const actions = d.createElement('div');
+      actions.className = 'roof-actions';
+      actions.appendChild(del);
+      row.appendChild(actions);
       this.listEl.appendChild(row);
     });
 
@@ -132,7 +146,182 @@ class RoofListEditor {
 }
 
 
-if (typeof window !== 'undefined') window.RoofListEditor = RoofListEditor;
+
+const SUPPORTED_YEARS = Object.freeze(Array.from({ length: 21 }, (_, i) => 2005 + i));
+
+class YearMenu {
+  constructor(container, options = {}) {
+    this.container = container;
+    this.doc = options.doc || container.ownerDocument || (typeof document !== 'undefined' ? document : null);
+    this.supported = options.supportedYears || SUPPORTED_YEARS;
+    this.verified = options.verified !== undefined ? Boolean(options.verified) : true;
+    this.selected = new Set(options.initialYears || []);
+    this._onChange = options.onChange || (() => {});
+    this.inputs = new Map();
+    this._val = '';
+    this.render();
+  }
+
+  getSelectedYears() {
+    return Array.from(this.selected).sort((a, b) => a - b);
+  }
+
+  setSelectedYears(years) {
+    const list = Array.isArray(years) ? years : String(years || '').split(/[,\s]+/).filter(Boolean).map(Number);
+    for (const y of list) {
+      if (!this.supported.includes(y)) throw Object.assign(Error('YEARS_INVALID: unsupported weather year ' + y), { code: 'YEARS_INVALID' });
+    }
+    this.selected = new Set(list);
+    this._sync();
+    this._onChange(this.getSelectedYears());
+  }
+
+  setSupportedYears(years) {
+    const list = Array.from(years || []);
+    this.supported = list.length ? Object.freeze(list) : SUPPORTED_YEARS;
+    this.verified = list.length > 0;
+    const nextSelected = new Set();
+    for (const y of this.selected) {
+      if (list.length && this.supported.includes(y)) nextSelected.add(y);
+    }
+    this.selected = nextSelected;
+    this.render();
+    this._onChange(this.getSelectedYears());
+  }
+
+  setVerified(verified) {
+    this.verified = Boolean(verified);
+    this.render();
+  }
+
+  _sync() {
+    for (const [y, cb] of this.inputs) cb.checked = this.selected.has(y);
+    const count = this.selected.size;
+    const total = this.verified ? this.supported.length : 0;
+    if (this.allCb) {
+      this.allCb.checked = total > 0 && count === total;
+      this.allCb.indeterminate = total > 0 && count > 0 && count < total;
+    }
+    if (this.summaryBadge) {
+      if (total === 0) {
+        this.summaryBadge.textContent = 'No years available';
+      } else {
+        const minYear = this.supported[0], maxYear = this.supported[total - 1];
+        const range = minYear === maxYear ? `${minYear}` : `${minYear}–${maxYear}`;
+        this.summaryBadge.textContent = count === total ? `All ${total} years (${range})` : `${count} / ${total} years selected`;
+      }
+    }
+    this._val = this.getSelectedYears().join(', ');
+  }
+
+  render() {
+    const d = this.doc;
+    this.container.textContent = '';
+    const details = d.createElement('details');
+    details.className = 'year-menu-details';
+
+    const total = this.verified ? this.supported.length : 0;
+    const minYear = total > 0 ? this.supported[0] : null;
+    const maxYear = total > 0 ? this.supported[total - 1] : null;
+    const range = total > 0 ? (minYear === maxYear ? `${minYear}` : `${minYear}–${maxYear}`) : '';
+
+    const summary = d.createElement('summary');
+    summary.className = 'year-menu-summary';
+    const sumTitle = d.createElement('span');
+    sumTitle.textContent = total > 0 ? `Historical weather years (${range}): ` : 'Historical weather years (none available): ';
+    const badge = d.createElement('span');
+    badge.className = 'year-summary-badge';
+    this.summaryBadge = badge;
+    summary.appendChild(sumTitle);
+    summary.appendChild(badge);
+    details.appendChild(summary);
+
+    const help = d.createElement('p');
+    help.className = 'year-menu-help';
+    help.textContent = total > 0
+      ? `PVGIS SARAH time series extend from ${range} (${total} weather ensemble years).`
+      : 'No supported weather years available. Save profile and check solar coverage to load supported years.';
+    details.appendChild(help);
+
+    const selectAllLbl = d.createElement('label');
+    selectAllLbl.className = 'year-select-all';
+    const allCb = d.createElement('input');
+    allCb.type = 'checkbox';
+    allCb.setAttribute('aria-label', total > 0
+      ? `Select all historical weather years (${range})`
+      : 'Select all historical weather years (none available)');
+    allCb.disabled = !this.verified || total === 0;
+    allCb.onchange = () => {
+      this.selected = allCb.checked ? new Set(this.supported) : new Set();
+      this._sync();
+      this.input?.dispatchEvent?.(new (this.doc.defaultView?.Event || Event)('input', { bubbles: true }));
+      this._onChange(this.getSelectedYears());
+    };
+    this.allCb = allCb;
+    const allTxt = d.createElement('span');
+    allTxt.textContent = 'Select all';
+    selectAllLbl.appendChild(allCb);
+    selectAllLbl.appendChild(allTxt);
+    details.appendChild(selectAllLbl);
+
+    const grid = d.createElement('div');
+    grid.className = 'year-checkbox-grid';
+    grid.setAttribute('role', 'group');
+    grid.setAttribute('aria-label', 'Historical weather years');
+
+    this.inputs.clear();
+    for (const y of (this.verified ? this.supported : [])) {
+      const lbl = d.createElement('label');
+      lbl.className = 'year-checkbox-item';
+      const cb = d.createElement('input');
+      cb.type = 'checkbox';
+      cb.name = 'weather_year';
+      cb.value = String(y);
+      cb.disabled = !this.verified;
+      cb.onchange = () => {
+        if (cb.checked) this.selected.add(y); else this.selected.delete(y);
+        this._sync();
+        this.input?.dispatchEvent?.(new (this.doc.defaultView?.Event || Event)('input', { bubbles: true }));
+        this._onChange(this.getSelectedYears());
+      };
+      this.inputs.set(y, cb);
+      const span = d.createElement('span');
+      span.textContent = String(y);
+      lbl.appendChild(cb);
+      lbl.appendChild(span);
+      grid.appendChild(lbl);
+    }
+    details.appendChild(grid);
+
+    if (!this.input) {
+      const hidden = d.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = 'years';
+      hidden.getSelectedYears = () => this.getSelectedYears();
+      Object.defineProperty(hidden, 'value', {
+        get: () => this._val,
+        set: (v) => {
+          const s = String(v ?? '');
+          if (s === this._val) return;
+          this.setSelectedYears(s);
+        },
+        configurable: true
+      });
+      this.input = hidden;
+    }
+    this.input.disabled = false;
+    details.appendChild(this.input);
+
+    this.container.appendChild(details);
+    this._sync();
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.RoofListEditor = RoofListEditor;
+  window.YearMenu = YearMenu;
+  window.SUPPORTED_YEARS = SUPPORTED_YEARS;
+}
 
 
 'use strict';
@@ -171,7 +360,7 @@ const Onboarding = (()=>{
   constructor(client,{onChange=()=>{}}={}){this.client=client;this.onChange=onChange;this.status='draft';this.profile=null;this.load=null;this.jobId=null;}
   reset(){this.status='draft';this.profile=null;this.load=null;this.jobId=null;}
   async select(id,revision){this.reset();this.client.select(id,revision);const value=await this.client.profileRequest('');this.profile=value.profile;const validation=await this.client.profileRequest('/validation');this.status=validation.ready?'ready':'draft';this.client.ready=this.status==='ready';this.onChange();return value;}
-  async create(){this.reset();this.client.clear();const value=await this.client.request('/api/profiles',{});await this.select(value.id,value.revision);return value;}
+  async create(name=''){this.reset();this.client.clear();const value=await this.client.request('/api/profiles',{name});await this.select(value.id,value.revision);return value;}
   async save(profile,load,checks){
    validateDraft(profile,load,checks);this.client.ready=false;this.status='draft';this.onChange();
    await this.client.profileRequest('',{profile},{method:'PATCH'});
@@ -203,7 +392,8 @@ const Onboarding = (()=>{
   root.textContent='';el('h2','Household setup');
   el('p','Inputs persist locally until you explicitly delete them. Deletion removes household inputs and results; no automatic recovery backup is made. Browser-session cookies identify this household on this LAN.');
   const status=el('p');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
-  const run=fn=>async event=>{const target=event?.currentTarget;if(target?.tagName==='BUTTON')target.disabled=true;try{await fn();}catch(error){if(error.name==='AbortError'||error.code==='STALE_RESPONSE')return;const diag=error.diagnostic;status.textContent=error.message+(diag?' ['+diag.code+(diag.row?' · row '+diag.row:'')+']':'');}finally{if(target?.tagName==='BUTTON')target.disabled=false;}};
+  let updateHelp=()=>{};
+  const run=fn=>async event=>{const target=event?.currentTarget;if(target?.tagName==='BUTTON')target.disabled=true;try{await fn();}catch(error){if(error.name==='AbortError'||error.code==='STALE_RESPONSE')return;const diag=error.diagnostic;status.textContent=error.message+(diag?' ['+diag.code+(diag.row?' · row '+diag.row:'')+']':'');}finally{if(target?.tagName==='BUTTON')target.disabled=false;updateHelp();}};
   const button=(label,fn,parent=root)=>{const b=el('button',label,parent);b.type='button';b.onclick=run(fn);return b;};
   const field=(parent,key,label,{type='text',options=null,value='',required=true}={})=>{
    const wrap=el('label',label+' ',parent),input=el(options?'select':'input',null,wrap);input.name=key;
@@ -211,9 +401,22 @@ const Onboarding = (()=>{
    input.value=value;if(!options)input.defaultValue=value;if(type==='number')input.step='any';input.required=required;fields[key]=input;return input;
   };
   const section=(title)=>{const s=el('fieldset');el('legend',title,s);return s;};
-  const selector=field(root,'profile','Profile',{options:[],required:false});
-  const refresh=async()=>{const data=await client.request('/api/profiles');selector.textContent='';el('option','Select a profile',selector).value='';for(const p of data.profiles){const o=el('option',p.id,selector);o.value=p.id;}selector.value=client.profileId||'';};
-  const form=el('form');form.inert=true;form.onsubmit=e=>e.preventDefault();
+  const setupGroup=el('fieldset',null,root);
+  setupGroup.className='profile-setup-group';
+  el('legend','Start here · Household profile',setupGroup);
+  const setupControls=el('div',null,setupGroup);
+  setupControls.className='profile-setup-controls';
+  const selector=field(setupControls,'profile','Profile',{options:[],required:false});
+  selector.setAttribute('aria-describedby','profileSetupExplanation');
+  const profileName=field(setupControls,'profileName','Profile name (optional)',{required:false});profileName.maxLength=120;
+  button('Create profile',async()=>{if(!profileName.reportValidity())return;form.reset();yearMenu.setSelectedYears([]);invalidateCoverage();form.inert=true;roofEditor.setRoofs([]);preview.textContent='';await workflow.create(profileName.value.trim());form.inert=false;dirty=false;await refresh();profileName.value='';status.textContent='New draft created. Enter all inputs.';onClear();},setupControls);
+  const help=el('p','Setup fields are disabled until you create or select a profile so your inputs belong to the right household profile.',setupGroup);
+  help.id='profileSetupExplanation';
+  help.className='profile-setup-help';
+  const form=el('form',null,root);form.inert=true;form.setAttribute('aria-describedby','profileSetupExplanation');form.onsubmit=e=>e.preventDefault();
+  updateHelp=()=>{const disabled=Boolean(form.inert);help.hidden=!disabled;help.textContent=disabled?'Setup fields are disabled until you create or select a profile so your inputs belong to the right household profile.':'';};
+  updateHelp();
+  const refresh=async()=>{const data=await client.request('/api/profiles');selector.textContent='';el('option','Select a profile',selector).value='';for(const p of data.profiles){const o=el('option',p.name||p.id,selector);o.value=p.id;}selector.value=client.profileId||'';updateHelp();};
   const location=section('1 · Location');form.appendChild(location);
   field(location,'country','Country',{options:['IT'],value:'IT'});field(location,'timezone','Timezone',{options:['Europe/Rome'],value:'Europe/Rome'});
   field(location,'latitude','Latitude (manual)',{type:'number'}).step='any';field(location,'longitude','Longitude (manual)',{type:'number'}).step='any';
@@ -252,15 +455,74 @@ const Onboarding = (()=>{
   for(const k of ['electric_excise','electric_vat','pmg_price','pmg_nominal_escalation','gse_fee_eur_kw_year','gse_fee_vat','export_irpef','regional_additional_tax','municipal_additional_tax','deduction_rate','gas_excise_0_120','gas_excise_120_480','gas_excise_480_1560','gas_excise_over_1560','gas_regional_0_120','gas_regional_over_120','gas_vat_reduced','gas_vat_standard'])field(market,k,k+' (rates as fractions; EUR where named)',{type:'number',required:false}).step='any';
   for(const k of ['effective_from','effective_to','as_of'])field(market,k,'Fiscal '+k,{type:'date'});field(market,'sources','Fiscal sources (one URL or reference per line)');field(market,'confirmed','I confirm fiscal applicability, sources and rates; these are not automatically current legal advice',{type:'checkbox'});
   const review=section('6 · Review and generate');form.appendChild(review);
-  field(review,'years','Historical weather years, comma separated');field(review,'reference_year','Annual allocation calendar year',{type:'number'});field(review,'loss_percent','System loss percent',{type:'number'});field(review,'mounting','Mounting',{options:['Free standing 2025','Integrated 2025']});field(review,'technology','Module technology',{options:['cSi']});
-  field(review,'providerConsent','I authorize sending entered coordinates/roof geometry and years to JRC PVGIS 6 SARAH-3 and coordinates/years to Open-Meteo historical ERA5',{type:'checkbox'});
-  el('p','Destination: photovoltaic-geographic-information-system.ec.europa.eu/api/v6/power/broadband (JRC PVGIS) and archive-api.open-meteo.com/v1/archive. No fallback to another location or provider. Live availability/terms remain unverified.',review);
+  const yearRoot=el('div',null,review);yearRoot.className='year-menu-root';const yearMenu=new YearMenu(yearRoot,{doc:d,verified:false});fields['years']=yearMenu.input;field(review,'reference_year','Annual allocation calendar year',{type:'number'});field(review,'loss_percent','System loss percent',{type:'number'});field(review,'mounting','Mounting',{options:['Free standing 2025','Integrated 2025']});field(review,'technology','Module technology',{options:['cSi']});
+   field(review,'providerConsent','I authorize sending entered coordinates/roof geometry and years to JRC PVGIS 5.3 and PVGIS 6 SARAH-3 and coordinates/years to Open-Meteo historical ERA5',{type:'checkbox',required:false});
+   el('p','Destinations: re.jrc.ec.europa.eu/api/v5_3/seriescalc and photovoltaic-geographic-information-system.ec.europa.eu/api/v6/power/broadband (JRC PVGIS); archive-api.open-meteo.com/v1/archive. No fallback to another location. Live availability/terms remain unverified.',review);
+  const coverageCache=new Map();let coverageSeq=0,coverageVerified=false,coverageStale=false,coverageRevision=null,coverageLocation=null,dirty=false;
+  function invalidateCoverage(){
+   coverageSeq++;
+   coverageVerified=false;
+   coverageStale=true;
+   coverageRevision=null;
+   coverageLocation=null;
+   yearMenu.setSupportedYears([]);
+  }
+  const checkCoverage=async()=>{
+   if(!check('providerConsent'))fail('PROVIDER_CONSENT_REQUIRED','Review coordinate destinations before checking solar coverage.');
+   if(!client.profileId)fail('PROFILE_REQUIRED','Create or select a draft first.');
+   const loc=workflow.profile?.location;
+   const lat=Number(val('latitude')),lon=Number(val('longitude'));
+   if(dirty||!loc||!client.revision||!Number.isFinite(loc.latitude)||!Number.isFinite(loc.longitude)||loc.latitude!==lat||loc.longitude!==lon){
+    fail('SAVE_REQUIRED','Save profile draft before checking solar coverage.');
+   }
+   const cacheKey=`${client.profileId}:${client.revision}:${loc.latitude},${loc.longitude}`;
+   if(coverageCache.has(cacheKey)){
+    const years=coverageCache.get(cacheKey);
+    coverageVerified=true;
+    coverageStale=false;
+    coverageRevision=client.revision;
+    coverageLocation=`${loc.latitude},${loc.longitude}`;
+    yearMenu.setSupportedYears(years);
+    status.textContent='Supported weather years loaded from cache.';
+    return;
+   }
+   const seq=++coverageSeq,reqProfileId=client.profileId,reqRevision=client.revision,reqGen=client.generation;
+   status.textContent='Checking supported solar years…';
+   try{
+    const res=await client.profileRequest('/solar-coverage',{consent:true,revision:client.revision},{method:'POST'});
+    if(seq!==coverageSeq||client.profileId!==reqProfileId||client.revision!==reqRevision||client.generation!==reqGen)return;
+    if(!res||!Array.isArray(res.years)||!res.years.length)fail('COVERAGE_INVALID','Solar coverage returned no supported years.');
+    const seen=new Set(),validYears=[];
+    for(const y of res.years){
+     const n=Number(y);
+     if(!Number.isInteger(n)||!SUPPORTED_YEARS.includes(n)||seen.has(n))fail('COVERAGE_INVALID','Solar coverage returned invalid or duplicate year: '+y);
+     seen.add(n);
+     validYears.push(n);
+    }
+    validYears.sort((a,b)=>a-b);
+    coverageCache.set(cacheKey,validYears);
+    coverageVerified=true;
+    coverageStale=false;
+    coverageRevision=client.revision;
+    coverageLocation=`${loc.latitude},${loc.longitude}`;
+    yearMenu.setSupportedYears(validYears);
+    status.textContent=`Solar coverage verified: ${validYears.length} supported years.`;
+   }catch(err){
+    if(seq===coverageSeq){
+     invalidateCoverage();
+    }
+    throw err;
+   }
+  };
+  button('Check solar coverage',checkCoverage,review);
   const preview=el('pre',null,review);preview.setAttribute('aria-label','Validation and input review');
   const val=k=>fields[k].value,check=k=>fields[k].checked,num=k=>{if(!val(k).trim())fail('FIELD_REQUIRED',k+' is required.');const n=Number(val(k));if(!Number.isFinite(n)||n<0)fail('NUMBER_REQUIRED',k+' must be finite and nonnegative.');return n;};
   function collect(){
    const kind=val('kind'),coverage={start:val('coverage_start'),end:val('coverage_end'),complete:true},policy={mode:kind==='interval'?'measured':'synthetic',leap_policy:'february_month_hour',reference_year:num('reference_year'),acknowledged:check('ack'),synthetic_completion:kind!=='interval'||check('synthetic_completion'),variant:val('variant')};
-   if(kind==='annual')policy.annual_kwh=num('annual');
-   const load={monthly_totals:kind==='annual'?null:numbers(val('totals')),policy};
+   const annual_kwh=kind==='annual'?num('annual'):null;
+   const monthly_totals=kind==='annual'?null:numbers(val('totals'));
+   if(kind==='annual')policy.annual_kwh=annual_kwh;
+   const load={monthly_totals,policy};
    const end_uses=[];for(const id of ['space_heat','dhw','cooking'])if(check(id+'_enabled')){
     const carrier=val(id+'_carrier'),factor=val(id+'_factor')?num(id+'_factor'):null,monthly=val(id+'_input')?numbers(val(id+'_input')):null;
     const use={id,carrier,measured_input:monthly?monthly.reduce((a,b)=>a+b,0):null,unit:monthly?({gas:'smc',biomass:'kg',district:'kwh',electricity:'kwh'}[carrier]||null):null,monthly_useful_kwh:val(id+'_heat')?numbers(val(id+'_heat')):null,efficiency:carrier==='electricity'?null:factor,cop:carrier==='electricity'?factor:null,annual_fixed_cost:num(id+'_fixed'),annual_variable_cost:num(id+'_variable'),included_in_electric_load:check(id+'_included'),action:val(id+'_action'),artifact_id:null,coverage,period_relation:'same'};
@@ -268,7 +530,7 @@ const Onboarding = (()=>{
    }
    const parameters={policy_version:'italy-fiscal-v1',mode:val('fiscal_mode'),confirmed:check('confirmed'),effective_from:val('effective_from'),effective_to:val('effective_to'),as_of:val('as_of'),sources:val('sources').split('\n').filter(Boolean)};
    for(const k of Object.keys(fields))if(/^(electric_excise|electric_vat|pmg_price|pmg_nominal_escalation|gse_fee_eur_kw_year|gse_fee_vat|export_irpef|regional_additional_tax|municipal_additional_tax|deduction_rate|gas_excise_.*|gas_regional_.*|gas_vat_.*|annual_bill_eur)$/.test(k)&&val(k)!=='')parameters[k]=num(k);
-   const profile={schema_version:1,id:client.profileId,country:val('country'),timezone:val('timezone'),location:{latitude:Number(val('latitude')),longitude:Number(val('longitude'))},consumption:{artifact_id:kind==='interval'?(workflow.profile?.consumption.artifact_id||null):null,kind,coverage,projection_policy:kind==='interval'?(check('fixed_clock')?'standard_month_hour':'civil_month_hour'):'synthetic_v1',acknowledged:check('ack')},roofs:roofEditor.getRoofs(),thermal:{end_uses,electric_loads:['ev','cooling'].map(id=>({id,included_in_electric_load:check(id+'_included'),action:val(id+'_action'),artifact_id:null,incremental_annual_kwh:val(id+'_incremental')?num(id+'_incremental'):null}))},market:{zone:val('zone'),series:val('series'),window_start:val('window_start'),window_end:val('window_end'),valuation_mode:val('valuation'),price_revision:val('price_revision')||null},fiscal:{country:'IT',rule_revision:null,gas_region:val('gas_region')||null,parameters},default_settings:{retail_contract:'fixed',baseline_cooling_kwh:num('baseline_cooling_kwh')}};
+   const profile={schema_version:1,id:client.profileId,country:val('country'),timezone:val('timezone'),location:{latitude:Number(val('latitude')),longitude:Number(val('longitude'))},consumption:{artifact_id:kind==='interval'?(workflow.profile?.consumption.artifact_id||null):null,kind,coverage,projection_policy:kind==='interval'?(check('fixed_clock')?'standard_month_hour':'civil_month_hour'):'synthetic_v1',acknowledged:check('ack'),annual_kwh,monthly_totals},roofs:roofEditor.getRoofs(),thermal:{end_uses,electric_loads:['ev','cooling'].map(id=>({id,included_in_electric_load:check(id+'_included'),action:val(id+'_action'),artifact_id:null,incremental_annual_kwh:val(id+'_incremental')?num(id+'_incremental'):null}))},market:{zone:val('zone'),series:val('series'),window_start:val('window_start'),window_end:val('window_end'),valuation_mode:val('valuation'),price_revision:val('price_revision')||null},fiscal:{country:'IT',rule_revision:null,gas_region:val('gas_region')||null,parameters},default_settings:{retail_contract:'fixed',baseline_cooling_kwh:num('baseline_cooling_kwh')}};
    if(!val('latitude').trim()||!val('longitude').trim())fail('LOCATION_REQUIRED','Enter coordinates.');
    return {profile,load,checks:{gross:check('gross'),existingPv:check('existingPv'),reconciled:check('reconciled')}};
   }
@@ -278,7 +540,9 @@ const Onboarding = (()=>{
    for(const key of ['country','timezone'])put(key,profile[key]);
    for(const key of ['latitude','longitude'])put(key,profile.location[key]);
    put('kind',profile.consumption.kind);put('ack',profile.consumption.acknowledged);
-   put('coverage_start',profile.consumption.coverage.start);put('coverage_end',profile.consumption.coverage.end);
+   if(profile.consumption.coverage){put('coverage_start',profile.consumption.coverage.start);put('coverage_end',profile.consumption.coverage.end);}
+   if(profile.consumption.annual_kwh!=null)put('annual',profile.consumption.annual_kwh);
+   if(profile.consumption.monthly_totals!=null)put('totals',Array.isArray(profile.consumption.monthly_totals)?profile.consumption.monthly_totals.join(','):profile.consumption.monthly_totals);
    put('baseline_cooling_kwh',profile.default_settings.baseline_cooling_kwh);
    for(const key of ['zone','series','price_revision','window_start','window_end'])put(key,profile.market[key]);put('valuation',profile.market.valuation_mode);
    put('gas_region',profile.fiscal.gas_region);put('fiscal_mode',profile.fiscal.parameters.mode);
@@ -290,11 +554,14 @@ const Onboarding = (()=>{
    }
    for(const u of profile.thermal.electric_loads||[]){put(u.id+'_included',u.included_in_electric_load);put(u.id+'_action',u.action);put(u.id+'_incremental',u.incremental_annual_kwh);}
   }
-  const save=async()=>{if(!client.profileId)fail('PROFILE_REQUIRED','Create or select a draft first.');if(!form.reportValidity())return false;const v=collect();const result=await workflow.save(v.profile,v.load,v.checks);preview.textContent=JSON.stringify({profile:workflow.profile,validation:result},null,2);status.textContent='Draft saved. Review inputs before generating.';return true;};
-  button('Create new draft',async()=>{form.reset();form.inert=true;roofEditor.setRoofs([]);preview.textContent='';await workflow.create();form.inert=false;await refresh();status.textContent='New draft created. Enter all inputs.';onClear();});
-  selector.onchange=run(async()=>{const id=selector.value;form.reset();form.inert=true;roofEditor.setRoofs([]);preview.textContent='';status.textContent='Loading profile…';if(!id){workflow.reset();client.clear();return;}await workflow.select(id);form.inert=false;hydrate(workflow.profile);roofEditor.setRoofs(workflow.profile?.roofs||[]);preview.textContent=JSON.stringify(workflow.profile,null,2);status.textContent=workflow.status==='ready'?'Ready profile selected.':'Draft selected. Confirm gross demand and re-enter monthly/annual totals, CSV mapping and weather-generation choices to revise it.';onClear();});
+  const save=async()=>{if(!client.profileId)fail('PROFILE_REQUIRED','Create or select a draft first.');if(!form.reportValidity())return false;const v=collect();const result=await workflow.save(v.profile,v.load,v.checks);dirty=false;invalidateCoverage();preview.textContent=JSON.stringify({profile:workflow.profile,validation:result},null,2);status.textContent='Draft saved. Review inputs before generating.';return true;};
+  selector.onchange=run(async()=>{const id=selector.value;form.reset();yearMenu.setSelectedYears([]);invalidateCoverage();form.inert=true;roofEditor.setRoofs([]);preview.textContent='';status.textContent='Loading profile…';if(!id){workflow.reset();client.clear();status.textContent='Select or create a profile to continue.';return;}await workflow.select(id);form.inert=false;dirty=false;hydrate(workflow.profile);roofEditor.setRoofs(workflow.profile?.roofs||[]);preview.textContent=JSON.stringify(workflow.profile,null,2);const cp=workflow.profile?.consumption;const hasRestoredTotals=cp?.kind==='annual'?(Number.isFinite(cp?.annual_kwh)&&cp.annual_kwh>=0):((Array.isArray(cp?.monthly_totals)&&cp.monthly_totals.length===12)||(typeof cp?.monthly_totals==='string'&&cp.monthly_totals.trim().split(',').length===12));status.textContent=workflow.status==='ready'?'Ready profile selected.':(hasRestoredTotals?'Draft selected. Confirm gross demand and re-enter CSV mapping and weather-generation choices to revise it.':'Draft selected. Confirm gross demand and re-enter monthly/annual totals, CSV mapping and weather-generation choices to revise it.');onClear();});
   // Any unsaved input invalidates the ready state immediately.
   form.addEventListener('input',event=>{
+   if(!['years','weather_year','providerConsent'].includes(event.target?.name)){
+    dirty=true;
+    invalidateCoverage();
+   }
    client.invalidate();workflow.status='draft';
    if(['csv','timestamp','energy','fold','unit','timestamp_convention','delimiter','decimal_separator','duration_seconds','fixed_clock','csv_start','csv_end'].includes(event.target?.name)&&workflow.profile?.consumption)workflow.profile.consumption.artifact_id=null;
    onClear();
@@ -303,18 +570,20 @@ const Onboarding = (()=>{
   button('Validate CSV preview',async()=>{if(!await save())return;if(val('kind')!=='interval')fail('CSV_BASIS_REQUIRED','Choose interval consumption to use a CSV.');const file=fields.csv.files?.[0];if(!file)fail('FILE_REQUIRED','Choose a CSV.');if(file.size>16*1024*1024)fail('FILE_TOO_LARGE','CSV exceeds 16 MiB.');const metadata=csvMetadata({timestamp:val('timestamp'),energy:val('energy'),fold:val('fold'),unit:val('unit'),duration_seconds:val('duration_seconds'),delimiter:val('delimiter'),decimal_separator:val('decimal_separator'),timezone:val('timezone'),timestamp_convention:val('timestamp_convention'),fixed_clock:check('fixed_clock'),existing_pv:check('existingPv'),coverage_start:val('csv_start'),coverage_end:val('csv_end')});if(!val('csv_start')||!val('csv_end'))fail('COVERAGE_REQUIRED','Declare the exact CSV range with UTC offsets. Partial coverage is allowed with all monthly totals.');const result=await workflow.upload(file,metadata);workflow.profile.consumption.artifact_id=result.artifact_id;preview.textContent=JSON.stringify(result,null,2);status.textContent='CSV preview validated. Review coverage and modeled totals.';},consumption);
   button('Generate solar data and compile (retry)',async()=>{
    if(!check('providerConsent'))fail('PROVIDER_CONSENT_REQUIRED','Review coordinate destinations before generation.');
-   if(!await save())return;
+   if(dirty||coverageStale||!coverageVerified||coverageRevision!==client.revision){
+    fail('COVERAGE_STALE','Solar coverage is stale or unverified. Save profile and check solar coverage before generating.');
+   }
    if(workflow.profile.consumption.kind==='interval'&&!workflow.profile.consumption.artifact_id)fail('CSV_REQUIRED','Validate the mapped CSV first.');
-   const years=val('years').split(/[,\s]+/).filter(Boolean).map(Number);if(!years.length||years.length>30||years.some((v,i)=>!Number.isInteger(v)||v<1900||v>2100||(i&&v<=years[i-1])))fail('YEARS_INVALID','Choose 1–30 sorted unique historical years.');
-   await workflow.generate(years,{loss_percent:num('loss_percent'),mounting:val('mounting'),technology:val('technology'),source_policy:{solar:'pvgis6_sarah3',temperature:'openmeteo_era5',hour_mapping:'pvgis6-sarah3-utc-observation-v1'}},state=>{status.textContent='Solar generation: '+state;});status.textContent='Compiled and ready. You may open the calculation views.';
+   const years=(typeof fields.years?.getSelectedYears==='function')?fields.years.getSelectedYears():val('years').split(/[,\s]+/).filter(Boolean).map(Number);if(!years.length||years.length>30||years.some((v,i)=>!Number.isInteger(v)||!yearMenu.supported.includes(v)||(i&&v<=years[i-1])))fail('YEARS_INVALID','Choose sorted unique historical years from supported range.');
+   await workflow.generate(years,{loss_percent:num('loss_percent'),mounting:val('mounting'),technology:val('technology'),source_policy:{solar:'pvgis53_pvgis6_sarah3',temperature:'openmeteo_era5',hour_mapping:'pvgis53-pvgis6-sarah3-utc-observation-v2'}},state=>{status.textContent='Solar generation: '+state;});status.textContent='Compiled and ready. You may open the calculation views.';
   },review);
   button('Open calculation views',async()=>{const validation=await client.profileRequest('/validation');if(!validation.ready||!client.ready)fail('PROFILE_NOT_READY','Save, generate and compile a valid profile first.');await onReady(workflow.profile);},review);
-  button('Delete selected profile',async()=>{await client.deleteProfile();workflow.reset();form.reset();form.inert=true;roofEditor.setRoofs([]);await refresh();preview.textContent='';status.textContent='Profile and its jobs deleted.';});
-  button('Delete all household data',async()=>{await client.deleteHousehold();workflow.reset();form.inert=true;selector.textContent='';preview.textContent='';form.reset();roofEditor.setRoofs([]);status.textContent='Household deleted. Reload to create a fresh session.';});
-  button('Reconnect / reload profile list',async()=>{client.clear();workflow.reset();form.reset();form.inert=true;roofEditor.setRoofs([]);preview.textContent='';await refresh();status.textContent='Session connected. Select a profile.';});
+  button('Delete selected profile',async()=>{await client.deleteProfile();workflow.reset();form.reset();yearMenu.setSelectedYears([]);invalidateCoverage();form.inert=true;roofEditor.setRoofs([]);await refresh();preview.textContent='';status.textContent='Profile and its jobs deleted.';});
+  button('Delete all household data',async()=>{await client.deleteHousehold();workflow.reset();form.inert=true;selector.textContent='';preview.textContent='';form.reset();yearMenu.setSelectedYears([]);invalidateCoverage();roofEditor.setRoofs([]);status.textContent='Household deleted. Reload to create a fresh session.';});
+  button('Reconnect / reload profile list',async()=>{client.clear();workflow.reset();form.reset();yearMenu.setSelectedYears([]);invalidateCoverage();form.inert=true;roofEditor.setRoofs([]);preview.textContent='';await refresh();status.textContent='Session connected. Select a profile.';});
   return {workflow,fields,roofEditor,refresh,ready:()=>client.ready};
  }
- return {numbers,validateDraft,csvMetadata,Workflow,mount,RoofListEditor,getCompass};
+ return {numbers,validateDraft,csvMetadata,Workflow,mount,RoofListEditor,getCompass,YearMenu,SUPPORTED_YEARS};
 })();
 if(typeof module!=='undefined')module.exports=Onboarding;
 if(typeof window!=='undefined')window.Onboarding=Onboarding;

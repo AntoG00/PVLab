@@ -6,6 +6,7 @@ import json
 import zipfile
 import numpy as np
 import pytest
+from feasibility.report import profile_disclosures, owned_report_text, owned_report_csv
 from feasibility.dataset_compile import (SolarArtifact, compile_dataset, sha256,
                                          check_npz_bounds, validate_arrays)
 from feasibility.load_projection import project_load
@@ -256,3 +257,75 @@ def test_compilation_is_deterministic_and_copies_solar_inputs():
     assert a.manifest_bytes == b.manifest_bytes
     s.power[0, 0, 0] = 50
     assert a.arrays['power'][0, 0, 0] == 1
+
+
+
+def test_gap_records_wiring_and_report_disclosures():
+    """End-to-end regression: provenance gap metadata -> audit gap_records -> profile_disclosures -> owned reports."""
+    from feasibility.profiles import strict_json
+    profile, solar, load = inputs(nr=1, years=(2023, 2024, 2028))
+    prov_solar_entries = []
+    for y in (2023, 2024, 2028):
+        prov_solar_entries.append({
+            'year': y,
+            'plane_id': 'plane0',
+            'endpoint': 'https://re.jrc.ec.europa.eu/api/v5_3/seriescalc',
+            'gap_method': 'linear_bounded_2h',
+            'gap_counts': {'power': 2, 'union': 2},
+            'gap_timestamps_utc': {'power': [f'{y}-06-01T12:00:00Z', f'{y}-06-01T13:00:00Z']},
+            'zero_fill_sensitivity': {
+                'delta_kwh_per_kwp': 0.5,
+                'delta_percent': 0.04,
+                'annual_interpolated_kwh_per_kwp': 1250.0,
+                'label': 'sensitivity',
+            },
+            'ignored_unscoped_field': 'should_not_be_copied',
+        })
+    prov_dict = {'contract': 'pvgis6-sarah3-openmeteo-era5-v1', 'solar': prov_solar_entries}
+    prov_bytes = canonical_json(prov_dict)
+    prov_digest = sha256(prov_bytes)
+
+    solar = replace(solar, source_provenance=prov_bytes, source_digest=prov_digest)
+    compiled = compile_dataset(profile, solar, load)
+    audit = strict_json(compiled.audit_bytes)
+
+    assert 'solar_source' in audit
+    assert 'gap_records' in audit['solar_source']
+    gap_recs = audit['solar_source']['gap_records']
+    assert len(gap_recs) == 3
+    for rec in gap_recs:
+        assert set(rec.keys()) == {'year', 'plane_id', 'gap_method', 'gap_counts',
+                                    'gap_timestamps_utc', 'zero_fill_sensitivity'}
+        assert 'ignored_unscoped_field' not in rec
+        assert rec['gap_method'] == 'linear_bounded_2h'
+        assert rec['zero_fill_sensitivity']['delta_kwh_per_kwp'] == 0.5
+
+    # Test profile_disclosures exposure
+    disc = profile_disclosures(profile, audit, revision='rev1', years=[2023, 2024, 2028])
+    assert 'solar_gap_records' in disc
+    assert disc['solar_gap_records']['status'] == 'audited'
+    assert len(disc['solar_gap_records']['gap_records']) == 3
+
+    # Test owned report rendering
+    result_mock = {'metrics': {'npv_eur': 1200.0}}
+    identity_mock = {'profile_id': profile['id']}
+    rpt_text = owned_report_text(result_mock, identity_mock, presentation=disc)
+    rpt_csv = owned_report_csv(result_mock, identity_mock, presentation=disc)
+
+    assert 'linear_bounded_2h' in rpt_text
+    assert 'delta_kwh_per_kwp' in rpt_text
+    assert '0.5' in rpt_text
+    assert 'linear_bounded_2h' in rpt_csv
+    assert 'delta_kwh_per_kwp' in rpt_csv
+
+
+def test_gap_records_older_metadata_untracked():
+    """Older or absent solar metadata must be reported as untracked, never claiming clean/zero gaps."""
+    profile, solar, load = inputs(nr=1, years=(2023, 2024, 2028))
+    audit_without_gaps = {
+        'projection': {},
+        'solar_source': {'file': 'solar-source.json', 'sha256': 'a'*64},
+    }
+    disc = profile_disclosures(profile, audit_without_gaps, revision='rev0', years=[2023, 2024, 2028])
+    assert disc['solar_gap_records']['status'] == 'untracked'
+    assert 'untracked' in disc['solar_gap_records']['note'].lower()

@@ -1,7 +1,7 @@
-"""PVGIS 6 solar and explicitly selected historical temperature; no runtime defaults.
+"""PVGIS 5.3/6 solar and explicitly selected historical temperature.
 
-Contract: pvgis6-sarah3-openmeteo-era5-v1. See solar_candidate module help for
-source/time semantics. No 5.3, per-hour repair, or implicit model fallback.
+Contract: pvgis53-pvgis6-sarah3-openmeteo-era5-v2. See solar_candidate for
+source and time semantics.
 """
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -24,15 +24,20 @@ from .load_projection import checked_years, immutable_array, utc_slots
 from .profiles import canonical_json, parse_profile, profile_to_dict, strict_json
 
 PVGIS_URL = 'https://photovoltaic-geographic-information-system.ec.europa.eu/api/v6/power/broadband'
+PVGIS5_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/seriescalc'
 TEMPERATURE_URL = 'https://archive-api.open-meteo.com/v1/archive'
-CONTRACT = 'pvgis6-sarah3-openmeteo-era5-v1'
-TIME_POLICY = 'pvgis6-sarah3-utc-observation-v1'
-SOURCE_POLICY = dict(solar='pvgis6_sarah3', temperature='openmeteo_era5', hour_mapping=TIME_POLICY)
+CONTRACT = 'pvgis53-pvgis6-sarah3-openmeteo-era5-v2'
+TIME_POLICY = 'pvgis53-pvgis6-sarah3-utc-observation-v2'
+SOURCE_POLICY = dict(solar='pvgis53_pvgis6_sarah3', temperature='openmeteo_era5', hour_mapping=TIME_POLICY)
 MAX_RESPONSE_BYTES = 128 * 1024 * 1024
 MAX_ATTEMPTS = 3
 _HOUR_NS = 3600 * 10**9
 _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 _POOL = threading.BoundedSemaphore(2)
+
+
+class SolarDataGapError(ValueError):
+    """Raised when PVGIS data gaps exceed supported repair limits."""
 
 
 @dataclass(frozen=True)
@@ -90,8 +95,10 @@ def _http_child(pipe, endpoint, parameters, connect_timeout, read_timeout, total
                 raise ValueError('response size limit')
         # http.client never follows redirects.
         pipe.send(('ok', response.status, b''.join(chunks)))
-    except (TimeoutError, OSError, http.client.HTTPException):
+    except TimeoutError:
         pipe.send(('timeout', 0, b''))
+    except (OSError, http.client.HTTPException):
+        pipe.send(('connection_error', 0, b''))
     except Exception:
         pipe.send(('invalid', 0, b''))
     finally:
@@ -101,7 +108,7 @@ def _http_child(pipe, endpoint, parameters, connect_timeout, read_timeout, total
 
 
 def network_transport(endpoint, parameters, *, connect_timeout, read_timeout, total_timeout, max_bytes):
-    if endpoint not in (PVGIS_URL, TEMPERATURE_URL):
+    if endpoint not in (PVGIS_URL, PVGIS5_URL, TEMPERATURE_URL):
         raise ValueError('unapproved endpoint')
     ctx = multiprocessing.get_context('spawn')
     receiver, sender = ctx.Pipe(duplex=False)
@@ -116,6 +123,8 @@ def network_transport(endpoint, parameters, *, connect_timeout, read_timeout, to
         kind, status, body = receiver.recv()
         if kind == 'timeout':
             raise TimeoutError('provider I/O deadline')
+        if kind == 'connection_error':
+            raise ConnectionError('provider connection failed')
         if kind != 'ok':
             raise ValueError('invalid provider response')
         return Response(status, endpoint, body)
@@ -136,7 +145,7 @@ class ProviderClient:
         self.limiter = _LIMITER if limiter is None else limiter
 
     def get_json(self, endpoint, parameters):
-        if endpoint not in (PVGIS_URL, TEMPERATURE_URL):
+        if endpoint not in (PVGIS_URL, PVGIS5_URL, TEMPERATURE_URL):
             raise ValueError('unapproved endpoint')
         for attempt in range(MAX_ATTEMPTS):
             with _POOL:
@@ -307,6 +316,201 @@ def _solar_parameters(profile, plane, year, loss, mounting, technology):
                 surface_position_optimisation_mode='None')
 
 
+def _solar_parameters_v5(profile, plane, year, loss, mounting, technology):
+    aspect = ((plane.azimuth_deg - 180 + 180) % 360) - 180
+    mounting_v5 = 'free' if 'free' in mounting.lower() else 'building'
+    tech_v5 = 'crystSi2025' if (technology == 'cSi' and '2025' in mounting) else technology
+    return dict(lat=profile.location.latitude,
+                lon=profile.location.longitude,
+                usehorizon=1,
+                raddatabase='PVGIS-SARAH3',
+                startyear=year,
+                endyear=year,
+                pvcalculation=1,
+                peakpower=1,
+                loss=loss,
+                mountingplace=mounting_v5,
+                pvtechchoice=tech_v5,
+                angle=plane.tilt_deg,
+                aspect=aspect,
+                components=1, outputformat='json')
+
+
+def _normalize_v5(obj, params, year):
+    if type(obj) is not dict:
+        raise ValueError('provider JSON object required')
+
+    inputs = obj.get('inputs')
+    if type(inputs) is not dict:
+        raise ValueError('invalid returned inputs metadata')
+
+    loc = inputs.get('location')
+    if type(loc) is not dict:
+        raise ValueError('invalid returned location metadata')
+    confirmed_coords = {}
+    for k_src, k_param in (('latitude', 'lat'), ('longitude', 'lon')):
+        if k_src not in loc:
+            raise ValueError(f'missing returned coordinate: {k_src}')
+        val = _number(loc[k_src], f'returned coordinate {k_src}')
+        if abs(val - params[k_param]) > 1e-4:
+            raise ValueError(f'coordinate mismatch: {k_src}')
+        confirmed_coords[k_src] = loc[k_src]
+
+    meteo = inputs.get('meteo_data')
+    if type(meteo) is not dict:
+        raise ValueError('invalid returned meteo_data metadata')
+    if meteo.get('radiation_db') != 'PVGIS-SARAH3':
+        raise ValueError('radiation_db mismatch')
+    ymin = meteo.get('year_min')
+    ymax = meteo.get('year_max')
+    if type(ymin) is not int or type(ymax) is not int:
+        raise ValueError('invalid year_min or year_max')
+    if not (ymin <= year <= ymax):
+        raise ValueError(f'year {year} outside meteo coverage [{ymin}, {ymax}]')
+    use_horizon = meteo.get('use_horizon')
+    if use_horizon not in (True, 1):
+        raise ValueError('horizon profile not applied')
+
+    ms = inputs.get('mounting_system')
+    fixed = ms.get('fixed') if isinstance(ms, dict) else None
+    if not isinstance(fixed, dict):
+        fixed = inputs.get('fixed')
+    if not isinstance(fixed, dict):
+        raise ValueError('invalid returned fixed mounting metadata')
+
+    slope_val = fixed.get('slope')
+    if isinstance(slope_val, dict):
+        slope_val = slope_val.get('value')
+    slope = _number(slope_val, 'returned slope')
+    if abs(slope - params['angle']) > 0.01:
+        raise ValueError('slope metadata mismatch')
+
+    az_val = fixed.get('azimuth')
+    if isinstance(az_val, dict):
+        az_val = az_val.get('value')
+    azimuth = _number(az_val, 'returned azimuth')
+    if abs(azimuth - params['aspect']) > 0.01:
+        raise ValueError('azimuth metadata mismatch')
+
+    mounting_type = fixed.get('type')
+    if type(mounting_type) is not str:
+        raise ValueError('missing fixed mounting type')
+    req_mounting = params['mountingplace']
+    if req_mounting == 'free' and 'free' not in mounting_type.lower():
+        raise ValueError('mounting type mismatch')
+    if req_mounting == 'building' and 'building' not in mounting_type.lower():
+        raise ValueError('mounting type mismatch')
+
+    pv_mod = inputs.get('pv_module')
+    if type(pv_mod) is not dict:
+        raise ValueError('invalid returned pv_module metadata')
+    if pv_mod.get('technology') != 'c-Si2025':
+        raise ValueError('technology mismatch: expected c-Si2025')
+    peak_power = _number(pv_mod.get('peak_power'), 'returned peak_power')
+    if abs(peak_power - params['peakpower']) > 1e-4:
+        raise ValueError('peak_power metadata mismatch')
+    system_loss = _number(pv_mod.get('system_loss'), 'returned system_loss')
+    if abs(system_loss - params['loss']) > 1e-4:
+        raise ValueError('system_loss metadata mismatch')
+
+    meta = obj.get('meta')
+    if type(meta) is not dict:
+        raise ValueError('missing meta in provider response')
+    outputs_meta = meta.get('outputs')
+    if type(outputs_meta) is not dict:
+        raise ValueError('missing outputs in meta')
+    hourly_meta = outputs_meta.get('hourly')
+    if type(hourly_meta) is not dict:
+        raise ValueError('missing hourly in meta.outputs')
+    variables = hourly_meta.get('variables')
+    if type(variables) is not dict:
+        raise ValueError('missing variables in meta.outputs.hourly')
+
+    for var_name, expected_unit in (('P', 'W'), ('Gb(i)', 'W/m2'), ('Gd(i)', 'W/m2'), ('Gr(i)', 'W/m2')):
+        var_meta = variables.get(var_name)
+        if type(var_meta) is not dict:
+            raise ValueError(f'missing variable metadata for {var_name}')
+        unit = var_meta.get('units') or var_meta.get('unit')
+        if unit != expected_unit:
+            raise ValueError(f'unit mismatch for {var_name}: expected {expected_unit}, got {unit}')
+
+    outputs = obj.get('outputs')
+    if type(outputs) is not dict:
+        raise ValueError('missing outputs in provider response')
+    hourly = outputs.get('hourly')
+    if type(hourly) is not list:
+        raise ValueError('invalid hourly records list')
+
+    orig_times = []
+    iso_times = []
+    power = []
+    direct = []
+    diffuse = []
+    reflected = []
+
+    for item in hourly:
+        if type(item) is not dict:
+            raise ValueError('invalid hourly record entry')
+        raw_t = item.get('time')
+        if type(raw_t) is not str:
+            raise ValueError('invalid record timestamp')
+        m = re.fullmatch(r'(\d{4})(\d\d)(\d\d):(\d\d)(\d\d)', raw_t)
+        if m:
+            iso_t = f'{m[1]}-{m[2]}-{m[3]}T{m[4]}:{m[5]}:00Z'
+        else:
+            m_iso = re.fullmatch(r'(\d{4}-\d\d-\d\d[T ]\d\d:\d\d(?::\d\d)?)(?:\.(\d{1,9}))?(Z|[+-]\d\d:\d\d)?', raw_t)
+            if m_iso:
+                iso_t = raw_t
+            else:
+                raise ValueError('malformed timestamp')
+        orig_times.append(raw_t)
+        iso_times.append(iso_t)
+
+        for key, target_list in (('P', power), ('Gb(i)', direct), ('Gd(i)', diffuse), ('Gr(i)', reflected)):
+            if key not in item:
+                raise ValueError(f'missing field in PVGIS 5.3 record: {key}')
+            val = item.get(key)
+            if val is None:
+                target_list.append(None)
+            else:
+                if type(val) not in (int, float) or isinstance(val, bool):
+                    raise ValueError(f'invalid number in {key}')
+                vf = float(val)
+                if not math.isfinite(vf) or vf < 0:
+                    raise ValueError(f'invalid physical value in {key}: {vf}')
+                target_list.append(vf)
+
+    _sequence(iso_times, year, True)
+
+    confirmed_equipment = dict(
+        technology=pv_mod['technology'],
+        peak_power=peak_power,
+        system_loss=system_loss,
+        radiation_db=meteo['radiation_db'],
+        year_min=ymin,
+        year_max=ymax,
+        use_horizon=bool(use_horizon),
+        surface_tilt=slope,
+        surface_orientation=azimuth,
+        mounting_type=mounting_type,
+        unit='degrees',
+    )
+
+    return dict(
+        timestamps=iso_times,
+        original_timestamps=orig_times,
+        power=power,
+        v5_direct_inclined_irradiance=direct,
+        v5_diffuse_inclined_irradiance=diffuse,
+        v5_ground_reflected_inclined_irradiance=reflected,
+        provider_confirmed_metadata=dict(
+            provider_confirmed_coordinates=confirmed_coords,
+            coordinate_authority='provider',
+            provider_confirmed_equipment=confirmed_equipment,
+        ),
+    )
+
+
 def _validate_solar(obj, parameters, plane):
     if (obj.get('timezone', 'UTC') not in ('UTC', 'Etc/UTC', 'GMT') or
             obj.get('frequency', 'h') not in ('h', 'Hourly') or obj.get('power_unit', 'W') != 'W'):
@@ -342,17 +546,123 @@ def _validate_solar(obj, parameters, plane):
                     surface_tilt=obj['surface_tilt'], surface_orientation=obj['surface_orientation'], unit=unit))
 
 
-def fetch_pvgis(request, transport=None):
-    """Fetch complete v6 SARAH3 years plus explicit Open-Meteo ERA5 temperature.
 
-    Only the known UTC hourly observation policy is accepted. We validate every
-    sequence before associating observations with slots; no arbitrary floor,
-    sorting, shifting, interpolation or per-hour/provider fallback is performed.
-    """
+_PVGIS_SOLAR_FIELDS = (
+    'power',
+    'direct_inclined_irradiance_before_reflectivity',
+    'diffuse_inclined_irradiance_before_reflectivity',
+    'ground_reflected_inclined_irradiance_before_reflectivity',
+)
+
+
+def _interpolate_solar_series(obj, times, n, fields=_PVGIS_SOLAR_FIELDS):
+    """Bounded linear interpolation of explicit None values in PVGIS power/irradiance."""
+    missing_by_field = {}
+    valid_values = {}
+    for field in fields:
+        raw_list = obj.get(field)
+        if type(raw_list) is not list or len(raw_list) != n:
+            raise ValueError('invalid array length: ' + field)
+        missing = []
+        parsed = []
+        for i, v in enumerate(raw_list):
+            if v is None:
+                missing.append(i)
+                parsed.append(None)
+            else:
+                if type(v) not in (int, float):
+                    raise ValueError('invalid numeric array: ' + field)
+                vf = float(v)
+                if not math.isfinite(vf) or vf < 0:
+                    raise ValueError('invalid physical array: ' + field)
+                parsed.append(vf)
+        missing_by_field[field] = missing
+        valid_values[field] = parsed
+
+    for field, missing in missing_by_field.items():
+        if not missing:
+            continue
+        missing_set = set(missing)
+        if 0 in missing_set or (n - 1) in missing_set:
+            raise SolarDataGapError('unbounded gap at sequence boundary: ' + field)
+        consecutive = 0
+        for i in range(n):
+            if i in missing_set:
+                consecutive += 1
+                if consecutive > 5:
+                    raise SolarDataGapError('gap exceeds maximum consecutive limit of 5 hours: ' + field)
+            else:
+                consecutive = 0
+
+    union_missing = set()
+    for missing in missing_by_field.values():
+        union_missing.update(missing)
+    max_union = 15
+    if len(union_missing) > max_union:
+        raise SolarDataGapError(f'missing hour count exceeds limit: {len(union_missing)} > {max_union}')
+
+    interpolated = {}
+    for field, parsed in valid_values.items():
+        missing = missing_by_field[field]
+        arr = np.empty(n, dtype=np.float64)
+        if not missing:
+            arr[:] = parsed
+        else:
+            missing_set = set(missing)
+            for i, v in enumerate(parsed):
+                if v is not None:
+                    arr[i] = v
+            i = 0
+            while i < n:
+                if i in missing_set:
+                    start = i
+                    while i < n and i in missing_set:
+                        i += 1
+                    end = i - 1
+                    v_left = arr[start - 1]
+                    v_right = arr[end + 1]
+                    gap_len = end - start + 1
+                    for step, idx in enumerate(range(start, end + 1), start=1):
+                        arr[idx] = v_left + (v_right - v_left) * (step / (gap_len + 1))
+                else:
+                    i += 1
+        interpolated[field] = arr
+
+    power_arr = interpolated['power']
+    power_missing = missing_by_field['power']
+    annual_kwh_per_kwp = float(np.sum(power_arr) / 1000.0)
+    if power_missing:
+        delta_kwh = float(np.sum(power_arr[power_missing]) / 1000.0)
+    else:
+        delta_kwh = 0.0
+    delta_pct = (delta_kwh / annual_kwh_per_kwp * 100.0) if annual_kwh_per_kwp > 0 else 0.0
+
+    gap_counts = {field: len(missing_by_field[field]) for field in fields}
+    gap_counts['union'] = len(union_missing)
+    gap_timestamps = {field: [times[i] for i in missing_by_field[field]] for field in fields}
+
+    gap_info = dict(
+        gap_method='linear_bounded_5h',
+        gap_counts=gap_counts,
+        gap_timestamps_utc=gap_timestamps,
+        zero_fill_sensitivity=dict(
+            delta_kwh_per_kwp=round(delta_kwh, 6),
+            delta_percent=round(delta_pct, 6),
+            annual_interpolated_kwh_per_kwp=round(annual_kwh_per_kwp, 6),
+            label='sensitivity',
+        ),
+    )
+    return power_arr, interpolated, gap_info
+
+
+def fetch_pvgis(request, transport=None):
+    """Fetch validated SARAH-3 generation with explicit version priority and ERA5 temperature."""
     if not isinstance(request, SolarRequest) or dict(request.source_policy) != SOURCE_POLICY:
         raise ValueError('explicit supported mixed-source policy required')
     profile = parse_profile(request.profile if isinstance(request.profile, dict) else profile_to_dict(request.profile))
     years = checked_years(request.years)
+    if any(year < 2005 or year > 2025 for year in years):
+        raise ValueError('supported SARAH-3 years are 2005–2025')
     loss = _number(request.loss_percent, 'loss', 0, 100)
     if request.mounting not in ('Free standing 2025', 'Integrated 2025') or request.technology != 'cSi':
         raise ValueError('unsupported equipment contract')
@@ -365,6 +675,8 @@ def fetch_pvgis(request, transport=None):
         latitude=profile.location.latitude, longitude=profile.location.longitude),
         solar=[], temperature=[], timestamps_by_year={}, offset_nanoseconds_by_year={},
         limitations=['PVGIS hourly W/1000 is an AC-equivalent hourly energy proxy, not a new DC model.',
+                    'SARAH-3 observations are mapped to their enclosing UTC hour after validating the complete hourly sequence and constant offset.',
+                    'PVGIS 5.3 and 6 irradiance components are validated separately and are not combined; user shading attenuates aggregate power.',
                     'Coarse beam_loss=P*shading_fraction, diffuse_loss=0 represents uniform additional attenuation.',
                     'PVGIS terrain horizon and explicit system loss are separate from user shading.',
                     'Historical temperature is separately sourced ERA5 model data on a nearby grid, not measured on-site.',
@@ -374,24 +686,70 @@ def fetch_pvgis(request, transport=None):
         n = len(utc_slots(year))
         for ri, plane in enumerate(profile.roofs):
             progress('solar', ri + yi*max(1, nr), ny*max(1, nr))
-            params = _solar_parameters(profile, plane, year, loss, request.mounting, request.technology)
-            obj = get(PVGIS_URL, params)
-            metadata = _validate_solar(obj, params, plane)
-            times = obj.get('timestamps')
+            params_v5 = _solar_parameters_v5(profile, plane, year, loss, request.mounting, request.technology)
+            if year < 2014:
+                params = params_v5
+                endpoint = PVGIS5_URL
+                obj = get(endpoint, params)
+                norm = _normalize_v5(obj, params, year)
+                times = norm['timestamps']
+                metadata = norm['provider_confirmed_metadata']
+                raw_power = norm['power']
+                primary_version = '5.3'
+            else:
+                params = _solar_parameters(profile, plane, year, loss, request.mounting, request.technology)
+                endpoint = PVGIS_URL
+                obj = get(endpoint, params)
+                metadata = _validate_solar(obj, params, plane)
+                times = obj.get('timestamps')
+                raw_power = obj.get('power')
+                primary_version = '6'
+                for field in _PVGIS_SOLAR_FIELDS[1:]:
+                    values = obj.get(field)
+                    if type(values) is not list or len(values) != n:
+                        raise ValueError('invalid array length: ' + field)
+                    for value in values:
+                        if value is not None and (type(value) not in (int, float) or not math.isfinite(value) or value < 0):
+                            raise ValueError('invalid physical array: ' + field)
             offset = _sequence(times, year, True)
             if year in offsets and (offsets[year] != offset or solar_times[year] != times):
                 raise ValueError('cross-plane timestamp inconsistency')
             offsets[year], solar_times[year] = offset, times
-            p = _array(obj.get('power'), n, 'power')
-            for name in ('direct_inclined_irradiance_before_reflectivity',
-                         'diffuse_inclined_irradiance_before_reflectivity',
-                         'ground_reflected_inclined_irradiance_before_reflectivity'):
-                _array(obj.get(name), n, name)
+            if type(raw_power) is not list or len(raw_power) != n:
+                raise ValueError('invalid array length: power')
+            if any(v is not None and type(v) not in (int, float) for v in raw_power):
+                raise ValueError('invalid numeric array: power')
+            if any(v is not None and (not math.isfinite(v) or v < 0) for v in raw_power):
+                raise ValueError('invalid physical array: power')
+            selected = list(raw_power)
+            sources = [primary_version if v is not None else None for v in selected]
+            fallback = None
+            if 2014 <= year <= 2023 and any(v is None for v in selected):
+                secondary_obj = get(PVGIS5_URL, params_v5)
+                secondary = _normalize_v5(secondary_obj, params_v5, year)
+                for i, value in enumerate(secondary['power']):
+                    if selected[i] is None and value is not None:
+                        selected[i] = value
+                        sources[i] = '5.3'
+                fallback = dict(provider_version='5.3', database='PVGIS-SARAH3', endpoint=PVGIS5_URL,
+                    request_parameters=params_v5, response_sha256=_digest(canonical_json(secondary_obj)),
+                    original_timestamps=secondary['original_timestamps'],
+                    **secondary['provider_confirmed_metadata'])
+            p, _, gap_info = _interpolate_solar_series({'power': selected}, times, n, fields=('power',))
+            sources = [source if source is not None else 'interpolated' for source in sources]
             power[ri, yi, :n] = p / 1000
-            provenance['solar'].append(dict(year=year, plane_id=plane.id, endpoint=PVGIS_URL,
-                provider='PVGIS', provider_version='6', dataset='SARAH-3',
+            provenance['solar'].append(dict(year=year, plane_id=plane.id, endpoint=endpoint,
+                provider='PVGIS', provider_version=primary_version, dataset='SARAH-3',
                 request_parameters=params, user_shading_fraction=plane.shading_fraction,
-                response_sha256=_digest(canonical_json(obj)), **metadata))
+                response_sha256=_digest(canonical_json(obj)),
+                original_timestamps=norm['original_timestamps'] if primary_version == '5.3' else times,
+                hourly_source=sources, fallback=fallback,
+                fallback_reason='primary_power_missing' if fallback else None,
+                gap_method=gap_info['gap_method'],
+                gap_counts=gap_info['gap_counts'],
+                gap_timestamps_utc=gap_info['gap_timestamps_utc'],
+                zero_fill_sensitivity=gap_info['zero_fill_sensitivity'],
+                **metadata))
         progress('temperature', yi, ny)
         params = dict(latitude=profile.location.latitude, longitude=profile.location.longitude,
                       start_date=f'{year}-01-01', end_date=f'{year}-12-31', hourly='temperature_2m',
@@ -424,3 +782,144 @@ def fetch_pvgis(request, transport=None):
         int(next(iter(offsets.values()), 0) // (60*10**9)), raw)
     progress('validated', 1, 1)
     return SolarSource(artifact, raw)
+
+
+
+class _ProbePlane:
+    tilt_deg = 35.0
+    azimuth_deg = 180.0
+    shading_fraction = 0.0
+    id = 'probe'
+
+
+def check_solar_coverage(profile, transport=None):
+    """Probe PVGIS 5.3 (2005, 2023) and PVGIS 6 (2014, 2025) for explicit SARAH-3 coverage."""
+    p = parse_profile(profile if isinstance(profile, dict) else profile_to_dict(profile))
+    plane = p.roofs[0] if getattr(p, 'roofs', None) else _ProbePlane()
+    client = transport if isinstance(transport, ProviderClient) else ProviderClient(transport)
+    retrieval_date = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+    sources = {}
+
+    # Probe PVGIS 5.3 SARAH-3 at documented range boundaries 2005 and 2023
+    v5_ok = True
+    v5_meta = None
+    v5_digests = []
+    for y in (2005, 2023):
+        try:
+            params = _solar_parameters_v5(p, plane, y, 14.0, 'Free standing 2025', 'cSi')
+            obj = client.get_json(PVGIS5_URL, params)
+            norm = _normalize_v5(obj, params, y)
+            _sequence(norm['timestamps'], y, True)
+            v5_digests.append(_digest(canonical_json(obj)))
+            if v5_meta is None:
+                v5_meta = norm.get('provider_confirmed_metadata', {})
+        except (TimeoutError, ConnectionError, OSError):
+            raise
+        except ValueError as exc:
+            if str(exc) in ('provider retry limit', 'unapproved endpoint', 'response size limit'):
+                raise
+            raise
+        except KeyError:
+            raise
+
+    if v5_ok:
+        v5_years = list(range(2005, 2024))
+        sources['5.3'] = dict(
+            provider='PVGIS',
+            provider_version='5.3',
+            database='PVGIS-SARAH3',
+            radiation_db='PVGIS-SARAH3',
+            endpoint=PVGIS5_URL,
+            year_min=2005,
+            year_max=2023,
+            years=v5_years,
+            verified_boundary_years=[2005, 2023],
+            evidence=dict(
+                provider='PVGIS',
+                provider_version='5.3',
+                database='PVGIS-SARAH3',
+                endpoint=PVGIS5_URL,
+                verified_boundary_years=[2005, 2023],
+                response_sha256=v5_digests,
+                retrieval_date_utc=retrieval_date,
+                **v5_meta,
+            ),
+        )
+
+    # Probe PVGIS 6 SARAH-3 at documented range boundaries 2014 and 2025
+    v6_ok = True
+    v6_meta = None
+    v6_digests = []
+    for y in (2014, 2025):
+        try:
+            n = len(utc_slots(y))
+            params = _solar_parameters(p, plane, y, 14.0, 'Free standing 2025', 'cSi')
+            obj = client.get_json(PVGIS_URL, params)
+            meta = _validate_solar(obj, params, plane)
+            for src_field in ('irradiance_source', 'radiation_database', 'radiation_db'):
+                val = obj.get(src_field) or (obj.get('inputs', {}) or {}).get(src_field)
+                if val is not None and val not in ('SARAH-3', 'SARAH3', 'PVGIS-SARAH3'):
+                    raise ValueError('radiation database mismatch')
+            times = obj.get('timestamps')
+            _sequence(times, y, True)
+            raw_power = obj.get('power')
+            if type(raw_power) is not list or len(raw_power) != n:
+                raise ValueError('invalid array length: power')
+            for v in raw_power:
+                if v is not None and (type(v) not in (int, float) or not math.isfinite(v) or v < 0):
+                    raise ValueError('invalid physical array: power')
+            for field in _PVGIS_SOLAR_FIELDS[1:]:
+                values = obj.get(field)
+                if type(values) is not list or len(values) != n:
+                    raise ValueError('invalid array length: ' + field)
+                for value in values:
+                    if value is not None and (type(value) not in (int, float) or not math.isfinite(value) or value < 0):
+                        raise ValueError('invalid physical array: ' + field)
+            v6_digests.append(_digest(canonical_json(obj)))
+            if v6_meta is None:
+                v6_meta = meta
+        except (TimeoutError, ConnectionError, OSError):
+            raise
+        except ValueError as exc:
+            if str(exc) in ('provider retry limit', 'unapproved endpoint', 'response size limit'):
+                raise
+            raise
+        except KeyError:
+            raise
+
+    if v6_ok:
+        v6_years = list(range(2014, 2026))
+        sources['6'] = dict(
+            provider='PVGIS',
+            provider_version='6',
+            database='SARAH-3',
+            radiation_db='SARAH-3',
+            endpoint=PVGIS_URL,
+            year_min=2014,
+            year_max=2025,
+            years=v6_years,
+            verified_boundary_years=[2014, 2025],
+            evidence=dict(
+                provider='PVGIS',
+                provider_version='6',
+                database='SARAH-3',
+                endpoint=PVGIS_URL,
+                verified_boundary_years=[2014, 2025],
+                response_sha256=v6_digests,
+                retrieval_date_utc=retrieval_date,
+                **v6_meta,
+            ),
+        )
+
+    all_years = sorted(set().union(*(s['years'] for s in sources.values()))) if sources else []
+
+    return dict(
+        supported=bool(sources),
+        sources=sources,
+        years=all_years,
+        year_range=[all_years[0], all_years[-1]] if all_years else None,
+        retrieval_date=retrieval_date,
+        retrieval_date_utc=retrieval_date,
+        location=dict(latitude=p.location.latitude, longitude=p.location.longitude),
+    )

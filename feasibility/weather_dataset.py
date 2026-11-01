@@ -264,9 +264,11 @@ def _load_v2(npz_path, audit_path, manifest_path, expected_manifest_sha256):
         raise ValueError('invalid v2 audit schema')
     if 'solar_source' in audit:
         source = audit['solar_source']
-        if (type(source) is not dict or set(source) != {'file', 'sha256', 'contract'} or
+        if (type(source) is not dict or set(source) not in
+                ({'file', 'sha256', 'contract'}, {'file', 'sha256', 'contract', 'gap_records'}) or
                 source['file'] != 'solar-source.json' or source['sha256'] != manifest['solar_digest'] or
-                source['contract'] != 'pvgis6-sarah3-openmeteo-era5-v1'):
+                source['contract'] not in ('pvgis6-sarah3-openmeteo-era5-v1',
+                                           'pvgis53-pvgis6-sarah3-openmeteo-era5-v2')):
             raise ValueError('invalid solar source metadata')
         source_path = manifest_path.parent / 'solar-source.json'
         if source_path.is_symlink() or source_path.stat().st_size > MAX_ARCHIVE_BYTES:
@@ -277,6 +279,16 @@ def _load_v2(npz_path, audit_path, manifest_path, expected_manifest_sha256):
         provenance = strict_json(source_raw)
         if type(provenance) is not dict or provenance.get('contract') != source['contract']:
             raise ValueError('invalid solar source contract')
+        if 'gap_records' in source:
+            entries = provenance.get('solar')
+            if type(entries) is not list:
+                raise ValueError('invalid solar gap provenance')
+            keys = ('year', 'plane_id', 'gap_method', 'gap_counts',
+                    'gap_timestamps_utc', 'zero_fill_sensitivity')
+            expected = [{k: entry[k] for k in keys if k in entry}
+                        for entry in entries if isinstance(entry, dict) and 'gap_method' in entry]
+            if canonical_json(source['gap_records']) != canonical_json(expected):
+                raise ValueError('solar gap audit/provenance mismatch')
     from .profiles import number
     number(audit['baseline_cooling_kwh'], 'baseline_cooling_kwh')
     monthly = audit.get('monthly_kwh')

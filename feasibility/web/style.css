@@ -107,6 +107,8 @@ header{display:flex;justify-content:space-between;align-items:center;flex-wrap:w
 .brand{display:flex;gap:12px;align-items:center;min-width:0;flex-shrink:0}
 .header-center{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .header-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-left:auto}
+.header-theme{display:flex;align-items:center}
+.header-actions[hidden] ~ .header-theme{margin-left:auto}
 @media(max-width:720px){header{padding:14px 18px;gap:10px}.header-actions{margin-left:0;width:100%;justify-content:space-between}}
 .quick-layout,.quick-equipment{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0}.quick-config label{display:block;font-size:12px;color:var(--muted)}.quick-config input{display:block;width:100%;margin-top:5px}.quick-summary{margin-bottom:0}@media(max-width:720px){.quick-layout,.quick-equipment{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .theoretical td:first-child{color:#a65316}.theoretical{background:#fff7ec}
@@ -4293,10 +4295,140 @@ aside {
 #metricSummaryAutarky .value-range{flex-basis:100%;white-space:normal}
 
 /* Household setup remains separate from the seven calculation views. */
-#householdOnboarding { max-width: 70rem; margin: 1rem auto; padding: 1rem; }
-#householdOnboarding fieldset { margin: 1rem 0; padding: 1rem; border: 1px solid currentColor; border-radius: .5rem; }
-#householdOnboarding label { display: inline-flex; flex-direction: column; gap: .35rem; margin: .5rem; max-width: 100%; }
-#householdOnboarding input, #householdOnboarding select { padding: .5rem; max-width: 100%; }
+#householdOnboarding { box-sizing: border-box; width: 100%; max-width: 70rem; margin: 1rem auto; padding: 1rem; }
+#householdOnboarding *, #householdOnboarding *::before, #householdOnboarding *::after { box-sizing: border-box; }
+#householdOnboarding fieldset { margin: 1rem 0; padding: 1rem; border: 1px solid var(--line, currentColor); border-radius: .5rem; min-width: 0; }
+#householdOnboarding label { display: inline-flex; flex-direction: column; gap: .35rem; margin: .5rem; max-width: calc(100% - 1rem); min-width: 0; }
+#householdOnboarding input, #householdOnboarding select { padding: .5rem; max-width: 100%; min-width: 0; }
 #householdOnboarding button { margin: .5rem; padding: .6rem; }
-#householdOnboarding :focus-visible { outline: 3px solid #368978; outline-offset: 3px; }
+#householdOnboarding :focus-visible { outline: 3px solid var(--green, #368978); outline-offset: 3px; }
 #householdOnboarding pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 24rem; overflow: auto; }
+
+/* Profile setup group */
+#householdOnboarding .profile-setup-group { margin: 1rem 0; }
+#householdOnboarding .profile-setup-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .75rem; margin: .5rem 0; }
+#householdOnboarding .profile-setup-controls label { flex: 1 1 200px; margin: 0; min-width: 0; max-width: 100%; }
+#householdOnboarding .profile-setup-controls button { flex: 0 0 auto; margin: 0; }
+#householdOnboarding .profile-setup-help { margin: .5rem 0 0; font-size: .85rem; color: var(--muted); line-height: 1.4; }
+
+/* Disabled inert form */
+#householdOnboarding form[inert] { opacity: .55; filter: grayscale(.2); user-select: none; }
+
+/* Roof rows & actions */
+#householdOnboarding .roof-plane {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) 9rem;
+  gap: .75rem;
+  align-items: end;
+  min-width: 0;
+  margin: .75rem 0;
+}
+#householdOnboarding .roof-plane legend { grid-column: 1 / -1; }
+#householdOnboarding .roof-plane label {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  margin: 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+#householdOnboarding .roof-plane input { min-width: 0; width: 100%; }
+#householdOnboarding .compass-hint { position: absolute; top: 0; right: 0; font-size: .85rem; color: var(--muted); pointer-events: none; }
+#householdOnboarding .roof-actions {
+  display: flex;
+  align-items: center;
+}
+#householdOnboarding .roof-actions button { margin: 0; max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
+
+/* Responsive adjustments (<=600px mobile stack, <=390px edge screens) */
+@media (max-width: 900px) {
+  #householdOnboarding .roof-plane { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  #householdOnboarding .profile-setup-controls { flex-direction: column; align-items: stretch; }
+  #householdOnboarding .profile-setup-controls label,
+  #householdOnboarding .profile-setup-controls button { width: 100%; flex: 1 1 auto; }
+  #householdOnboarding .roof-plane { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 390px) {
+  #householdOnboarding { padding: .75rem .35rem; }
+  #householdOnboarding fieldset { padding: .75rem .45rem; }
+}
+/* Accessible Historical Weather Year Details Menu */
+#householdOnboarding .year-menu-details {
+  margin: 1rem 0;
+  padding: .75rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-alt);
+}
+#householdOnboarding .year-menu-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--ink);
+}
+#householdOnboarding .year-summary-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--soft);
+  color: var(--green);
+}
+#householdOnboarding .year-menu-help {
+  font-size: 11px;
+  color: var(--muted);
+  margin: .5rem 0 .75rem;
+  line-height: 1.4;
+}
+#householdOnboarding .year-select-all {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: .45rem;
+  margin: 0 0 .5rem;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+#householdOnboarding .year-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: .4rem;
+  margin-top: .4rem;
+}
+#householdOnboarding .year-checkbox-item {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  margin: 0;
+  padding: .35rem .5rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+#householdOnboarding .year-checkbox-item:hover {
+  background: var(--soft);
+}
+#householdOnboarding .year-menu-details input[type="checkbox"] {
+  flex: 0 0 16px;
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  min-height: 16px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--green);
+}

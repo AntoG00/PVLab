@@ -12258,12 +12258,12 @@ function clearHouseholdView(){
  activeResultProfile=null;activeResultJob=null;
  if($('profileResultsPanel'))$('profileResultsPanel').hidden=true;
  if($('profileResultHeader'))$('profileResultHeader').textContent='';
- if(householdViewsOpened){householdViewsOpened=false;document.querySelectorAll('main, aside, nav, header .header-actions').forEach(node=>{node.hidden=true;});window.location.reload();return;}
+ if(householdViewsOpened){householdViewsOpened=false;document.querySelectorAll('main, aside, nav, header .header-actions, header .header-center').forEach(node=>{node.hidden=true;});window.location.reload();return;}
  clearTimeout(timer);clearInterval(householdSyncInterval);householdSyncInterval=null;requestId++;candidateLoadId++;dayhourRequest++;
  if(sharedSync?.setScope)sharedSync.setScope(null);
  sharedSync=null;sharedUiReady=false;current=null;candidates=null;study=null;dayhourData=null;settings={};quote={line_items:[]};schema=null;
  saved=[];loanSaved=[];localStorage?.clearPrivate?.();
- document.querySelectorAll('main, aside, nav, header .header-actions').forEach(node=>{node.hidden=true;});
+ document.querySelectorAll('main, aside, nav, header .header-actions, header .header-center').forEach(node=>{node.hidden=true;});
  if($('householdOnboarding'))$('householdOnboarding').hidden=false;
  $('status').textContent='Select or configure a household profile';
 }
@@ -12279,7 +12279,7 @@ async function openHouseholdViews(){
   settings={...schema.defaults,...settings};delete settings.baseline_cooling_kwh;
  }
  renderControls();buildQuoteFields();renderLines();syncQuoteFields();initializeOptimizer();initBatterySizingControls();initSolarSizingControls();setupProfileResults();sharedUiReady=true;
- document.querySelectorAll('main, aside, nav, header .header-actions').forEach(node=>{node.hidden=false;});
+ document.querySelectorAll('main, aside, nav, header .header-actions, header .header-center').forEach(node=>{node.hidden=false;});
  $('householdOnboarding').hidden=true;householdViewsOpened=true;
  householdSyncInterval=setInterval(pollSharedState,10000);
  $('status').textContent='Household ready';

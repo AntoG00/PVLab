@@ -376,3 +376,170 @@ def test_legacy_description_metadata_is_explicit_and_never_used_by_tenant_defaul
     path.write_text('{"unexpected":"field"}')
     with pytest.raises(ValueError):
         legacy_default_descriptions()
+
+
+def test_profile_name_durability_across_revisions_and_reopen(tmp_path):
+    store = TenantStore(root=tmp_path / "store")
+    tenant_id = store.create_tenant()
+    prof = store.create_profile(tenant_id, name="  Production Profile  ")
+
+    # Initial profile list has trimmed name and initial revision
+    profiles_0 = store.profiles(tenant_id)
+    assert len(profiles_0) == 1
+    assert profiles_0[0] == {
+        "id": prof["id"],
+        "revision": prof["revision"],
+        "name": "Production Profile",
+    }
+
+    # Name is durable across revision updates
+    snap1 = store.publish(tenant_id, prof["id"], prof["revision"], scenario={"tilt": 20})
+    profiles_1 = store.profiles(tenant_id)
+    assert profiles_1 == [
+        {
+            "id": prof["id"],
+            "revision": snap1["revision"],
+            "name": "Production Profile",
+        }
+    ]
+
+    snap2 = store.publish(tenant_id, prof["id"], snap1["revision"], defaults={"azimuth": 180})
+    profiles_2 = store.profiles(tenant_id)
+    assert profiles_2 == [
+        {
+            "id": prof["id"],
+            "revision": snap2["revision"],
+            "name": "Production Profile",
+        }
+    ]
+
+    # Name is durable after closing and reopening the store
+    reopened = TenantStore(root=tmp_path / "store")
+    assert reopened.profiles(tenant_id) == [
+        {
+            "id": prof["id"],
+            "revision": snap2["revision"],
+            "name": "Production Profile",
+        }
+    ]
+
+
+def test_profile_name_valid_default_and_whitespace_fallback(tmp_path):
+    store = TenantStore(root=tmp_path / "store")
+    tenant_id = store.create_tenant()
+
+    p_default = store.create_profile(tenant_id)
+    p_empty = store.create_profile(tenant_id, name="")
+    p_spaces = store.create_profile(tenant_id, name="   ")
+
+    profiles_by_id = {p["id"]: p for p in store.profiles(tenant_id)}
+    assert profiles_by_id[p_default["id"]]["name"] == ""
+    assert profiles_by_id[p_empty["id"]]["name"] == ""
+    assert profiles_by_id[p_spaces["id"]]["name"] == ""
+    assert set(profiles_by_id[p_default["id"]].keys()) == {"id", "revision", "name"}
+
+
+@pytest.mark.parametrize(
+    "invalid_name",
+    [
+        123,
+        None,
+        ["Profile"],
+        {"name": "Profile"},
+        "a" * 121,
+        "  " + "b" * 121 + "  ",
+        "bad\x00name",
+        "bad\nname",
+        "bad\rname",
+        "bad\tname",
+        "bad\x1fname",
+        "bad\x7fname",
+    ],
+)
+def test_profile_name_invalid_rejects_without_creating_rows(tmp_path, invalid_name):
+    from feasibility.tenant_store import StoreError
+
+    store = TenantStore(root=tmp_path / "store")
+    tenant_id = store.create_tenant()
+
+    with pytest.raises(StoreError) as exc:
+        store.create_profile(tenant_id, name=invalid_name)
+    assert exc.value.status == 400
+
+    # Ensure no rows were inserted in any related tables
+    assert store.profiles(tenant_id) == []
+    with store._connection() as db:
+        assert db.execute("SELECT COUNT(*) FROM profiles").fetchone()[0] == 0
+        assert db.execute("SELECT COUNT(*) FROM revisions").fetchone()[0] == 0
+        assert db.execute("SELECT COUNT(*) FROM scenarios").fetchone()[0] == 0
+        assert db.execute("SELECT COUNT(*) FROM defaults").fetchone()[0] == 0
+
+
+def test_profile_schema_v1_migration_to_v2_idempotent(tmp_path):
+    import sqlite3
+
+    root = tmp_path / "store"
+    s1 = TenantStore(root=root)
+    t1 = s1.create_tenant()
+    t2 = s1.create_tenant()
+
+    p1 = s1.create_profile(t1)
+    p2 = s1.create_profile(t2)
+    published1 = s1.publish(t1, p1["id"], p1["revision"], scenario={"tilt": 30})
+    snap1_expected = s1.snapshot(t1, p1["id"])
+    snap2_expected = s1.snapshot(t2, p2["id"])
+
+    # Synthesize legacy v1 database state: profiles table without 'name' and user_version = 1
+    with sqlite3.connect(s1.db_path) as db:
+        db.execute("PRAGMA foreign_keys=OFF")
+        db.execute("""
+            CREATE TABLE profiles_v1 (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                current_revision TEXT NOT NULL,
+                UNIQUE(id, tenant_id),
+                FOREIGN KEY(id, tenant_id, current_revision) REFERENCES revisions(profile_id, tenant_id, sha) DEFERRABLE INITIALLY DEFERRED
+            )
+        """)
+        db.execute("INSERT INTO profiles_v1(id, tenant_id, current_revision) SELECT id, tenant_id, current_revision FROM profiles")
+        db.execute("DROP TABLE profiles")
+        db.execute("ALTER TABLE profiles_v1 RENAME TO profiles")
+        db.execute("PRAGMA user_version = 1")
+        db.commit()
+
+    # Reopen store: triggers migration to v2
+    s2 = TenantStore(root=root)
+    with s2._connection() as db:
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 2
+        col_names = [row["name"] for row in db.execute("PRAGMA table_info(profiles)").fetchall()]
+        assert "name" in col_names
+
+    # Existing profiles preserved with default empty string name
+    p_by_id = {p["id"]: p for p in s2.profiles(t1)}
+    assert p_by_id[p1["id"]] == {"id": p1["id"], "revision": published1["revision"], "name": ""}
+    p2_by_id = {p["id"]: p for p in s2.profiles(t2)}
+    assert p2_by_id[p2["id"]] == {"id": p2["id"], "revision": p2["revision"], "name": ""}
+
+    # Revisions and cross-tenant isolation preserved
+    assert s2.snapshot(t1, p1["id"]) == snap1_expected
+    assert s2.snapshot(t2, p2["id"]) == snap2_expected
+    with pytest.raises(NotFound):
+        s2.snapshot(t1, p2["id"])
+    with pytest.raises(NotFound):
+        s2.snapshot(t2, p1["id"])
+
+    # Reopen store again: idempotent migration
+    s3 = TenantStore(root=root)
+    with s3._connection() as db:
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 2
+    assert {p["id"]: p for p in s3.profiles(t1)} == p_by_id
+    assert {p["id"]: p for p in s3.profiles(t2)} == p2_by_id
+
+    # New profiles can be created with names in migrated store
+    p3 = s3.create_profile(t1, name="Post-Migration Profile")
+    updated_profiles = {p["id"]: p for p in s3.profiles(t1)}
+    assert updated_profiles[p3["id"]] == {
+        "id": p3["id"],
+        "revision": p3["revision"],
+        "name": "Post-Migration Profile",
+    }

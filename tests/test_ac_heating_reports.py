@@ -657,6 +657,36 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
             self.assertIn(expected_peak_e_str, sum_content)
             self.assertIn(expected_peak_th_str, sum_content)
 
+    def test_write_reports_v2_synthetic_calibration(self):
+        """write_reports must succeed on a complete structurally valid study with v2 synthetic calibration."""
+        study = self._make_base_study()
+        # v2 synthetic calibration as emitted by engine.calibration() on v2 datasets
+        study['calibration'] = {
+            'annual_kwh': 4212.1,
+            'annual_gas_smc': 300.0,
+            'annual_electric_bill_eur': 1091.53,
+            'thermal_baseline': {'baseline_cost_eur': 360.0},
+            'invoice': None,
+            'research': None,
+            'legacy_reference_applicable': False,
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = report.write_reports(study, dest=Path(tmpdir) / 'reports')
+            self.assertTrue((Path(out_dir) / 'executive.md').exists())
+            self.assertTrue((Path(out_dir) / 'executive_summary.md').exists())
+            exec_md = (Path(out_dir) / 'executive.md').read_text(encoding='utf-8')
+            summary_md = (Path(out_dir) / 'executive_summary.md').read_text(encoding='utf-8')
+            # Verify truthful not-available labels and absence of fabricated invoice total
+            self.assertIn('non disponibile', exec_md)
+            self.assertIn('fattura non disponibile', summary_md)
+            # Verify annual values are truthfully reported from calibration
+            self.assertIn('4,212.10', exec_md)
+            self.assertIn('300', exec_md)
+            # Verify verification.json preserved with None invoice without fabrication
+            verif = json.loads((Path(out_dir) / 'verification.json').read_text(encoding='utf-8'))
+            self.assertIsNone(verif['calibration']['invoice'])
+            self.assertEqual(verif['calibration']['annual_kwh'], 4212.1)
+
 
 if __name__ == '__main__':
     unittest.main()

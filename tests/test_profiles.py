@@ -619,3 +619,60 @@ def test_parse_profile_rejects_thermal_monthly_useful_kwh_bad_numbers(valid_draf
     p["thermal"]["end_uses"] = [eu]
     with pytest.raises(ValueError, match="(?i)bool|finite|type|outside allowed range"):
         parse_profile(p)
+
+
+
+def test_consumption_load_fields_roundtrip_and_backward_compatibility(valid_draft_payload):
+    profile_old = parse_profile(valid_draft_payload)
+    assert profile_old.consumption.annual_kwh is None
+    assert profile_old.consumption.monthly_totals is None
+    exported_old = profile_to_dict(profile_old)
+    assert exported_old == valid_draft_payload
+    assert 'annual_kwh' not in exported_old['consumption']
+    assert 'monthly_totals' not in exported_old['consumption']
+
+    payload_annual = copy.deepcopy(valid_draft_payload)
+    payload_annual['consumption']['annual_kwh'] = 3200.0
+    profile_annual = parse_profile(payload_annual)
+    assert profile_annual.consumption.annual_kwh == 3200.0
+    assert profile_annual.consumption.monthly_totals is None
+    exported_annual = profile_to_dict(profile_annual)
+    assert exported_annual['consumption']['annual_kwh'] == 3200.0
+    assert 'monthly_totals' not in exported_annual['consumption']
+    assert parse_profile(exported_annual) == profile_annual
+
+    payload_monthly = copy.deepcopy(valid_draft_payload)
+    months = [200.0, 220.0, 250.0, 300.0, 350.0, 400.0, 420.0, 380.0, 330.0, 290.0, 260.0, 240.0]
+    payload_monthly['consumption']['monthly_totals'] = months
+    profile_monthly = parse_profile(payload_monthly)
+    assert profile_monthly.consumption.annual_kwh is None
+    assert profile_monthly.consumption.monthly_totals == tuple(months)
+    exported_monthly = profile_to_dict(profile_monthly)
+    assert exported_monthly['consumption']['monthly_totals'] == months
+    assert 'annual_kwh' not in exported_monthly['consumption']
+    assert parse_profile(exported_monthly) == profile_monthly
+
+
+@pytest.mark.parametrize(
+    'bad_consumption',
+    [
+        {'annual_kwh': -1.0},
+        {'annual_kwh': True},
+        {'annual_kwh': float('nan')},
+        {'annual_kwh': float('inf')},
+        {'annual_kwh': float('-inf')},
+        {'monthly_totals': [100.0] * 11},
+        {'monthly_totals': [100.0] * 13},
+        {'monthly_totals': [100.0] * 11 + [-1.0]},
+        {'monthly_totals': [100.0] * 11 + [float('nan')]},
+        {'monthly_totals': [100.0] * 11 + [float('inf')]},
+        {'monthly_totals': [100.0] * 11 + [True]},
+        {'monthly_totals': 'not-a-list'},
+        {'extra_field': 'not_allowed'},
+    ],
+)
+def test_consumption_load_fields_reject_invalid_inputs(valid_draft_payload, bad_consumption):
+    payload = copy.deepcopy(valid_draft_payload)
+    payload['consumption'].update(bad_consumption)
+    with pytest.raises(ValueError):
+        parse_profile(payload)

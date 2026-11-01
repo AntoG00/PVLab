@@ -99,7 +99,7 @@ def test_fail_closed_on_source_contract(bad):
             if bad == 'efficiency': obj['system_efficiency'] = 1
             if bad == 'negative': obj['power'][0] = -1
             if bad == 'nonfinite': obj['power'][0] = float('nan')
-            if bad == 'component': obj['direct_inclined_irradiance_before_reflectivity'][0] = None
+            if bad == 'component': obj['direct_inclined_irradiance_before_reflectivity'][0] = -1
             if bad == 'short': obj['timestamps'].pop()
             if bad == 'duplicate': obj['timestamps'][1] = obj['timestamps'][0]
             if bad == 'gap': obj['timestamps'][10] = '2023-01-02T00:00:00Z'

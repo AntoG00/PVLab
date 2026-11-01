@@ -125,8 +125,8 @@
     },
     {
       "path": "feasibility/api.py",
-      "sha256": "4ee8486aad5cd0fc2d97cff73d2314fdac26af4e3de630c8952bc82581bf3283",
-      "size": 33374,
+      "sha256": "a69885e06b7ae22252ae9681ba906b3e168ebd4e7ce3e98e72f1898801c020d1",
+      "size": 37158,
       "mode": "0o644"
     },
     {
@@ -149,8 +149,8 @@
     },
     {
       "path": "feasibility/dataset_compile.py",
-      "sha256": "153bd9e06aa167fb11fc6ea198bbf2204180e1bed165f60e89c55c690233288f",
-      "size": 13207,
+      "sha256": "78ac9a449a20f461c8e1a2f60fd4ae64cb9172ad6c145e2894af1f3cb7ee9c53",
+      "size": 14085,
       "mode": "0o644"
     },
     {
@@ -287,14 +287,14 @@
     },
     {
       "path": "feasibility/profiles.py",
-      "sha256": "cb447783f28d6c52e5c323a8f9420a657f44413c10120e6e378b0e27682cbf8c",
-      "size": 23440,
+      "sha256": "05c828323f8065a123da2952c94526d4f075f0fb05436853147a77575679cd9a",
+      "size": 24238,
       "mode": "0o644"
     },
     {
       "path": "feasibility/report.py",
-      "sha256": "eda1996bad930f16cd707ad9817bc3b6137f6b586170e93b21b437b0d4e33c6d",
-      "size": 50188,
+      "sha256": "ea2af8d20e1734bbb446a5cf103a0ad188758940894186a42140908d214f1536",
+      "size": 52173,
       "mode": "0o755"
     },
     {
@@ -365,20 +365,20 @@
     },
     {
       "path": "feasibility/solar_candidate.py",
-      "sha256": "c91dfa620d4447f3933daf5a505f80382d4df9284e9cd122fe1609fa8285999c",
-      "size": 7054,
+      "sha256": "bfce39644aa686d05dbc5ea873578f62ae335eda061cc0249cf296b396d82d00",
+      "size": 7047,
       "mode": "0o644"
     },
     {
       "path": "feasibility/solar_provider.py",
-      "sha256": "9992bf52212c26dd090526ab6c12e7422af0a96d0ec3fb74e1de4bcbaf978f75",
-      "size": 20871,
+      "sha256": "cdc8861e70f7f496a603768bc4f4cc57c6a37b4cafa0468e57217434baf4a315",
+      "size": 41631,
       "mode": "0o644"
     },
     {
       "path": "feasibility/tenant_store.py",
-      "sha256": "cbb0dbc9cc67c3e460ebfb4a8a400ad674befaab62becc8be9fc1f3d7b77dcbe",
-      "size": 36868,
+      "sha256": "634c76befec697d2d56c99f6140a4878d0c085efd0d4459dd62fd3876f2cb098",
+      "size": 37506,
       "mode": "0o644"
     },
     {
@@ -395,14 +395,14 @@
     },
     {
       "path": "feasibility/weather_dataset.py",
-      "sha256": "8b3412411e913070ab16027093b557422c3e6c7861d62ce17290a88cfefecd1f",
-      "size": 15330,
+      "sha256": "458bf257dd82a6be0660b5a065eafcac089383de046e32667c6b8c19b281b3e9",
+      "size": 16134,
       "mode": "0o755"
     },
     {
       "path": "feasibility/web/app.js",
-      "sha256": "86c04f5afd1886ecfc3b7dd4c98130610f56b4752129f8ec07ba7679e23ca3f0",
-      "size": 964326,
+      "sha256": "52059873f216a0a62941e0711095a2322eb1fdc300a98ba1816d1927501954b8",
+      "size": 964395,
       "mode": "0o755"
     },
     {
@@ -425,14 +425,14 @@
     },
     {
       "path": "feasibility/web/index.html",
-      "sha256": "15fb9b56403b172c33cc66fd8f792720186b3b696a853375bb7061ae02781e71",
-      "size": 83683,
+      "sha256": "6613fcd6255091fbf18e988a0c68f434fae74f065f3d354dd1f58c3a55c777a1",
+      "size": 83725,
       "mode": "0o755"
     },
     {
       "path": "feasibility/web/onboarding.js",
-      "sha256": "b1e3f88a286c1d305797621bed9fd5bc4822a6915dd3cb5d81c6240043f3ecef",
-      "size": 33168,
+      "sha256": "274bd96de523406bddfb36116a453eb1af863b09c9bc952f4c8458b8f8b77c05",
+      "size": 45889,
       "mode": "0o644"
     },
     {
@@ -449,14 +449,14 @@
     },
     {
       "path": "feasibility/web/style.css",
-      "sha256": "4c8623344f34f91c91652b4f3edba9ab3515bf3595ffd58d7658994f7825e343",
-      "size": 166165,
+      "sha256": "dbdc8f35c961df8c04fcece7f568a8028ba28039f827853cc8d2d6bb9113e0bf",
+      "size": 170456,
       "mode": "0o755"
     },
     {
       "path": "feasibility/web/sync.js",
-      "sha256": "ca522bb57941867fbcaf44c6536395488b21ec30da696fd1ba9a572776950663",
-      "size": 11310,
+      "sha256": "50c011348507de1c06e0145f45c7829e864f0b7dc07df317451f4fd0f343c33e",
+      "size": 11872,
       "mode": "0o755"
     },
     {
@@ -617,8 +617,8 @@
     },
     {
       "path": "tests/test_ac_heating_reports.py",
-      "sha256": "f4db497ad3c523fcd6592b1106bad8e2c95d3e5b9554394aa63c0850bfbda0a3",
-      "size": 33212,
+      "sha256": "6763673e6ffa02726d11d7b6f908bbb207b8ecd936b47ba72c32f2a944a5516b",
+      "size": 35000,
       "mode": "0o755"
     },
     {
@@ -773,8 +773,8 @@
     },
     {
       "path": "tests/test_dataset_compile.py",
-      "sha256": "07fbb0a4249e3c7271df8ecb8001fd47a540114e84152c24c2619ec513692300",
-      "size": 11486,
+      "sha256": "4d98c1c2c0132688efa742d30586f8e814a0d526bba184c767ee8b12241450ec",
+      "size": 14862,
       "mode": "0o644"
     },
     {
@@ -1091,8 +1091,8 @@
     },
     {
       "path": "tests/test_onboarding_ui.js",
-      "sha256": "a381114894d96123d9347b6923f3adafff9a830a1622b02f399ab5b90a25f3a1",
-      "size": 13184,
+      "sha256": "640d3f20ec290d7f4e4c943ef31c0a4496569098a89ea38644ace97679e45679",
+      "size": 39866,
       "mode": "0o644"
     },
     {
@@ -1145,8 +1145,8 @@
     },
     {
       "path": "tests/test_profiles.py",
-      "sha256": "da3a2222e274ce766f2d8c40776b57ba6e0806b8c1b12bebb9c24e64d1fbffe8",
-      "size": 21078,
+      "sha256": "50b1f2d51f739b345b5560151d778d281a169053fdd26fcec81ff3bc5b8ec8fa",
+      "size": 23626,
       "mode": "0o644"
     },
     {
@@ -1367,8 +1367,8 @@
     },
     {
       "path": "tests/test_solar_candidate.py",
-      "sha256": "267c2d076bb42993e11d48829e144ff7c6701da1afd984f22f3eab4ab2222ace",
-      "size": 12090,
+      "sha256": "e1cdf1f4e0eabfb21d730874a51aae97e566d31be00d17237817b23d9d064e59",
+      "size": 12088,
       "mode": "0o644"
     },
     {
@@ -1379,8 +1379,8 @@
     },
     {
       "path": "tests/test_solar_provider.py",
-      "sha256": "e0991d9bd7342e532763b22e3c075274e31c652b1197b4c05a6081e74bb288e4",
-      "size": 11148,
+      "sha256": "2fc3d5600b9b9f9cd142f1f0f3d03b02598f38afd87f9de57807b3782e79f7f4",
+      "size": 47964,
       "mode": "0o644"
     },
     {
@@ -1463,14 +1463,14 @@
     },
     {
       "path": "tests/test_tenant_api.py",
-      "sha256": "c37d4041b6549d6f996f0eadccb4ac18313c976c2f6e81bfa9ce6bd3230e54ef",
-      "size": 17448,
+      "sha256": "662fde569e92ea13dd19797d49e5c7cfce8e59d019d773d4f4ebbf977806a386",
+      "size": 33284,
       "mode": "0o644"
     },
     {
       "path": "tests/test_tenant_store.py",
-      "sha256": "474d51ebc63ab672288e5aae2cf465d4fa4928ca22d55543fd91025a28dc9bb8",
-      "size": 17972,
+      "sha256": "91efe4f787026da3e88552eca00356e22916e03298b394c5348865727bb0e31f",
+      "size": 24202,
       "mode": "0o644"
     },
     {
@@ -1564,6 +1564,6 @@
       "mode": "0o755"
     }
   ],
-  "reviewed_source_sha256": "d9610d1d10d7cc7a0caffc0aeef96d2b1623ca8f24e27fc902915a18f021da73",
+  "reviewed_source_sha256": "b2f8d4c0da13c8652d754df0c0078946300805413c17907220995dd28c64a482",
   "digest_scope": "reviewed_source_sha256 excludes checklist and generated manifests; files includes all payload except this manifest"
 }

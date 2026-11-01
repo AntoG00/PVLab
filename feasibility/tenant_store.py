@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS sessions (
  expires REAL);
 CREATE TABLE IF NOT EXISTS profiles (
  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
- current_revision TEXT NOT NULL, UNIQUE(id,tenant_id),
+ current_revision TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', UNIQUE(id,tenant_id),
  FOREIGN KEY(id,tenant_id,current_revision) REFERENCES revisions(profile_id,tenant_id,sha) DEFERRABLE INITIALLY DEFERRED);
 CREATE TABLE IF NOT EXISTS revisions (
  profile_id TEXT NOT NULL, tenant_id TEXT NOT NULL, sha TEXT NOT NULL, manifest_ref TEXT NOT NULL,
@@ -150,10 +150,15 @@ class TenantStore:
         with self._connection() as db:
             db.execute('PRAGMA journal_mode=WAL')
             version = db.execute('PRAGMA user_version').fetchone()[0]
-            if version not in (0, 1):
+            if version not in (0, 1, 2):
                 raise StoreError()
             db.executescript(SCHEMA)
-            db.execute('PRAGMA user_version=1')
+            with db:
+                db.execute('BEGIN IMMEDIATE')
+                cols = [r[1] for r in db.execute('PRAGMA table_info(profiles)').fetchall()]
+                if 'name' not in cols:
+                    db.execute("ALTER TABLE profiles ADD COLUMN name TEXT NOT NULL DEFAULT ''")
+                db.execute('PRAGMA user_version=2')
 
     @contextmanager
     def _connection(self):
@@ -211,7 +216,12 @@ class TenantStore:
         self._audit('created', tenant_id)
         return tenant_id
 
-    def create_profile(self, tenant_id, *, manifest_ref='', defaults=None):
+    def create_profile(self, tenant_id, *, name='', manifest_ref='', defaults=None):
+        if not isinstance(name, str) or any(ord(c) < 32 or ord(c) == 127 for c in name):
+            raise StoreError()
+        name = name.strip()
+        if len(name) > 120:
+            raise StoreError()
         if not isinstance(manifest_ref, str) or len(manifest_ref) > 256 or any(ord(c) < 32 for c in manifest_ref):
             raise StoreError()
         defaults = {} if defaults is None else defaults
@@ -220,9 +230,10 @@ class TenantStore:
         revision = hashlib.sha256(uuid.uuid4().bytes).hexdigest()
         with self._transaction(write=True) as db:
             self._tenant(db, tenant_id)
-            db.execute('INSERT INTO profiles VALUES (?,?,?)', (profile_id, tenant_id, revision))
+            db.execute('INSERT INTO profiles (id, tenant_id, current_revision, name) VALUES (?,?,?,?)',
+                       (profile_id, tenant_id, revision, name))
             self._insert_revision(db, tenant_id, profile_id, revision, manifest_ref, {}, defaults)
-        return {'id': profile_id, 'revision': revision}
+        return {'id': profile_id, 'revision': revision, 'name': name}
 
     @staticmethod
     def _insert_revision(db, tenant_id, profile_id, revision, manifest_ref, scenario, defaults):
@@ -279,7 +290,7 @@ class TenantStore:
     def profiles(self, tenant_id):
         with self._transaction() as db:
             self._tenant(db, tenant_id)
-            return [dict(r) for r in db.execute('SELECT id,current_revision AS revision FROM profiles WHERE tenant_id=? ORDER BY id', (tenant_id,))]
+            return [dict(r) for r in db.execute('SELECT id,name,current_revision AS revision FROM profiles WHERE tenant_id=? ORDER BY id', (tenant_id,))]
 
     def job_directory(self, tenant_id, job_id):
         with self._transaction() as db:

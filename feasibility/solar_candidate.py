@@ -6,9 +6,9 @@ policy (ProjectionPolicy fields), optional interval_csv and ingest_options},
 cache_root (external), tenant_id (opaque 32 hex chars). Relative input paths are
 resolved beside the manifest. No household bootstrap, load or geometry defaults.
 
-Source policy is pvgis6_sarah3 + openmeteo_era5 with
-hour_mapping=pvgis6-sarah3-utc-observation-v1. Only this audited combination is
-supported. No fixed weather window, 5.3 or per-hour fallback. Empty roofs fetch
+Source policy is pvgis53_pvgis6_sarah3 + openmeteo_era5 with
+hour_mapping=pvgis53-pvgis6-sarah3-utc-observation-v2. PVGIS 6 is primary
+where supported, with explicit PVGIS 5.3 fallback. Empty roofs fetch
 only historical temperature: there is no generation/reference-plane request.
 
 PVGIS 6 accepts north-clockwise compass orientation directly (v5 south aspect
@@ -28,7 +28,7 @@ per UTC hour, a constant nonnegative within-hour nanosecond offset per complete
 year, and identical solar timestamps across planes. Only after those checks,
 associate each observation with its corresponding UTC hour. Reject gaps,
 duplicates, changes of offset, unsupported sources and partial years. No
-interpolation, sorting, or generic timestamp flooring. Preserve original strings
+arbitrary sorting or generic timestamp flooring. Preserve original strings
 and exact offsets in the digest-bound solar-source.json. Validate the observed
 response frequency alias `h` for requested `Hourly`; the old minute field
 records only the first offset's minute component for compatibility.
@@ -95,7 +95,7 @@ def build_candidate(profile_manifest, output, *, transport=None):
         dataset.write_candidate(output)
         _atomic(status, canonical_json(dict(state='complete', completed=1, total=1, activated=False,
             candidate_digest=dataset.digest, solar_source_digest=source.artifact.source_digest,
-            source_contract='pvgis6-sarah3-openmeteo-era5-v1', source_policy=solar['source_policy'])))
+            source_contract='pvgis53-pvgis6-sarah3-openmeteo-era5-v2', source_policy=solar['source_policy'])))
         return dataset
     except Exception as exc:
         # No raw provider body, coordinates, input paths or arbitrary exception text.

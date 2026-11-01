@@ -24,7 +24,6 @@
   <link rel="stylesheet" href="/evidence-datasets.css">
 </head>
 <body>
-  <section id="householdOnboarding" aria-label="Household setup" hidden></section>
   <header>
     <div class="brand">
       <img src="/favicon.png?v=2" alt="PV Lab" width="64" height="64">
@@ -44,10 +43,6 @@
     <div class="header-actions">
       <span id="status" role="status">Starting engine…</span>
       <span id="syncStatus" role="status">Loading shared scenario…</span>
-      <button id="themeToggle" class="button theme-toggle-btn" type="button" role="switch" aria-checked="false" aria-pressed="false" aria-label="Night theme" title="Toggle night theme">
-        <span class="theme-icon" aria-hidden="true">🌙</span>
-        <span class="theme-label">Night</span>
-      </button>
       <details id="scenarioMenu" class="header-menu-dropdown">
         <summary class="button menu-summary-btn" aria-haspopup="menu">Scenario &amp; Export ▾</summary>
         <div class="menu-dropdown-content" role="menu">
@@ -63,7 +58,14 @@
         </div>
       </details>
     </div>
+    <div class="header-theme">
+      <button id="themeToggle" class="button theme-toggle-btn" type="button" role="switch" aria-checked="false" aria-pressed="false" aria-label="Night theme" title="Toggle night theme">
+        <span class="theme-icon" aria-hidden="true">🌙</span>
+        <span class="theme-label">Night</span>
+      </button>
+    </div>
   </header>
+  <section id="householdOnboarding" aria-label="Household setup" hidden></section>
 
   <nav aria-label="Views">
     <button class="active" data-view="summary" aria-current="page">Summary</button>

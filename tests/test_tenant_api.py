@@ -53,6 +53,32 @@ def _req(svc, method, path, *, cookie=None, csrf=None, origin='http://localhost:
     return svc.request(method, path, headers=headers, body=body)
 
 
+def test_solar_coverage_requires_consent_and_current_revision(tmp_path, monkeypatch):
+    from tests.test_profiles import valid_draft_payload
+    from feasibility import solar_provider
+    svc = _svc(tmp_path)
+    session = _req(svc, 'POST', '/api/session', body={})
+    cookie, csrf = _cookie(session), session.body['csrf_token']
+    created = _req(svc, 'POST', '/api/profiles', cookie=cookie, csrf=csrf,
+                   body={'profile': valid_draft_payload.__wrapped__()}).body
+    path = '/api/profiles/' + created['id'] + '/solar-coverage'
+    headers = {'Host': 'localhost:8765', 'Origin': 'http://localhost:8765',
+               'Cookie': cookie, 'X-CSRF-Token': csrf, 'If-Match': created['revision']}
+    calls = []
+    monkeypatch.setattr(solar_provider, 'check_solar_coverage',
+                        lambda profile, transport=None: calls.append(profile) or
+                        {'supported': True, 'years': [2024, 2025]})
+    def post(consent, revision):
+        return svc.request('POST', path, headers=headers,
+                           body=json.dumps({'consent': consent, 'revision': revision}).encode())
+    assert post(False, created['revision']).status == 400
+    assert post(True, 'stale').status == 409
+    assert not calls
+    result = post(True, created['revision'])
+    assert result.status == 200 and result.body['years'] == [2024, 2025]
+    assert len(calls) == 1
+
+
 def test_two_clients_isolation(tmp_path):
     svc = _svc(tmp_path)
     r1 = _req(svc, 'POST', '/api/session', body={})
@@ -309,3 +335,321 @@ def test_onboarding_switch_to_coarse_input_drops_old_interval_source(tmp_path):
     validation = _req(svc, 'GET', path + '/validation', cookie=cookie)
     assert validation.body['consumption'] is None
     assert validation.body['ready'] is False
+
+
+def test_profile_api_name_trimmed_persists_and_isolated(tmp_path):
+    svc = _svc(tmp_path)
+    s1 = _req(svc, 'POST', '/api/session', body={})
+    c1, csrf1 = _cookie(s1), _body(s1)['csrf_token']
+    s2 = _req(svc, 'POST', '/api/session', body={})
+    c2 = _cookie(s2)
+
+    r_default = _req(svc, 'POST', '/api/profiles', cookie=c1, csrf=csrf1, body={})
+    assert r_default.status == 201
+    pid_default = _body(r_default)['id']
+
+    r_named = _req(svc, 'POST', '/api/profiles', cookie=c1, csrf=csrf1, body={'name': '   Rooftop West   '})
+    assert r_named.status == 201
+    pid_named = _body(r_named)['id']
+
+    profiles1 = {p['id']: p for p in _body(_req(svc, 'GET', '/api/profiles', cookie=c1))['profiles']}
+    assert profiles1[pid_default]['name'] == ''
+    assert profiles1[pid_named]['name'] == 'Rooftop West'
+
+    profiles2 = _body(_req(svc, 'GET', '/api/profiles', cookie=c2))['profiles']
+    assert not any(p['id'] in (pid_default, pid_named) for p in profiles2)
+    assert _req(svc, 'GET', f'/api/profiles/{pid_named}', cookie=c2).status == 404
+
+
+@pytest.mark.parametrize(
+    'invalid_name',
+    [123, None, 'a' * 121, 'bad\nname', 'bad\x00name', 'bad\x7fname'],
+)
+def test_profile_api_invalid_name_fails_400_no_rows(tmp_path, invalid_name):
+    svc = _svc(tmp_path)
+    session = _req(svc, 'POST', '/api/session', body={})
+    cookie, csrf = _cookie(session), _body(session)['csrf_token']
+
+    res = _req(svc, 'POST', '/api/profiles', cookie=cookie, csrf=csrf, body={'name': invalid_name})
+    assert res.status == 400
+
+    list_res = _req(svc, 'GET', '/api/profiles', cookie=cookie)
+    assert _body(list_res)['profiles'] == []
+    with svc.store._connection() as db:
+        assert db.execute('SELECT COUNT(*) FROM profiles').fetchone()[0] == 0
+
+
+
+def test_consumption_load_persistence_reselect_and_restart(tmp_path):
+    from copy import deepcopy
+    from feasibility.api import create_service
+    from feasibility.tenant_store import TenantStore
+    from tests.test_profiles import valid_draft_payload
+
+    svc = _svc(tmp_path)
+    res = _req(svc, 'POST', '/api/session', body={})
+    assert res.status == 201
+    cookie, csrf = _cookie(res), _body(res)['csrf_token']
+
+    base = valid_draft_payload.__wrapped__()
+
+    # 1. Profile 1: Annual-only consumption (optional annual_kwh present, monthly_totals absent)
+    p1_payload = deepcopy(base)
+    p1_payload['consumption'].update(
+        kind='annual',
+        annual_kwh=3500.0,
+        projection_policy='synthetic_v1',
+        acknowledged=True,
+    )
+    r1 = _req(svc, 'POST', '/api/profiles', cookie=cookie, csrf=csrf, body={'name': 'Annual Household', 'profile': p1_payload})
+    assert r1.status == 201
+    p1_id, p1_rev = _body(r1)['id'], _body(r1)['revision']
+
+    # 2. Profile 2: Monthly consumption (both annual_kwh and 12 monthly_totals present)
+    p2_payload = deepcopy(base)
+    months = [300.0, 320.0, 350.0, 400.0, 450.0, 500.0, 520.0, 480.0, 420.0, 380.0, 350.0, 330.0]
+    p2_payload['consumption'].update(
+        kind='monthly',
+        annual_kwh=4800.0,
+        monthly_totals=months,
+        projection_policy='synthetic_v1',
+        acknowledged=True,
+    )
+    r2 = _req(svc, 'POST', '/api/profiles', cookie=cookie, csrf=csrf, body={'name': 'Monthly Household', 'profile': p2_payload})
+    assert r2.status == 201
+    p2_id, p2_rev = _body(r2)['id'], _body(r2)['revision']
+
+    # 3. Profile 3: Old profile backward compatibility (neither annual_kwh nor monthly_totals in payload)
+    p3_payload = deepcopy(base)
+    r3 = _req(svc, 'POST', '/api/profiles', cookie=cookie, csrf=csrf, body={'name': 'Legacy Household', 'profile': p3_payload})
+    assert r3.status == 201
+    p3_id, p3_rev = _body(r3)['id'], _body(r3)['revision']
+
+    # Reselect across all 3 profiles and verify isolated fields
+    p1_get = _req(svc, 'GET', f'/api/profiles/{p1_id}', cookie=cookie)
+    assert p1_get.status == 200
+    c1 = _body(p1_get)['profile']['consumption']
+    assert c1['kind'] == 'annual'
+    assert c1['annual_kwh'] == 3500.0
+    assert 'monthly_totals' not in c1
+
+    p2_get = _req(svc, 'GET', f'/api/profiles/{p2_id}', cookie=cookie)
+    assert p2_get.status == 200
+    c2 = _body(p2_get)['profile']['consumption']
+    assert c2['kind'] == 'monthly'
+    assert c2['annual_kwh'] == 4800.0
+    assert c2['monthly_totals'] == months
+
+    p3_get = _req(svc, 'GET', f'/api/profiles/{p3_id}', cookie=cookie)
+    assert p3_get.status == 200
+    c3 = _body(p3_get)['profile']['consumption']
+    assert c3['kind'] == 'interval'
+    assert 'annual_kwh' not in c3
+    assert 'monthly_totals' not in c3
+
+    # Schema endpoint also returns persisted profile consumption fields
+    schema_res = _req(svc, 'GET', f'/api/schema?profile_id={p2_id}', cookie=cookie)
+    assert schema_res.status == 200
+    assert _body(schema_res)['profile']['consumption']['annual_kwh'] == 4800.0
+    assert _body(schema_res)['profile']['consumption']['monthly_totals'] == months
+
+    # Update Profile 1 via PATCH with new revision and reselect
+    p1_update = _body(p1_get)['profile']
+    p1_update['consumption']['annual_kwh'] = 3600.0
+    p1_update['consumption']['monthly_totals'] = [300.0] * 12
+    headers = {'Host': 'localhost:8765', 'Origin': 'http://localhost:8765',
+               'Cookie': cookie, 'X-CSRF-Token': csrf, 'If-Match': p1_rev}
+    patch_res = svc.request('PATCH', f'/api/profiles/{p1_id}', headers=headers,
+                            body=json.dumps({'profile': p1_update}).encode())
+    assert patch_res.status == 200
+    p1_rev_updated = patch_res.body['revision']
+    assert p1_rev_updated != p1_rev
+
+    p1_after = _req(svc, 'GET', f'/api/profiles/{p1_id}', cookie=cookie)
+    assert _body(p1_after)['profile']['consumption']['annual_kwh'] == 3600.0
+    assert _body(p1_after)['profile']['consumption']['monthly_totals'] == [300.0] * 12
+
+    # Reopen / restart service with same persistent database
+    store_reopened = TenantStore(tmp_path / 'store')
+    svc_reopened = create_service({'allowed_hosts': ['localhost:8765']}, store_reopened, FakePool())
+
+    # Session remains active
+    sess_res = _req(svc_reopened, 'GET', '/api/session', cookie=cookie)
+    assert sess_res.status == 200
+
+    # Reselect all 3 profiles after reopen/restart
+    r_p1 = _req(svc_reopened, 'GET', f'/api/profiles/{p1_id}', cookie=cookie)
+    assert r_p1.status == 200
+    assert _body(r_p1)['revision'] == p1_rev_updated
+    assert _body(r_p1)['profile']['consumption']['annual_kwh'] == 3600.0
+    assert _body(r_p1)['profile']['consumption']['monthly_totals'] == [300.0] * 12
+
+    r_p2 = _req(svc_reopened, 'GET', f'/api/profiles/{p2_id}', cookie=cookie)
+    assert r_p2.status == 200
+    assert _body(r_p2)['revision'] == p2_rev
+    assert _body(r_p2)['profile']['consumption']['annual_kwh'] == 4800.0
+    assert _body(r_p2)['profile']['consumption']['monthly_totals'] == months
+
+    r_p3 = _req(svc_reopened, 'GET', f'/api/profiles/{p3_id}', cookie=cookie)
+    assert r_p3.status == 200
+    assert _body(r_p3)['revision'] == p3_rev
+    assert 'annual_kwh' not in _body(r_p3)['profile']['consumption']
+    assert 'monthly_totals' not in _body(r_p3)['profile']['consumption']
+
+    # Invalid input testing (negative, non-finite, bool, invalid sequence length, non-numeric)
+    for bad_consumption in [
+        {'kind': 'annual', 'annual_kwh': -100.0},
+        {'kind': 'annual', 'annual_kwh': True},
+        {'kind': 'annual', 'annual_kwh': 'invalid_string'},
+        {'kind': 'monthly', 'monthly_totals': [100.0] * 11},
+        {'kind': 'monthly', 'monthly_totals': [100.0] * 13},
+        {'kind': 'monthly', 'monthly_totals': [100.0] * 11 + [-10.0]},
+        {'kind': 'monthly', 'monthly_totals': [100.0] * 11 + [True]},
+        {'kind': 'monthly', 'monthly_totals': 'not_a_list'},
+        {'kind': 'annual', 'unexpected_consumption_key': 123},
+    ]:
+        bad_payload = deepcopy(base)
+        bad_payload['consumption'].update(bad_consumption)
+        res_bad = _req(svc, 'POST', '/api/profiles', cookie=cookie, csrf=csrf, body={'profile': bad_payload})
+        assert res_bad.status == 422
+
+
+
+def test_solar_job_timeout_error_exposed(tmp_path):
+    svc = _svc(tmp_path)
+    r_sess = _req(svc, 'POST', '/api/session', body={})
+    assert r_sess.status == 201
+    cookie = _cookie(r_sess)
+    csrf = _body(r_sess)['csrf_token']
+    tenant_id = _body(r_sess)['tenant_id']
+
+    r_prof = _req(svc, 'POST', '/api/profiles', cookie=cookie, csrf=csrf, body={'name': 'Timeout Test'})
+    assert r_prof.status == 201
+    prof_id = _body(r_prof)['id']
+    rev = _body(r_prof)['revision']
+
+    job = svc.store.create_job(tenant_id, prof_id, rev, '0' * 64)
+    svc.store.job_directory(tenant_id, job['id'])
+    with svc.store.files._directory(('tenants', tenant_id, 'jobs', job['id'])) as fd:
+        svc.store.files._write_once(fd, 'candidate.status.json',
+                                    json.dumps({'state': 'failed', 'error': 'TimeoutError', 'activated': False}).encode())
+    svc.store.fail_job(tenant_id, job['id'])
+
+    r_job = _req(svc, 'GET', f"/api/jobs/{job['id']}", cookie=cookie)
+    assert r_job.status == 200
+    data = _body(r_job)
+    assert data['state'] == 'failed'
+    assert data['error'] == 'Solar data request timed out; retry later.'
+    assert data['error_code'] == 'SOLAR_TIMEOUT'
+    assert 'TimeoutError' not in json.dumps(data)
+    assert 'tenants' not in json.dumps(data)
+
+    r_query = _req(svc, 'GET', f"/api/job?id={job['id']}", cookie=cookie)
+    assert r_query.status == 200
+    q_data = _body(r_query)
+    assert q_data['error'] == 'Solar data request timed out; retry later.'
+    assert q_data['error_code'] == 'SOLAR_TIMEOUT'
+
+
+def test_solar_job_network_error_exposed(tmp_path):
+    svc = _svc(tmp_path)
+    r_sess = _req(svc, 'POST', '/api/session', body={})
+    assert r_sess.status == 201
+    cookie = _cookie(r_sess)
+    csrf = _body(r_sess)['csrf_token']
+    tenant_id = _body(r_sess)['tenant_id']
+
+    r_prof = _req(svc, 'POST', '/api/profiles', cookie=cookie, csrf=csrf, body={'name': 'Network Test'})
+    assert r_prof.status == 201
+    prof_id = _body(r_prof)['id']
+    rev = _body(r_prof)['revision']
+
+    for error_type in ('ConnectionError', 'OSError', 'HTTPException', 'ConnectionRefusedError'):
+        job = svc.store.create_job(tenant_id, prof_id, rev, '0' * 64)
+        svc.store.job_directory(tenant_id, job['id'])
+        with svc.store.files._directory(('tenants', tenant_id, 'jobs', job['id'])) as fd:
+            svc.store.files._write_once(fd, 'candidate.status.json',
+                                        json.dumps({'state': 'failed', 'error': error_type, 'activated': False}).encode())
+        svc.store.fail_job(tenant_id, job['id'])
+
+        r_job = _req(svc, 'GET', f"/api/jobs/{job['id']}", cookie=cookie)
+        assert r_job.status == 200
+        data = _body(r_job)
+        assert data['state'] == 'failed'
+        assert data['error'] == 'Solar data request network error; retry later.'
+        assert data['error_code'] == 'SOLAR_NETWORK_ERROR'
+        assert error_type not in json.dumps(data)
+        assert 'tenants' not in json.dumps(data)
+
+        r_query = _req(svc, 'GET', f"/api/job?id={job['id']}", cookie=cookie)
+        assert r_query.status == 200
+        q_data = _body(r_query)
+        assert q_data['error'] == 'Solar data request network error; retry later.'
+        assert q_data['error_code'] == 'SOLAR_NETWORK_ERROR'
+
+
+def test_solar_job_unknown_error_not_leaked(tmp_path):
+    svc = _svc(tmp_path)
+    r_sess = _req(svc, 'POST', '/api/session', body={})
+    assert r_sess.status == 201
+    cookie = _cookie(r_sess)
+    csrf = _body(r_sess)['csrf_token']
+    tenant_id = _body(r_sess)['tenant_id']
+
+    r_prof = _req(svc, 'POST', '/api/profiles', cookie=cookie, csrf=csrf, body={'name': 'Unknown Error Test'})
+    assert r_prof.status == 201
+    prof_id = _body(r_prof)['id']
+    rev = _body(r_prof)['revision']
+
+    job = svc.store.create_job(tenant_id, prof_id, rev, '0' * 64)
+    svc.store.job_directory(tenant_id, job['id'])
+    with svc.store.files._directory(('tenants', tenant_id, 'jobs', job['id'])) as fd:
+        svc.store.files._write_once(fd, 'candidate.status.json',
+                                    json.dumps({'state': 'failed', 'error': 'RuntimeErrorInternalLeak', 'activated': False}).encode())
+    svc.store.fail_job(tenant_id, job['id'])
+
+    r_job = _req(svc, 'GET', f"/api/jobs/{job['id']}", cookie=cookie)
+    assert r_job.status == 200
+    data = _body(r_job)
+    assert data['state'] == 'failed'
+    assert 'error_code' not in data
+    assert 'RuntimeErrorInternalLeak' not in json.dumps(data)
+    assert 'tenants' not in json.dumps(data)
+
+
+def test_solar_job_data_gaps_error_exposed(tmp_path):
+    svc = _svc(tmp_path)
+    r_sess = _req(svc, 'POST', '/api/session', body={})
+    assert r_sess.status == 201
+    cookie = _cookie(r_sess)
+    csrf = _body(r_sess)['csrf_token']
+    tenant_id = _body(r_sess)['tenant_id']
+
+    r_prof = _req(svc, 'POST', '/api/profiles', cookie=cookie, csrf=csrf, body={'name': 'Data Gap Test'})
+    assert r_prof.status == 201
+    prof_id = _body(r_prof)['id']
+    rev = _body(r_prof)['revision']
+
+    job = svc.store.create_job(tenant_id, prof_id, rev, '0' * 64)
+    svc.store.job_directory(tenant_id, job['id'])
+    with svc.store.files._directory(('tenants', tenant_id, 'jobs', job['id'])) as fd:
+        svc.store.files._write_once(fd, 'candidate.status.json',
+                                    json.dumps({'state': 'failed', 'error': 'SolarDataGapError', 'activated': False}).encode())
+    svc.store.fail_job(tenant_id, job['id'])
+
+    r_job = _req(svc, 'GET', f"/api/jobs/{job['id']}", cookie=cookie)
+    assert r_job.status == 200
+    data = _body(r_job)
+    assert data['state'] == 'failed'
+    assert data['error'] == 'PVGIS data gaps exceed the supported repair limits. Review the selected weather years; no years were omitted.'
+    assert data['error_code'] == 'SOLAR_DATA_GAPS'
+    assert 'SolarDataGapError' not in json.dumps(data)
+    assert 'tenants' not in json.dumps(data)
+    assert 'boundary' not in json.dumps(data)
+    assert 'consecutive' not in json.dumps(data)
+
+    r_query = _req(svc, 'GET', f"/api/job?id={job['id']}", cookie=cookie)
+    assert r_query.status == 200
+    q_data = _body(r_query)
+    assert q_data['error'] == 'PVGIS data gaps exceed the supported repair limits. Review the selected weather years; no years were omitted.'
+    assert q_data['error_code'] == 'SOLAR_DATA_GAPS'

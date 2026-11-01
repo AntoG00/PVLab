@@ -19,7 +19,7 @@ import numpy as np
 
 from .load_projection import (LoadProjection, checked_years, immutable_array, utc_slots,
                               STANDARD, projection_digest, _totals)
-from .profiles import canonical_json, parse_profile, profile_to_dict, identifier
+from .profiles import canonical_json, parse_profile, profile_to_dict, identifier, strict_json
 
 DATASET_SCHEMA_VERSION = 2
 CALENDAR_VERSION = 'utc_hourly_v2'
@@ -228,8 +228,24 @@ def compile_dataset(profile, solar_artifact, load_projection):
         if (type(s.source_provenance) is not bytes or len(s.source_provenance) > MAX_ARCHIVE_BYTES or
                 sha256(s.source_provenance) != s.source_digest):
             raise ValueError('solar source provenance digest/size mismatch')
+        prov = strict_json(s.source_provenance)
+        if type(prov) is not dict or prov.get('contract') not in (
+                'pvgis6-sarah3-openmeteo-era5-v1', 'pvgis53-pvgis6-sarah3-openmeteo-era5-v2'):
+            raise ValueError('invalid solar source contract')
         audit['solar_source'] = dict(file='solar-source.json', sha256=s.source_digest,
-                                     contract='pvgis6-sarah3-openmeteo-era5-v1')
+                                     contract=prov['contract'])
+        if isinstance(prov, dict) and isinstance(prov.get('solar'), list):
+            gap_records = []
+            for entry in prov['solar']:
+                if isinstance(entry, dict) and 'gap_method' in entry:
+                    gap_records.append({
+                        k: entry[k]
+                        for k in ('year', 'plane_id', 'gap_method', 'gap_counts',
+                                  'gap_timestamps_utc', 'zero_fill_sensitivity')
+                        if k in entry
+                    })
+            if gap_records:
+                audit['solar_source']['gap_records'] = gap_records
     audit_raw = canonical_json(audit)
     archive = io.BytesIO()
     np.savez_compressed(archive, **data)

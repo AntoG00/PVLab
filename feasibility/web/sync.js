@@ -180,7 +180,12 @@ class HouseholdClient {
    if(['queued','running'].includes(job.state))this.pendingJob={id,profileId,revision};
    onProgress(job.state);
    if(job.state==='complete')return job;
-   if(!['queued','running'].includes(job.state))throw Error('JOB_FAILED: job '+job.state+'; review inputs and retry.');
+   if(!['queued','running'].includes(job.state)){
+    if(job.error_code==='SOLAR_TIMEOUT')throw Object.assign(Error('SOLAR_TIMEOUT: Solar data request timed out; retry later.'),{code:'SOLAR_TIMEOUT'});
+    if(job.error_code==='SOLAR_NETWORK_ERROR')throw Object.assign(Error('SOLAR_NETWORK_ERROR: Solar data request network error; retry later.'),{code:'SOLAR_NETWORK_ERROR'});
+    if(job.error_code==='SOLAR_DATA_GAPS')throw Object.assign(Error('SOLAR_DATA_GAPS: PVGIS data gaps exceed the supported repair limits. Review the selected weather years; no years were omitted.'),{code:'SOLAR_DATA_GAPS'});
+    throw Error('JOB_FAILED: job '+job.state+'; review inputs and retry.');
+   }
    await new Promise(resolve=>setTimeout(resolve,2000));
   }}finally{if(this.pendingJob?.id===id)this.pendingJob=null;}
  }

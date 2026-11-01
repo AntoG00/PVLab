@@ -31,8 +31,20 @@ def profile_disclosures(profile, audit, revision, years, solar_parameters=None):
     projection = audit.get('projection', {})
     fiscal = profile['fiscal']
     thermal = profile['thermal'].get('end_uses', [])
+    solar_source = audit.get('solar_source')
+    if isinstance(solar_source, dict) and 'gap_records' in solar_source:
+        solar_gaps = {
+            'status': 'audited',
+            'gap_records': list(solar_source['gap_records']),
+        }
+    else:
+        solar_gaps = {
+            'status': 'untracked',
+            'note': 'Older or absent solar metadata; gap records untracked.',
+        }
     return {
         'profile_id': profile['id'], 'input_revision': revision,
+        'solar_gap_records': solar_gaps,
         'quality': {
             'measured_training_fraction': projection.get('measured_training_fraction'),
             'synthetic_training_fraction': projection.get('synthetic_training_fraction'),
@@ -243,11 +255,16 @@ def write_reports(study, dest=None):
         except Exception:
             selected = None
     label = _legacy_report_label()
+    inv_val = fmt(c['invoice']['total_eur'], 2) if isinstance(c.get('invoice'), dict) and 'total_eur' in c['invoice'] else "non disponibile"
+    w_cnt = c.get('weather_count')
+    h_cnt = c.get('hour_count')
+    weather_sim_val = f"{w_cnt} / {h_cnt}" if w_cnt is not None and h_cnt is not None else "non disponibile"
+    gas_runrate_val = fmt(c.get('annual_gas_runrate_eur'), 2) if c.get('annual_gas_runrate_eur') is not None else "non disponibile"
     lines=[f'# {label} — scenari fotovoltaico e accumulo','',
     '**SCENARI IN ATTESA DI CONFERMA.** Gli intervalli meteo usano tutte le annate storiche separatamente. Gli intervalli congiunti combinano i percorsi finanziari espliciti e due stress: non rappresentano probabilità né tutte le combinazioni possibili. Le assunzioni finanziarie proposte non diventano confermate selezionando i valori predefiniti.','',
     legacy_text('report_generic_248','Nessun sopralluogo è implicito. Ingombri, struttura, stringhe e distanze richiedono conferma dell’installatore; ogni layout deriva dai limiti espliciti del profilo.'),'',
     '## Dati e controlli', '',table(['Controllo','Risultato calcolato'],[
-    ['Consumo elettrico misurato annuo (kWh)',fmt(c['annual_kwh'],2)],['Gas annuo misurato (Smc)',fmt(c['annual_gas_smc'])],['Fattura elettrica riprodotta (EUR)',fmt(c['invoice']['total_eur'],2)],['Run rate elettrico annuo (EUR)',fmt(c['annual_electric_bill_eur'],2)],['Run rate gas approssimato (EUR)',fmt(c['annual_gas_runrate_eur'],2)],['Annate / ore simulate',f"{c['weather_count']} / {c['hour_count']}"],['Configurazioni / casi finanziari / stress',f"{study['counts']['candidates']} / {study['counts']['financial_candidate_cases']} / {study['counts']['joint_stress_cases']}"]]),'',
+    ['Consumo elettrico misurato annuo (kWh)',fmt(c.get('annual_kwh'),2)],['Gas annuo misurato (Smc)',fmt(c.get('annual_gas_smc'))],['Fattura elettrica riprodotta (EUR)',inv_val],['Run rate elettrico annuo (EUR)',fmt(c.get('annual_electric_bill_eur'),2)],['Run rate gas approssimato (EUR)',gas_runrate_val],['Annate / ore simulate',weather_sim_val],['Configurazioni / casi finanziari / stress',f"{study['counts']['candidates']} / {study['counts']['financial_candidate_cases']} / {study['counts']['joint_stress_cases']}"]]),'',
     legacy_text('report_generic_251','La tariffazione annualizzata applica i parametri forniti e non ricostruisce la spesa delle fatture. Le convenzioni temporali conservano i totali mensili; la copertura va verificata nel profilo.'),'',
     '## Confronti coerenti','',
     'NPV incrementale FV confronta FV+accumulo con lo stesso carico futuro senza FV. NPV del pacchetto confronta elettrificazione+FV con elettricità storica+gas, contabilizzando conversione, disconnessione e variazione della potenza contrattuale. I costi e benefici di acquisto e mobilità dell’auto sono esclusi.','']
@@ -371,7 +388,7 @@ def write_reports(study, dest=None):
             "orario solare standard fisso UTC+1 (+1 anno bisestile)"
         )
         lines += ['## Pompa di calore aria-acqua (pianificazione)','',
-        f"Pianificazione pompa di calore aria-acqua attiva per riscaldamento idronico (radiatori) e produzione ACS con accumulo. {legacy_text('report_period','Riferimento termico del profilo')}: {fmt(c['annual_gas_smc'])} Smc (riscaldamento {fmt(ref_gas.get('heating_reference_smc'))} Smc / {fmt(ref_gas.get('heating_useful_kwh'), 0)} kWh termici utili; ACS {fmt(ref_gas.get('dhw_reference_smc'))} Smc / {fmt(ref_gas.get('dhw_gross_useful_kwh'), 0)} kWh termici lordi con base estiva {fmt(s.get('summer_gas_base', 20))} Smc/mese; cottura {fmt(ref_gas.get('cooking_reference_smc', s.get('cooking_smc_annual', 20.0)))} Smc gas). Il rendimento stagionale della caldaia a gas esistente $\\eta = {fmt(s.get('boiler_efficiency', 0.80), 2)}$ è una stima dell'utente non verificata ({legacy_text('boiler_age','caldaia esistente;')} non misurata con contatore di calore).",'',
+        f"Pianificazione pompa di calore aria-acqua attiva per riscaldamento idronico (radiatori) e produzione ACS con accumulo. {legacy_text('report_period','Riferimento termico del profilo')}: {fmt(c.get('annual_gas_smc'))} Smc (riscaldamento {fmt(ref_gas.get('heating_reference_smc'))} Smc / {fmt(ref_gas.get('heating_useful_kwh'), 0)} kWh termici utili; ACS {fmt(ref_gas.get('dhw_reference_smc'))} Smc / {fmt(ref_gas.get('dhw_gross_useful_kwh'), 0)} kWh termici lordi con base estiva {fmt(s.get('summer_gas_base', 20))} Smc/mese; cottura {fmt(ref_gas.get('cooking_reference_smc', s.get('cooking_smc_annual', 20.0)))} Smc gas). Il rendimento stagionale della caldaia a gas esistente $\\eta = {fmt(s.get('boiler_efficiency', 0.80), 2)}$ è una stima dell'utente non verificata ({legacy_text('boiler_age','caldaia esistente;')} non misurata con contatore di calore).",'',
         f"Taglia nominale provvisoria {fmt(s.get('hp_nominal_kw', 9.0), 1)} kW modificabile, modellata con mappa generica fallback basata su sensibilità termodinamiche tipo Carnot (o mappa personalizzata da costruttore). Nessun modello commerciale specifico è stato selezionato. I rating di brochure del costruttore, come per [Vaillant aroTHERM plus](https://www.vaillant.com/en/products/arothermplus/) (accesso 2026-10-14), riportano punti di prova a carico parziale (es. A7/W35 a potenza parzializzata e alto COP) e non devono essere scambiati per una mappa di capacità massima continua del compressore.",'',
         f"Curva climatica impostata con mandata tra {fmt(s.get('hp_curve_flow_mild', 35.0), 1)}°C a {fmt(s.get('hp_curve_outdoor_mild', 15.0), 1)}°C e {fmt(s.get('hp_curve_flow_cold', 55.0), 1)}°C a {fmt(s.get('hp_curve_outdoor_cold', -5.0), 1)}°C (con clamping). Derating emissione radiatori secondo metodologia EN 442 $\\Delta T 50$ con esponente caratteristico $n = {rad_exp_str}$ approssimato e modificabile: [Guida tecnica Stelrad fattori di correzione radiatori](https://www.stelrad.ie/wp-content/uploads/2021/10/Stelrad-Correction-Factor-Oct-21.pdf) (accesso 2026-10-14). L'osservazione dell'utente con mandata caldaia ~60°C e mantenimento di ~18°C indoor non identifica la temperatura di ritorno dell'acqua né la potenza nominale dei radiatori installati; dispersione d'involucro ($UA$) e superfici radianti restano non identificate in assenza di sopralluogo tecnico.",'',
         f"Il riscaldamento opera con {sched_desc} e setback impostato a {fmt(s.get('hp_setback_delta', 0.0), 1)}°C; non è modellata la massa termica dinamica dell'edificio e i deficit termici rimangono esplicitamente non serviti. Serbatoio ACS da {fmt(s.get('hp_tank_litres', 200.0), 0)} litri (perdite {fmt(s.get('hp_tank_loss_w_k', 1.0), 1)} W/K, soglia minima servizio {fmt(s.get('hp_tank_service_temp', 40.0), 1)}°C, {hygiene_desc}) con priorità condivisa ACS: durante il reintegro del serbatoio l'erogazione al riscaldamento viene sospesa o limitata.",'',
@@ -400,11 +417,25 @@ def write_reports(study, dest=None):
     lines += ['## Classifiche per obiettivo e scenario','', 'Ogni riga indica il primo caso pratico secondo l’obiettivo specificato, senza raccomandazione unica. L’elenco completo e le frontiere sono in study.json. Payback nullo indica mancato recupero entro l’orizzonte; il caso senza investimento può dominare quando rendimenti sono negativi.','',table(['Percorso / detrazione','Carico','Obiettivo','Primo caso'],[[r['scenario'],r['load_scenario'],r['objective'],r['ordered_ids'][0]] for r in study['rankings']]),'']
     lines += ['## Sensibilità e conferme da ottenere','',
     'Il registro input_ledger.json distingue intervalli plausibili dai limiti di validazione. La sensibilità include capacità IRPEF disponibile nulla e piena, detrazione nulla/36%/50%, percorsi energia inferiori/piatti/superiori, prestito e interpretazioni alternative dei benchmark. Sono casi espliciti, non una distribuzione del mercato. La capacità annuale di detrazione deve essere confermata dal contribuente.','',table(['Parametro','Valore alternativo','NPV FV EUR (meteo)','Payback anni (meteo)'],[[x['parameter'],json.dumps(x['value']),band(x['metrics']['npv_eur']),band(x['metrics']['payback_years'],1)] for x in study['sensitivity']['cases'] if 'metrics' in x]),'',
-    '## Costi, fonti e conflitti','',
-    f"Il catalogo fornito per 6 kWp vale EUR {fmt(c['calibrated_6kwp_eur'])}; la formula originale fornita produce EUR {fmt(c['original_cost_formula_6kwp_eur'])}. Il modello conserva il fisso e calibra il marginale al pacchetto; la formula originale resta una sensibilità. I benchmark commerciali sono dati forniti dall’utente, senza distribuzione statistica né nuovi riscontri web.",
-    f"Il percorso baseload×capture produce EUR/kWh {fmt(c['base_times_capture_eur_kwh'],5)}, mentre il prezzo capture fornito è {fmt(c['provided_capture_eur_kwh'],5)}: entrambi sono valutati senza applicare il capture due volte. Il fattore export parte da 1 nel primo anno simulato, varia linearmente fino al moltiplicatore obiettivo dopo gli anni trascorsi impostati e poi resta costante. Il prezzo unitario applica una sola volta fattore, inflazione ed escalation reale energia; PMG, imposte e commissioni seguono questo calcolo. La rampa non cambia importazioni o dispatch fisico. Manca una serie PZO oraria osservata, pertanto la base usa un benchmark piatto; non stima la cannibalizzazione oraria dell’export.",
-    f"{legacy_text('cer_note','CER dipende da selezione esplicita, regole applicabili e corrispondenza oraria; nessuna configurazione locale viene ereditata.')}",'',
-    '## Confronto rendimento Solar API / PVGIS','',table(['Orientamento','PVGIS ombreggiato beam kWh/kWp','Tutte radiazioni ombreggiate','Google DC','Google AC illustrativo'],[[r['orientation'],band(r['pvgis_beam_shaded']),band(r['pvgis_all_light_shaded']),fmt(r['google_dc_kwh_kwp']),fmt(r['google_ac_kwh_kwp'])] for r in c['roofs']]),'',
+    '## Costi, fonti e conflitti','']
+
+    if c.get('calibrated_6kwp_eur') is not None and c.get('original_cost_formula_6kwp_eur') is not None:
+        lines.append(f"Il catalogo fornito per 6 kWp vale EUR {fmt(c['calibrated_6kwp_eur'])}; la formula originale fornita produce EUR {fmt(c['original_cost_formula_6kwp_eur'])}. Il modello conserva il fisso e calibra il marginale al pacchetto; la formula originale resta una sensibilità. I benchmark commerciali sono dati forniti dall’utente, senza distribuzione statistica né nuovi riscontri web.")
+    else:
+        lines.append('I parametri di costo benchmark 6 kWp non sono disponibili nel profilo corrente.')
+
+    if c.get('base_times_capture_eur_kwh') is not None and c.get('provided_capture_eur_kwh') is not None:
+        lines.append(f"Il percorso baseload×capture produce EUR/kWh {fmt(c['base_times_capture_eur_kwh'],5)}, mentre il prezzo capture fornito è {fmt(c['provided_capture_eur_kwh'],5)}: entrambi sono valutati senza applicare il capture due volte. Il fattore export parte da 1 nel primo anno simulato, varia linearmente fino al moltiplicatore obiettivo dopo gli anni trascorsi impostati e poi resta costante. Il prezzo unitario applica una sola volta fattore, inflazione ed escalation reale energia; PMG, imposte e commissioni seguono questo calcolo. La rampa non cambia importazioni o dispatch fisico. Manca una serie PZO oraria osservata, pertanto la base usa un benchmark piatto; non stima la cannibalizzazione oraria dell’export.")
+    else:
+        lines.append('I parametri di confronto capture price / baseload non sono disponibili nel profilo corrente.')
+
+    lines += [f"{legacy_text('cer_note','CER dipende da selezione esplicita, regole applicabili e corrispondenza oraria; nessuna configurazione locale viene ereditata.')}",'',
+    '## Confronto rendimento Solar API / PVGIS','']
+    if c.get('roofs'):
+        lines += [table(['Orientamento','PVGIS ombreggiato beam kWh/kWp','Tutte radiazioni ombreggiate','Google DC','Google AC illustrativo'],[[r['orientation'],band(r['pvgis_beam_shaded']),band(r['pvgis_all_light_shaded']),fmt(r['google_dc_kwh_kwp']),fmt(r['google_ac_kwh_kwp'])] for r in c['roofs']]),'']
+    else:
+        lines += ['Dati di confronto Solar API / PVGIS per orientamento falda non disponibili nel profilo sintetico.','']
+    lines += [
     legacy_text('report_generic_408','Il ponte DC→AC è un’approssimazione dichiarata, non una misura. Non si applica nuovamente a dati che includono già le perdite; la geometria non verifica stringhe o fattibilità.'),'',
     '## Metodo e limiti','',
     'Capitale al tempo zero, flussi nominali a fine anno; tasso nominale=(1+tasso reale)×(1+inflazione)−1. La visualizzazione reale deflaziona gli stessi flussi mantenendo NPV coerente. LCOE scontato per kWh AC prodotto, distinto dalla variante al netto incentivi. Detrazione in dieci rate nominali, limite annuale di imposta disponibile e cap spesa; quote non usate perse. PMG applicato come massimo sui ricavi annuali aggregati prima di fee e imposta marginale. Prestito separa rendimento del progetto e capitale proprio.']
@@ -432,7 +463,7 @@ def write_reports(study, dest=None):
     # Preserve executed acceptance results rather than claiming a rerun.
     verification=dest/'verification.json'
     evidence=json.loads(verification.read_text()) if verification.exists() else {}
-    evidence.update(report_generated_utc=datetime.now(timezone.utc).isoformat(),engine='feasibility/engine.py',scenario_counts=study['counts'],calibration={k:c[k] for k in ['invoice','annual_kwh','annual_gas_smc','weather_count','hour_count']},status='Executed model evidence; test run recorded separately')
+    evidence.update(report_generated_utc=datetime.now(timezone.utc).isoformat(),engine='feasibility/engine.py',scenario_counts=study['counts'],calibration={k:c.get(k) for k in ['invoice','annual_kwh','annual_gas_smc','weather_count','hour_count']},status='Executed model evidence; test run recorded separately')
     verification.write_text(json.dumps(evidence,indent=2,allow_nan=False))
     write_summary(study, dest=dest, selected=selected)
     return str(dest)
@@ -525,9 +556,16 @@ def write_summary(study, dest=None, selected=None):
     'Caso 12 pannelli Sud, con/senza accumulo: intervalli congiunti da tutte le annate meteo, percorsi energia inferiori/piatti/superiori, detrazioni alternative e due stress finanziari/tecnici. Non sono probabilità né estremi di tutte le combinazioni. Un limite payback non definito significa mancato recupero in almeno un caso.','',
     table(['Carico','Accumulo kWh','NPV FV EUR','Payback anni','Autarchia frazione'],rows),'',
     '## Classifica condizionata dall’obiettivo NPV','',table(['Percorso / detrazione','Carico','Primo caso pratico'],[[r['scenario'],r['load_scenario'],r['ordered_ids'][0]] for r in ranks]),'',
-    'Queste classifiche usano mediane meteo a parità di percorso. Payback, autarchia e autoconsumo possono scegliere casi diversi: tutte le frontiere e i controfattuali dell’accumulo sono nello studio completo.','',
-    '## Verifiche e conferme','',
-    f"Il motore riproduce {fmt(c['annual_kwh'],2)} kWh/anno elettrici, {fmt(c['annual_gas_smc'])} Smc/anno e fattura di EUR {fmt(c['invoice']['total_eur'],2)}. L’energia si conserva in ogni intervallo; il verbale verifica i vincoli per tutta la vita. Il run rate gas di EUR {fmt(c['annual_gas_runrate_eur'],2)} è una tariffazione annualizzata approssimata, non la spesa storica delle dodici fatture.",
+    'Queste classifiche usano mediane meteo a parità di percorso. Payback, autarchia e autoconsumo possono scegliere casi diversi: tutte le frontiere e i controfattuali dell’accumulo sono nello studio completo.','']
+    inv_summary = f"fattura di EUR {fmt(c['invoice']['total_eur'],2)}" if isinstance(c.get('invoice'), dict) and 'total_eur' in c['invoice'] else "fattura non disponibile"
+    gas_smc_summary = f"{fmt(c.get('annual_gas_smc'))} Smc/anno" if c.get('annual_gas_smc') is not None else "gas non disponibile"
+    gas_runrate_summary = (
+        f"Il run rate gas di EUR {fmt(c['annual_gas_runrate_eur'],2)} è una tariffazione annualizzata approssimata, non la spesa storica delle dodici fatture."
+        if c.get('annual_gas_runrate_eur') is not None else
+        "Il run rate gas non è disponibile nel profilo corrente."
+    )
+    lines += ['## Verifiche e conferme','',
+    f"Il motore riproduce {fmt(c.get('annual_kwh'),2)} kWh/anno elettrici, {gas_smc_summary} e {inv_summary}. L’energia si conserva in ogni intervallo; il verbale verifica i vincoli per tutta la vita. {gas_runrate_summary}",
     'Prima di valutare un’offerta: confermare capacità IRPEF annuale disponibile (controllo modificabile, incluse sensibilità nulla/piena), costi/scope/IVA, modelli e garanzie, potenze e degrado dell’accumulo, struttura e layout del tetto. Le rate di detrazione inutilizzabili sono perse. Tutte le ipotesi finanziarie proposte restano pendenti.',
     legacy_text('report_generic_532','Il benchmark export applica capture una sola volta. La rampa futura cambia la remunerazione, non il dispatch fisico. PMG, imposte e commissioni seguono il prezzo export. CER richiede evidenza e selezione esplicite.'),'',
     legacy_text('report_generic_533','[Report completo](executive.md) · [Studio e flussi JSON](study.json) · [Registro input](input_ledger.json) · [Verifiche](verification.json)'),'']

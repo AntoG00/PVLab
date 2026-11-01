@@ -180,6 +180,25 @@ class Service:
             raise Conflict()
         return result
 
+    def _annotate_solar_timeout(self, owner, job_id, result):
+        if result.get('state') == 'failed':
+            try:
+                with self.store.files._directory(('tenants', owner, 'jobs', job_id)) as fd:
+                    raw = self.store.files._read(fd, 'candidate.status.json', 4096)
+                    err = strict_json(raw).get('error')
+                    if err == 'TimeoutError':
+                        result['error'] = 'Solar data request timed out; retry later.'
+                        result['error_code'] = 'SOLAR_TIMEOUT'
+                    elif err in ('ConnectionError', 'OSError', 'HTTPException', 'ConnectionRefusedError'):
+                        result['error'] = 'Solar data request network error; retry later.'
+                        result['error_code'] = 'SOLAR_NETWORK_ERROR'
+                    elif err == 'SolarDataGapError':
+                        result['error'] = 'PVGIS data gaps exceed the supported repair limits. Review the selected weather years; no years were omitted.'
+                        result['error_code'] = 'SOLAR_DATA_GAPS'
+            except Exception:
+                pass
+        return result
+
     def request(self, method, path, *, headers=None, body=b'', client_ip='127.0.0.1', _transport_checked=False, local_authority=None):
         headers = headers or {}
         try:
@@ -266,11 +285,11 @@ class Service:
                     return Response(body={'profiles': self.store.profiles(owner)})
                 if method == 'POST':
                     value = self._object(body)
-                    if set(value) - {'profile', 'defaults'}:
+                    if set(value) - {'profile', 'defaults', 'name'}:
                         raise StoreError()
                     if not isinstance(value.get('defaults', {}), dict):
                         raise StoreError()
-                    created = self.store.create_profile(owner, defaults={'factory': value.get('defaults', {}), 'overrides': {}})
+                    created = self.store.create_profile(owner, name=value.get('name', ''), defaults={'factory': value.get('defaults', {}), 'overrides': {}})
                     if value.get('profile') is not None:
                         profile = dict(value['profile'], id=created['id'])
                         try:
@@ -406,6 +425,42 @@ class Service:
                         self.store.fail_job(owner, job['id'])
                         raise
                     return Response(202, {'id': job['id'], 'state': 'queued'})
+                if len(parts) == 4 and parts[3] == 'solar-coverage' and method == 'POST':
+                    value = self._object(body)
+                    if set(value) != {'consent', 'revision'}:
+                        raise StoreError()
+                    if value.get('consent') is not True:
+                        return Response(400, {'error': 'Explicit user consent required before external network requests', 'consent_required': True})
+                    if value['revision'] != snap['revision']:
+                        raise Conflict()
+                    if_match = headers.get('If-Match', '').strip('"')
+                    if if_match != snap['revision']:
+                        raise Conflict()
+                    if doc.get('profile') is None:
+                        raise InvalidDomain()
+                    self._rate(('solar-coverage', owner), self.limits['uploads_per_hour'], 3600)
+                    from feasibility.solar_provider import check_solar_coverage
+                    transport = self.config.get('solar_transport')
+                    try:
+                        coverage = check_solar_coverage(doc['profile'], transport=transport)
+                    except TimeoutError:
+                        return Response(504, {'error': 'Solar provider timed out; retry later', 'error_code': 'SOLAR_TIMEOUT'})
+                    except (ConnectionError, OSError):
+                        return Response(502, {'error': 'Solar provider network error; retry later', 'error_code': 'SOLAR_NETWORK_ERROR'})
+                    except ValueError as exc:
+                        if str(exc) in ('provider retry limit', 'unapproved endpoint', 'response size limit'):
+                            return Response(502, {'error': 'Solar provider request failed; retry later', 'error_code': 'SOLAR_PROVIDER_ERROR'})
+                        raise
+                    if not coverage['supported']:
+                        return Response(422, {
+                            'error': 'Location outside verified solar coverage',
+                            'supported': False,
+                            'sources': {},
+                            'years': [],
+                            'location': coverage['location'],
+                            'retrieval_date_utc': coverage.get('retrieval_date_utc'),
+                        })
+                    return Response(body={'profile_id': profile_id, **coverage})
                 if len(parts) == 4 and parts[3] == 'compile' and method == 'POST':
                     value = self._object(body)
                     if set(value) != {'revision', 'job_id'} or value['revision'] != snap['revision']:
@@ -442,7 +497,8 @@ class Service:
                 job = self.store.job(owner, query.get('id', [''])[0])
                 if job['state'] == 'complete':
                     self._result(owner, job['id'])
-                return Response(body={k: job[k] for k in ('id', 'state', 'profile_id', 'profile_revision', 'error')})
+                resp = {k: job[k] for k in ('id', 'state', 'profile_id', 'profile_revision', 'error')}
+                return Response(body=self._annotate_solar_timeout(owner, job['id'], resp))
             if path in ('/report', '/report.md', '/report.csv', '/assumptions.json', '/verification.json', '/api/study') and method == 'GET':
                 job_id = query.get('job_id', [''])[0]
                 job = self.store.job(owner, job_id)
@@ -470,6 +526,7 @@ class Service:
                     result = {'id': job['id'], 'state': job['state'], 'profile_id': job['profile_id'], 'revision': job['profile_revision']}
                     if job['error']:
                         result['error'] = job['error']
+                    self._annotate_solar_timeout(owner, job['id'], result)
                     if job['state'] == 'complete':
                         result['identity'] = self._result(owner, job['id'])
                     return Response(body=result)
