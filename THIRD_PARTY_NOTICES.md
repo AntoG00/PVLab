@@ -1,6 +1,6 @@
 # Third-party material and data terms
 
-Reviewed for the source-code-only inventory on 2026-10-30. The PolyForm license
+Reviewed for the source-code-only inventory on 2026-11-04. The PolyForm license
 covers original project code only. Dependencies, documentation sources, data,
 standards and trademarks retain their own licenses and rights. The release does
 not include dependency wheels/native libraries, real GME/PVGIS/ERA5/Google data,
@@ -26,6 +26,7 @@ this source-only distribution does not grant permission to repackage them.
 | Numba 0.68.0 | BSD-2-Clause and third-party notices | [Numba LICENSE](https://github.com/numba/numba/blob/main/LICENSE), LICENSES.third-party in its distribution |
 | llvmlite 0.50.0 | BSD-2-Clause; LLVM Apache-2.0 with LLVM exception | [llvmlite LICENSE](https://github.com/numba/llvmlite/blob/main/LICENSE) and installed LLVM notice |
 | defusedxml 0.7.1 | Python Software Foundation license | [defusedxml license](https://github.com/tiran/defusedxml/blob/main/LICENSE) |
+| tzdata 2026.6 | Apache-2.0; retain included timezone-data notices | [tzdata license](https://github.com/python/tzdata/blob/master/LICENSE) |
 | Rasterio 1.5.2, optional legacy tools | BSD-3-Clause; separate GDAL/native-component terms | [Rasterio license](https://github.com/rasterio/rasterio/blob/main/LICENSE.txt) |
 
 The complete development/build locks add MIT, BSD, Apache-2.0 and PSF-licensed

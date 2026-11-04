@@ -32,6 +32,10 @@ __pycache__/
 # Local agent instructions
 /AGENTS.md
 
+# Local planning and documentation
+/docs/
+/.local-qa/
+
 # Private runtime and audit material (tracked originals are retained)
 /private/
 /runtime/

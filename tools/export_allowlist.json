@@ -10,6 +10,7 @@
     "NOTICE",
     "README.md",
     "THIRD_PARTY_NOTICES.md",
+    "assets/architecture.svg",
     "conftest.py",
     "docs/DEPLOYMENT.md",
     "docs/FISCAL_STATUS.md",
@@ -31,6 +32,7 @@
     "feasibility/evidence_formats.py",
     "feasibility/evidence_priority.py",
     "feasibility/evidence_store.py",
+    "feasibility/file_lock.py",
     "feasibility/fiscal.py",
     "feasibility/fiscal_it.py",
     "feasibility/gas_taxes.py",
@@ -49,6 +51,7 @@
     "feasibility/prepare_market_prices.py",
     "feasibility/profile_store.py",
     "feasibility/profiles.py",
+    "feasibility/recover_profiles.py",
     "feasibility/report.py",
     "feasibility/requirements.txt",
     "feasibility/roof_config.py",
@@ -68,6 +71,8 @@
     "feasibility/weather_candidate.py",
     "feasibility/weather_dataset.py",
     "feasibility/web/app.js",
+    "feasibility/web/consumption-csv.js",
+    "feasibility/web/diagnostics.js",
     "feasibility/web/evidence-datasets.css",
     "feasibility/web/evidence-datasets.js",
     "feasibility/web/favicon.png",
@@ -77,6 +82,7 @@
     "feasibility/web/schedule.js",
     "feasibility/web/style.css",
     "feasibility/web/sync.js",
+    "feasibility/windows_storage.py",
     "feasibility/worker_pool.py",
     "pyproject.toml",
     "requirements-build.lock",
@@ -84,6 +90,12 @@
     "requirements-legacy.lock",
     "requirements-test-parallel.txt",
     "requirements.lock",
+    "screenshots/01-hero-verdict.png",
+    "screenshots/02-battery-tradeoff.png",
+    "screenshots/03-sankey-and-dispatch.png",
+    "screenshots/04-sensitivity-tornado.png",
+    "screenshots/05-economic-sensitivity.png",
+    "screenshots/readme-example.jpg",
     "tests/fixtures/consumption/hourly_italian_semicolon_comma_bom.csv",
     "tests/fixtures/heatpump_results_fixture.json",
     "tests/fixtures/heatpump_schema_fixture.json",
@@ -126,6 +138,8 @@
     "tests/test_charts.py",
     "tests/test_check_public_plan.py",
     "tests/test_clipping_cap_ui.js",
+    "tests/test_consumption_csv.js",
+    "tests/test_consumption_csv_binding.js",
     "tests/test_consumption_ingest.py",
     "tests/test_controls.js",
     "tests/test_coupling_constraints.py",
@@ -171,6 +185,8 @@
     "tests/test_heatpump_ui.js",
     "tests/test_integration.py",
     "tests/test_isolation_regression.py",
+    "tests/test_job_diagnostics.py",
+    "tests/test_job_failure_ui.js",
     "tests/test_load_projection.py",
     "tests/test_loan_behavior_ui.js",
     "tests/test_loan_panel_scope_ui.js",
@@ -188,6 +204,7 @@
     "tests/test_plan_gate.py",
     "tests/test_privacy_check.py",
     "tests/test_profile_cache_identity.py",
+    "tests/test_profile_market_catalog.py",
     "tests/test_profile_prices.py",
     "tests/test_profile_results_ui.js",
     "tests/test_profile_store.py",
@@ -205,6 +222,7 @@
     "tests/test_regression_tools.py",
     "tests/test_restart.js",
     "tests/test_robustness_dispatch_memo.py",
+    "tests/test_roof_capacity_ui.js",
     "tests/test_roof_config.py",
     "tests/test_routing_priority.py",
     "tests/test_routing_priority_ui.js",
@@ -222,6 +240,7 @@
     "tests/test_server.py",
     "tests/test_server_weather_stale.py",
     "tests/test_sessions.py",
+    "tests/test_setup_diagnostics_ui.js",
     "tests/test_shared_state.py",
     "tests/test_sizing_calendar_parity.py",
     "tests/test_sizing_ensemble_means.py",
@@ -248,10 +267,12 @@
     "tests/test_tenant_store.py",
     "tests/test_thermal_baseline.py",
     "tests/test_thermal_engine_integration.py",
+    "tests/test_tou_projection.py",
     "tests/test_user_defaults.py",
     "tests/test_weather_activation.py",
     "tests/test_weather_dispatch_batch.py",
     "tests/test_weather_prices_dynamic.py",
+    "tests/test_windows_storage.py",
     "tests/test_worker_pool.py",
     "tools/check_public_plan.py",
     "tools/export_allowlist.json",
@@ -260,6 +281,7 @@
     "tools/plan_gate.py",
     "tools/privacy_check.py",
     "tools/regression.py",
+    "tools/windows_release_smoke.py",
     "verify.py"
   ],
   "assets": [
@@ -281,6 +303,48 @@
     {
       "public_git_identity_sha256": "39eefc0c64478f0b53749ce3a8179aec1eb11159245c03b02ce5cf958dec56ed",
       "reason": "Owner explicitly approved this public author/committer identity; only exact Git author/committer header identities are recognized."
+    },
+    {
+      "path": "screenshots/01-hero-verdict.png",
+      "sha256": "aaf9ed474b6ca8fd47462dc59959f62f0f7c9f9e20fb0ade4e581b15921bc9ca",
+      "synthetic": true,
+      "public_screenshot": true,
+      "reason": "Owner approved this exact README screenshot on 2026-11-04; visually reviewed fictional demo results with no personal names or coordinates and no personal image metadata."
+    },
+    {
+      "path": "screenshots/02-battery-tradeoff.png",
+      "sha256": "25a8bc22d6f25396d78f92ddbec40786c79f81315f5d31e6fdbbc01d0b5db275",
+      "synthetic": true,
+      "public_screenshot": true,
+      "reason": "Owner approved this exact README screenshot on 2026-11-04; visually reviewed fictional demo results with no personal names or coordinates and no personal image metadata."
+    },
+    {
+      "path": "screenshots/03-sankey-and-dispatch.png",
+      "sha256": "ecf904898baa61af9b931493e21821d5866aaea87f5c8d7c8002547e6986b3ef",
+      "synthetic": true,
+      "public_screenshot": true,
+      "reason": "Owner approved this exact README screenshot on 2026-11-04; visually reviewed fictional demo results with no personal names or coordinates and no personal image metadata."
+    },
+    {
+      "path": "screenshots/04-sensitivity-tornado.png",
+      "sha256": "b2ec15ac81dc15310745f3beb9947875f21ece31841d9237b9631c56257ea6c7",
+      "synthetic": true,
+      "public_screenshot": true,
+      "reason": "Owner approved this exact README screenshot on 2026-11-04; visually reviewed fictional demo results with no personal names or coordinates and no personal image metadata."
+    },
+    {
+      "path": "screenshots/05-economic-sensitivity.png",
+      "sha256": "bd36ecd46a822ebe6d50aabd454c149ccb89beb9221f87302bf31eb40cced703",
+      "synthetic": true,
+      "public_screenshot": true,
+      "reason": "Owner approved this exact README screenshot on 2026-11-04; visually reviewed fictional demo results with no personal names or coordinates and no personal image metadata."
+    },
+    {
+      "path": "screenshots/readme-example.jpg",
+      "sha256": "4cab66d39f52b900f7e15a466351e4e55b720ccf189abbf8ac2327bb8069fcae",
+      "synthetic": true,
+      "public_screenshot": true,
+      "reason": "Owner approved this exact README screenshot on 2026-11-04; visually reviewed fictional demo results with no personal names or coordinates and no personal image metadata."
     }
   ]
 }

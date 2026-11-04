@@ -1,67 +1,85 @@
-# Audited local source export — publication checklist
+# Audited local source update — publication checklist
 
-This checklist describes preparation of an unpublished local export. No GitHub
-remote, push, release publication or deployment is authorized by these checks.
+This checklist describes preparation of a subsequent reviewed update to an existing
+local public repository. No remote, push, release publication, or deployment is authorized.
+Existing public history contains two commits; this update appends a third commit and
+must never amend, reset, rebase, or reinitialize public history.
 
 ## Release policy
 
-- [x] Source-code-only distribution; users run their own Python server.
-- [x] Source-available original code: unmodified PolyForm Noncommercial 1.0.0,
-  LICENSE and required NOTICE preserved. Commercial use, including customer
-  assessments and paid services, requires separate written permission.
-- [x] Third-party code/data terms are separate; THIRD_PARTY_NOTICES.md retained.
-  No real provider archives, manufacturer tables, private inputs, dependency
-  binaries or native-library bundle is included.
-- [x] Loopback startup; explicit optional trusted-LAN binding. Session isolation,
-  CSRF/Host/Origin controls, owned deletion and bounded workers retained.
+- [x] Source-code-only distribution; users run their own local Python server.
+- [x] Source-available original code: unmodified PolyForm Noncommercial 1.0.0; LICENSE
+  and NOTICE preserved. Commercial use requires separate explicit written permission.
+- [x] Third-party code/data terms separate; THIRD_PARTY_NOTICES.md retained. No real
+  provider archives, manufacturer tables, private inputs, dependency binaries, or native bundles.
+- [x] Loopback default (127.0.0.1); optional trusted-LAN binding. Session isolation,
+  CSRF/Host/Origin checks, owned deletion, and bounded workers retained.
 - [x] Hosted operator/contact and hosting region: not applicable to this release.
-- [x] Fiscal status: multiple-LLM review without independent specialist validation;
-  sources/dates and limitations in FISCAL_STATUS.md. No professional-review or
-  current-legal-correctness claim; specialist review is not a code-only blocker.
+- [x] Fiscal status: multiple-LLM review without independent specialist validation
+  (FISCAL_STATUS.md). No current legal correctness claim; non-blocking for code-only.
+
+## Platform validation and environment compatibility
+
+- [x] Linux (x86_64) verification current for the application and tests.
+- [ ] Windows x64: support docs retain prior native verification; not rerun here.
+- [ ] macOS (Apple Silicon arm64): native platform validation remains pending.
+- [x] Environment metadata: owner approved a separate current kernel/tzdata compatibility
+  manifest with unchanged sealed inputs/oracle and exact comparator, after original
+  metadata gate rejected host environment mismatch.
 
 ## Verification evidence
 
-Gate 20 cleared with private/public Python 1,990 passed, Node 352 passed, acceptance
-and exact sealed/synthetic references; no skipped tests or oracle refresh. Four
-dependency locks audited without known advisories. Original license/notices and
-production-wheel loopback/isolation/deletion/log checks passed.
+Superseded initial export baseline (Gate 20/Phase 21): Python 1,990/2,004 passed, Node
+352 passed, wheel 61 entries, sdist 74 files; acceptance passed.
 
-- [x] Phase 21 full private and clean exported public suites: Python 2,004 passed,
-  Node 352 passed, acceptance and exact sealed/synthetic references passed. No
-  skipped tests or oracle refresh; all 14 exporter checks passed independently
-  in a fresh Gemini verification and locally.
-- [x] All payload bytes/hashes, relative paths and modes audited against committed
-  reviewed source. No private Git objects, raw inputs or source paths are copied.
-- [x] Strict export privacy and directory secret scans: zero findings; no legacy
-  exemptions. The synthetic PNG has only IHDR/IDAT/IEND chunks.
-- [x] Build from the exported directory: wheel 61 entries, source archive 74 files;
-  every application/source member matches reviewed bytes. License/notices retained,
-  no bundled native dependencies and no archive-content/metadata privacy findings.
+Pre-update Python/Node/acceptance checks: Python 2,286 passed, Node 464 passed, acceptance passed.
+The initial metadata-only private gate rejection is retained; the separately approved
+compatibility gate pins the current environment and compares the unchanged sealed oracle.
 
-Reviewed source inventory SHA256:
-`d9610d1d10d7cc7a0caffc0aeef96d2b1623ca8f24e27fc902915a18f021da73`.
-Detailed reports remain outside the export. The final delivery supplies the
-manifest SHA256 and the reviewed fresh Git commit; neither is embedded here,
-because embedding a self-dependent whole-tree/commit digest would be circular.
+- [x] Full private compatibility and clean exported public suites: 2,299 Python tests passed, 465 Node tests passed;
+  all acceptance scenarios and sealed references match without oracle refresh or skips.
+- [x] Payload bytes/hashes, relative paths, and POSIX modes audited against committed
+  reviewed source allowlist; no private Git objects, private filesystem paths, or raw inputs.
+- [x] Strict export privacy and secret scans: zero findings; no legacy exemptions.
+- [x] Package build verification: wheel contains 66 entries, source archive
+  contains 79 files; archive members match reviewed source without bundled binaries.
 
-The final Git gate requires exactly one initial commit on main, the approved
-public author/committer identity, clean fsck/worktree, every object scanned, no
-inherited refs/objects/config/hooks/alternates, no remote and no tags. Git and
-directory secret scans and the source/manifest/metadata checks run again on the
-final payload before handoff. A failed check blocks delivery, not just a checkbox.
+- [x] Four hash-locked dependency inventories audited: no known advisories. Separate
+  third-party notices preserved, including the newly required timezone package.
+- [x] Installed production wheel: actual default loopback socket, three-session
+  isolation, explicit pairing, owned deletion, assets, no capability logs and clean SIGINT.
+- [x] Seven exact approved synthetic media assets inspected: no EXIF, PNG chunks
+  limited to IHDR/IDAT/IEND; JPEG retains only standard sRGB/JFIF metadata.
 
-`PUBLIC_EXPORT_MANIFEST.json` lists sanitized file hashes/sizes/modes; its own SHA256
-is supplied with the reviewed export. The `reviewed_source_sha256` field excludes
-this checklist and generated manifests to avoid a circular digest. The manifest's
-file entries still include the final checklist and software manifest.
-`SOFTWARE_MANIFEST.json` records source license, runtime and dependency-lock hashes.
-Neither includes private source commit IDs, local paths or private gate evidence.
+Reviewed source inventory SHA256 (`reviewed_source_sha256`):
+`f08ca10ced2304bc63cbc22103fcf7379f53045540fa2cd91a244d88bab2bdc0`.
 
-## Remaining owner action and update policy
+Manifests (`PUBLIC_EXPORT_MANIFEST.json`, `SOFTWARE_MANIFEST.json`) record sanitized file
+metadata, runtime requirements, and dependency lock hashes without private paths or IDs.
 
-Select the final GitHub repository name/remote and separately approve the exact
-export commit and manifest hash before creating a remote, pushing or publishing.
-There is no hosted deployment in this release model. Future releases use reviewed
-allowlist exports/patches with the same privacy, secret, synthetic, dependency/data
-licensing and exact-regression checks; never copy or mirror private Git history.
-Users maintain their own local runtime/OS and explicit provider credentials/data.
+## Public Git history gate
+
+The existing public repository has two commits. This update appends exactly one new
+commit (the third commit) on `main`. Never amend, reset, rebase, or reinitialize.
+Clean worktree and fsck required; approved author/committer identity; every object scanned;
+no inherited private refs, objects, hooks, or alternates; no remote and no tags.
+
+## Known pre-existing UI limitations
+
+The result-view roof controls remain hidden, and applying a sizing recommendation
+does not immediately refresh those controls. Roof edits remain available through
+onboarding. These issues predate this update; they are follow-up usability work.
+
+## Future update procedure and owner approval
+
+Subsequent updates must follow this reviewed sequence:
+1. Committed allowlist files: Stage and review changes in source repository allowlist.
+2. New empty temp snapshot: Export committed allowlist files into an isolated directory.
+3. Audit and test: Run privacy/secret scans, clean package builds, and full test suites.
+4. Reviewed synchronization: Synchronize reviewed files into the public repository
+   worktree while strictly preserving existing public `.git` directory and commit history.
+5. Append public commit: Record changes as a single new commit appended to history.
+6. Stop for owner approval: Stop before any remote creation, push, or deployment.
+
+Explicit owner review and approval of the exact commit ID and manifest SHA256 are
+required before any remote push or distribution. Users maintain their local runtime/OS.

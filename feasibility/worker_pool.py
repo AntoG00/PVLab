@@ -1,15 +1,22 @@
 """Bounded spawn workers. Scientific state is immutable for each process lifetime."""
 from collections import OrderedDict, deque
+from concurrent.futures import Future
+import ctypes
 from dataclasses import dataclass
+import errno
+from functools import cache
 import hashlib
 import html
 import json
 import multiprocessing as mp
 import os
 from pathlib import Path
+import re
 import signal
+import sys
 import threading
 import time
+import traceback
 
 from feasibility.tenant_store import Conflict, StoreError
 
@@ -46,11 +53,30 @@ def _json(value):
     return json.dumps(value, allow_nan=False, separators=(',', ':')).encode()
 
 
+_THREAD_ENV = ('NUMBA_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'OMP_NUM_THREADS',
+               'MKL_NUM_THREADS', 'NUMEXPR_NUM_THREADS')
+_SPAWN_ENV_LOCK = threading.Lock()
+
+
 def _bounded_environment():
-    # Spawn imports the main module before invoking its target. Set these in
-    # the parent too, so native libraries see the budget on their first import.
-    for name in ('NUMBA_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'OMP_NUM_THREADS', 'MKL_NUM_THREADS', 'NUMEXPR_NUM_THREADS'):
+    for name in _THREAD_ENV:
         os.environ[name] = '1'
+
+
+def _start_process(process):
+    # Spawn imports the main module before invoking the target. Only the
+    # child's inherited environment should retain the worker thread budget.
+    with _SPAWN_ENV_LOCK:
+        previous = {name: os.environ.get(name) for name in _THREAD_ENV}
+        _bounded_environment()
+        try:
+            process.start()
+        finally:
+            for name, value in previous.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
 
 
 def render_owned_result(result, identity):
@@ -130,7 +156,21 @@ def _bind(manifest):
     return initialize_runtime(ctx)
 
 
+def _clean_scenario(settings, options):
+    if isinstance(settings, dict) and 'baseline_cooling_kwh' in settings:
+        settings = dict(settings)
+        settings.pop('baseline_cooling_kwh', None)
+    if isinstance(options, dict) and isinstance(options.get('quote'), dict):
+        ref = options['quote'].get('reference_settings')
+        if isinstance(ref, dict) and 'baseline_cooling_kwh' in ref:
+            ref = dict(ref)
+            ref.pop('baseline_cooling_kwh', None)
+            options = dict(options, quote=dict(options['quote'], reference_settings=ref))
+    return settings, options
+
+
 def _compute(operation, settings, options):
+    settings, options = _clean_scenario(settings, options)
     if operation == 'presentation-context':
         from feasibility.runtime_context import current_runtime, mutable_copy
         from feasibility.fiscal import FISCAL_RATES, CONFIRMATIONS
@@ -192,9 +232,50 @@ def _compute(operation, settings, options):
     raise ValueError('Unknown operation')
 
 
+def get_package_version():
+    """Derive package version from installed distribution metadata or pyproject.toml."""
+    try:
+        import importlib.metadata
+        return importlib.metadata.version('pv-lab')
+    except Exception:
+        pass
+    try:
+        pyproject = Path(__file__).resolve().parents[1] / 'pyproject.toml'
+        if pyproject.is_file():
+            match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', pyproject.read_text(encoding='utf-8'))
+            if match:
+                return match.group(1)
+    except Exception:
+        pass
+    return 'unknown'
+
+
+def _sanitize_traceback(exc, max_frames=12, max_frame_len=120):
+    """Extract safe repo-relative traceback frames, omitting all external paths and variables."""
+    frames = []
+    try:
+        tb = exc.__traceback__
+        repo_root = Path(__file__).resolve().parents[1]
+        for frame, lineno in traceback.walk_tb(tb):
+            filename = Path(frame.f_code.co_filename).resolve()
+            func_name = frame.f_code.co_name
+            try:
+                rel_path = filename.relative_to(repo_root).as_posix()
+            except ValueError:
+                continue
+            if rel_path.startswith(('feasibility/', 'tools/', 'tests/')) and '..' not in rel_path:
+                func = re.sub(r'[^a-zA-Z0-9_<>]', '', func_name)[:40]
+                entry = f"{rel_path}:{lineno} in {func}"
+                frames.append(entry[:max_frame_len])
+    except Exception:
+        pass
+    return frames[-max_frames:]
+
+
 def _child(pipe, manifest_raw):
     """Only the server invokes this target; requests are bounded JSON, never pickles."""
-    os.setsid()
+    if os.name != 'nt':
+        os.setsid()
     _bounded_environment()
     from numba import set_num_threads
     set_num_threads(1)
@@ -277,23 +358,234 @@ def _child(pipe, manifest_raw):
                         exported = destination / name
                         exported.write_text(text, encoding='utf-8')
                         os.chmod(exported, 0o600)
-                        with exported.open('rb') as stream:
+                        with exported.open('r+b' if os.name == 'nt' else 'rb') as stream:
                             os.fsync(stream.fileno())
                 for path in (report, result_path, *(destination / 'result').iterdir()):
-                    with path.open('rb') as stream:
+                    with path.open('r+b' if os.name == 'nt' else 'rb') as stream:
                         os.fsync(stream.fileno())
-                import resource
                 pipe.send_bytes(_json({'ok': True, 'identity': identity,
-                    'peak_rss_bytes': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024}))
-            except Exception:
-                pipe.send_bytes(_json({'ok': False}))
+                    'peak_rss_bytes': _peak_rss()}))
+            except Exception as exc:
+                sanitized_tb = _sanitize_traceback(exc)
+                err_code = 'COMPUTE_EXCEPTION'
+                tb = exc.__traceback__
+                last_func = None
+                while tb is not None:
+                    last_func = tb.tb_frame.f_code.co_name
+                    tb = tb.tb_next
+                if (
+                    isinstance(exc, ValueError)
+                    and str(exc) == 'missing month/hour shape cell; explicit synthetic completion required'
+                    and last_func == 'project_load'
+                ):
+                    err_code = 'SYNTHETIC_COMPLETION_REQUIRED'
+                pipe.send_bytes(_json({
+                    'ok': False,
+                    'failure_type': 'EXCEPTION',
+                    'error_code': err_code,
+                    'error_name': type(exc).__name__,
+                    'traceback': sanitized_tb
+                }))
     except Exception:
         pass
     finally:
         pipe.close()
 
 
+def _maxrss_to_bytes(ru_maxrss, platform=None):
+    plat = sys.platform if platform is None else platform
+    if plat == 'darwin':
+        return int(ru_maxrss)
+    return int(ru_maxrss) * 1024
+
+
+class _RusageInfoV0(ctypes.Structure):
+    # Darwin's struct rusage_info_v0 from <sys/resource.h>.
+    _fields_ = [
+        ('ri_uuid', ctypes.c_uint8 * 16),
+        ('ri_user_time', ctypes.c_uint64),
+        ('ri_system_time', ctypes.c_uint64),
+        ('ri_pkg_idle_wkups', ctypes.c_uint64),
+        ('ri_interrupt_wkups', ctypes.c_uint64),
+        ('ri_pageins', ctypes.c_uint64),
+        ('ri_wired_size', ctypes.c_uint64),
+        ('ri_resident_size', ctypes.c_uint64),
+        ('ri_phys_footprint', ctypes.c_uint64),
+        ('ri_proc_start_abstime', ctypes.c_uint64),
+        ('ri_proc_exit_abstime', ctypes.c_uint64),
+    ]
+
+
+@cache
+def _get_libproc():
+    lib = ctypes.CDLL('/usr/lib/libproc.dylib', use_errno=True)
+    lib.proc_pid_rusage.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
+    lib.proc_pid_rusage.restype = ctypes.c_int
+    return lib
+
+
+def _darwin_rss(pid):
+    libproc = _get_libproc()
+    info = _RusageInfoV0()
+    ret = libproc.proc_pid_rusage(pid, 0, ctypes.byref(info))  # RUSAGE_INFO_V0
+    if ret == 0:
+        return int(info.ri_resident_size)
+    err = ctypes.get_errno()
+    if err == errno.ESRCH:
+        return 0
+    raise RuntimeError('Worker RSS watchdog unavailable')
+
+
+class _MemoryCounters(ctypes.Structure):
+    _fields_ = [('size', ctypes.c_uint32), ('faults', ctypes.c_uint32),
+                ('peak', ctypes.c_size_t), ('resident', ctypes.c_size_t),
+                ('other', ctypes.c_size_t * 6)]
+
+
+class _JobLimits(ctypes.Structure):
+    class _Basic(ctypes.Structure):
+        _fields_ = [('time_limits', ctypes.c_int64 * 2), ('flags', ctypes.c_uint32),
+                    ('working_set', ctypes.c_size_t * 2), ('active_processes', ctypes.c_uint32),
+                    ('affinity', ctypes.c_size_t), ('priority', ctypes.c_uint32),
+                    ('scheduling', ctypes.c_uint32)]
+
+    _fields_ = [('basic', _Basic), ('io_counters', ctypes.c_uint64 * 6),
+                ('memory_limits', ctypes.c_size_t * 4)]
+
+
+@cache
+def _windows_process_api():
+    from ctypes.wintypes import BOOL, DWORD, HANDLE
+    api = ctypes.WinDLL('kernel32', use_last_error=True)
+    for name, result, args in (
+        ('GetCurrentProcess', HANDLE, ()),
+        ('K32GetProcessMemoryInfo', BOOL, (HANDLE, ctypes.POINTER(_MemoryCounters), DWORD)),
+        ('CreateJobObjectW', HANDLE, (ctypes.c_void_p, ctypes.c_wchar_p)),
+        ('SetInformationJobObject', BOOL, (HANDLE, ctypes.c_int, ctypes.c_void_p, DWORD)),
+        ('AssignProcessToJobObject', BOOL, (HANDLE, HANDLE)),
+        ('CloseHandle', BOOL, (HANDLE,)),
+    ):
+        func = getattr(api, name)
+        func.restype, func.argtypes = result, args
+    return api
+
+
+def _windows_memory(handle):
+    counters = _MemoryCounters()
+    counters.size = ctypes.sizeof(counters)
+    if not _windows_process_api().K32GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.size):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return counters
+
+
+def _peak_rss():
+    if os.name == 'nt':
+        return _windows_memory(_windows_process_api().GetCurrentProcess()).peak
+    import resource
+    return _maxrss_to_bytes(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+
+
+def _worker_rss(process):
+    if os.name != 'nt':
+        return _rss(process.pid)
+    try:
+        # On Windows the multiprocessing sentinel is an open process handle.
+        return _windows_memory(process.sentinel).resident
+    except OSError:
+        if not process.is_alive():
+            return 0
+        raise
+
+
+def _windows_job(process):
+    api = _windows_process_api()
+    handle = api.CreateJobObjectW(None, None)
+    if not handle:
+        raise ctypes.WinError(ctypes.get_last_error())
+    limits = _JobLimits()
+    limits.basic.flags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+    if (not api.SetInformationJobObject(handle, 9, ctypes.byref(limits), ctypes.sizeof(limits))
+            or not api.AssignProcessToJobObject(handle, process.sentinel)):
+        error = ctypes.WinError(ctypes.get_last_error())
+        api.CloseHandle(handle)
+        raise error
+    return handle
+
+
+def _send_request(pipe, request):
+    if os.name != 'nt':
+        pipe.send_bytes(request)
+        return None
+
+    # Windows named-pipe writes can wait for the reader to drain the buffer.
+    # Keep the watchdog and cancellation responsive during worker startup.
+    sent = Future()
+
+    def send():
+        try:
+            pipe.send_bytes(request)
+        except Exception as exc:
+            sent.set_exception(exc)
+        else:
+            sent.set_result(None)
+
+    thread = threading.Thread(target=send, name='pv-worker-send', daemon=True)
+    thread.start()
+    return sent, thread
+
+
+def _request_sent(sender):
+    if sender is None:
+        return True
+    sent, _ = sender
+    if not sent.done():
+        return False
+    sent.result()
+    return True
+
+
+def _stop_worker(process, pipe, job_handle, sender=None):
+    if job_handle is not None:
+        if not _windows_process_api().CloseHandle(job_handle):
+            raise ctypes.WinError(ctypes.get_last_error())
+    elif process.is_alive():
+        try:
+            if os.name != 'nt' and os.getpgid(process.pid) == process.pid:
+                os.killpg(process.pid, signal.SIGKILL)
+            else:
+                process.kill()
+        except ProcessLookupError:
+            pass
+    # Reap before the caller marks the job terminal or removes its files.
+    process.join()
+    if sender is not None:
+        sender[1].join()
+    pipe.close()
+    process.close()
+
+
+def _spawn_worker(context, manifest):
+    parent, child = context.Pipe()
+    process = context.Process(target=_child, args=(child, _json(manifest)), daemon=False)
+    try:
+        _start_process(process)
+        # No request is sent until the worker and its future descendants are contained.
+        job_handle = _windows_job(process) if os.name == 'nt' else None
+    except BaseException:
+        if process.pid is None:
+            parent.close()
+            process.close()
+        else:
+            _stop_worker(process, parent, None)
+        raise
+    finally:
+        child.close()
+    return process, parent, job_handle
+
+
 def _rss(pid):
+    if sys.platform == 'darwin':
+        return _darwin_rss(pid)
     try:
         for line in Path(f'/proc/{pid}/status').read_text().splitlines():
             if line.startswith('VmRSS:'):
@@ -305,7 +597,6 @@ def _rss(pid):
 
 class WorkerPool:
     def __init__(self, store, config=None):
-        _bounded_environment()
         self.store, self.config = store, config or PoolConfig()
         self._ctx = mp.get_context('spawn')
         self._queue, self._workers = deque(), OrderedDict()
@@ -319,6 +610,7 @@ class WorkerPool:
     def submit(self, job, manifest, operation, settings, options):
         if operation not in OPERATIONS or not isinstance(settings, dict) or not isinstance(options, dict):
             raise StoreError()
+        settings, options = _clean_scenario(settings, options)
         # Freeze before enqueue; no caller can mutate a queued request.
         item = json.loads(_json({'job': job, 'manifest': manifest, 'operation': operation,
                                  'settings': settings, 'options': options}))
@@ -331,47 +623,80 @@ class WorkerPool:
             self._queue.append(item)
 
     def _kill(self, key):
-        worker = self._workers.pop(key)
-        process = worker['process']
-        if process.is_alive():
-            try:
-                if os.getpgid(process.pid) == process.pid:
-                    os.killpg(process.pid, signal.SIGKILL)
-                else:
-                    process.kill()
-            except ProcessLookupError:
-                pass
-        process.join(timeout=2)
-        worker['pipe'].close()
-        process.close()
+        worker = self._workers[key]
+        _stop_worker(worker['process'], worker['pipe'], worker['job_handle'], worker.get('sender'))
+        del self._workers[key]
 
-    def _fail(self, item):
+    def _fail(self, item, failure_type='EXCEPTION', error_code='COMPUTE_EXCEPTION', error_name='ComputationError', traceback=None):
         job = item['job']
         try:
-            self.store.fail_job(job['tenant_id'], job['id'])
+            from feasibility.runtime_context import model_build_digest
+            failure_info = {
+                'job_id': job['id'],
+                'operation': item.get('operation', 'compute'),
+                'failure_type': failure_type,
+                'error_code': error_code,
+                'error_name': error_name,
+                'model_build_id': item.get('manifest', {}).get('model_build_id') or model_build_digest(),
+                'version': get_package_version(),
+                'traceback': traceback or [],
+                'timestamp': time.time(),
+            }
+            self.store.fail_job(job['tenant_id'], job['id'], failure_info=failure_info)
         except StoreError:
             pass
 
     def _tick(self):
         while self._queue and time.monotonic() - self._queue[0]['enqueued'] > self.config.deadline_seconds:
-            self._fail(self._queue.popleft())
+            self._fail(self._queue.popleft(), failure_type='QUEUE_TIMEOUT', error_code='QUEUE_TIMEOUT', error_name='QueueTimeout')
         for key, worker in list(self._workers.items()):
             item = worker['item']
-            if not worker['process'].is_alive() or _rss(worker['process'].pid) > self.config.memory_bytes or (
+            alive = worker['process'].is_alive()
+            over_memory = alive and _worker_rss(worker['process']) > self.config.memory_bytes
+            if not alive or over_memory or (
                     item and time.monotonic() - worker['started'] > self.config.deadline_seconds):
+                if not worker['process'].is_alive():
+                    failure_type, error_code, error_name = 'PROCESS_EXIT', 'PROCESS_EXIT', 'WorkerProcessDied'
+                elif over_memory:
+                    failure_type, error_code, error_name = 'MEMORY', 'COMPUTE_MEMORY', 'WorkerMemoryExceeded'
+                else:
+                    failure_type, error_code, error_name = 'TIMEOUT', 'COMPUTE_TIMEOUT', 'WorkerDeadlineExceeded'
                 self._kill(key)
                 if item:
-                    self._fail(item)
+                    self._fail(item, failure_type=failure_type, error_code=error_code, error_name=error_name)
                 continue
-            if item and worker['pipe'].poll():
+            try:
+                ready = item and _request_sent(worker.get('sender')) and worker['pipe'].poll()
+            except (EOFError, OSError):
+                self._kill(key)
+                self._fail(item, failure_type='PROCESS_EXIT', error_code='PROCESS_EXIT', error_name='WorkerProcessDied')
+                continue
+            if ready:
                 try:
                     result = json.loads(worker['pipe'].recv_bytes(65536))
                     if not result['ok']:
-                        raise ValueError('Computation failed')
+                        failure_type = result.get('failure_type', 'EXCEPTION')
+                        error_code = result.get('error_code', 'COMPUTE_EXCEPTION')
+                        error_name = result.get('error_name', 'ComputationError')
+                        tb = result.get('traceback', [])
+                        self._fail(item, failure_type=failure_type, error_code=error_code, error_name=error_name, traceback=tb)
+                        worker['item'] = None
+                        self._workers.move_to_end(key)
+                        continue
                     if result['peak_rss_bytes'] > self.config.memory_bytes:
-                        raise ValueError('Worker exceeded memory limit')
+                        self._kill(key)
+                        self._fail(item, failure_type='MEMORY', error_code='COMPUTE_MEMORY', error_name='WorkerMemoryExceeded')
+                        continue
+                    if time.monotonic() - worker['started'] > self.config.deadline_seconds:
+                        self._kill(key)
+                        self._fail(item, failure_type='TIMEOUT', error_code='COMPUTE_TIMEOUT', error_name='WorkerDeadlineExceeded')
+                        continue
                     job = item['job']
                     self.store.publish_result(job['tenant_id'], job['id'], result['identity'])
+                except (EOFError, BrokenPipeError):
+                    self._kill(key)
+                    self._fail(item, failure_type='PROCESS_EXIT', error_code='PROCESS_EXIT', error_name='WorkerProcessDied')
+                    continue
                 except Exception:
                     self._fail(item)
                 worker['item'] = None
@@ -387,11 +712,9 @@ class WorkerPool:
                 if idle is None:
                     return
                 self._kill(idle)
-            parent, child = self._ctx.Pipe()
-            process = self._ctx.Process(target=_child, args=(child, _json(manifest)), daemon=False)
-            process.start()
-            child.close()
-            self._workers[key] = {'process': process, 'pipe': parent, 'item': None, 'started': 0}
+            process, parent, job_handle = _spawn_worker(self._ctx, manifest)
+            self._workers[key] = {'process': process, 'pipe': parent, 'job_handle': job_handle,
+                                  'item': None, 'started': 0}
         worker = self._workers[key]
         if worker['item'] is not None:
             return
@@ -399,12 +722,13 @@ class WorkerPool:
         try:
             self.store.start_job(job['tenant_id'], job['id'])
             destination = self.store.job_directory(job['tenant_id'], job['id'])
-            worker['pipe'].send_bytes(_json(dict(operation=item['operation'], settings=item['settings'],
+            started = time.monotonic()
+            sender = _send_request(worker['pipe'], _json(dict(operation=item['operation'], settings=item['settings'],
                 options=item['options'], destination=str(destination), job_id=job['id'], scenario_hash=job['scenario_hash'])))
-            worker.update(item=item, started=time.monotonic())
+            worker.update(item=item, started=started, sender=sender)
         except Exception:
-            self._fail(item)
             self._kill(key)
+            self._fail(item)
 
     def _run(self):
         while not self._closed:
@@ -414,13 +738,13 @@ class WorkerPool:
                 except Exception:
                     # Fail every pending item if monitoring itself fails; never leave ghost jobs.
                     for item in self._queue:
-                        self._fail(item)
+                        self._fail(item, failure_type='PROCESS_EXIT', error_code='PROCESS_EXIT', error_name='MonitorFailure')
                     self._queue.clear()
                     for key in list(self._workers):
                         item = self._workers[key]['item']
                         self._kill(key)
                         if item:
-                            self._fail(item)
+                            self._fail(item, failure_type='PROCESS_EXIT', error_code='PROCESS_EXIT', error_name='MonitorFailure')
             time.sleep(0.05)
 
     def cancel(self, tenant_id, job_id):
@@ -468,49 +792,41 @@ def run_local(operation, settings, options, *, config=None):
     """CLI/report and frozen-reference entry point, using the same child/watchdog."""
     if operation not in LOCAL_OPERATIONS:
         raise ValueError('Unsupported local operation')
-    _bounded_environment()
     import tempfile
     from feasibility.runtime_context import model_build_digest
     config = config or PoolConfig()
     context = mp.get_context('spawn')
-    parent, child = context.Pipe()
     manifest = {'kind': 'local', 'revision': 'local', 'model_build_id': model_build_digest()}
     with tempfile.TemporaryDirectory(prefix='pv-local-worker-') as temp:
-        process = context.Process(target=_child, args=(child, _json(manifest)))
-        process.start()
-        child.close()
+        process, parent, job_handle = _spawn_worker(context, manifest)
         started = time.monotonic()
+        sender = None
         try:
             request = _json(dict(operation=operation, settings=settings, options=options,
                 destination=temp, job_id='local', scenario_hash=hashlib.sha256(_json(settings)).hexdigest()))
             if len(request) > 2 * 1024**2:
                 raise ValueError('Local request too large')
-            parent.send_bytes(request)
+            sender = _send_request(parent, request)
             while True:
                 if not process.is_alive():
                     raise RuntimeError('Local worker exited before completion')
-                resident = _rss(process.pid)
+                resident = _worker_rss(process)
                 if resident > config.memory_bytes:
                     raise RuntimeError(f'Local worker exceeded RSS limit: {resident} > {config.memory_bytes} bytes')
                 if time.monotonic() - started > config.deadline_seconds:
                     raise RuntimeError('Local worker deadline exceeded')
+                if not _request_sent(sender):
+                    time.sleep(.05)
+                    continue
                 if parent.poll(.05):
                     result = json.loads(parent.recv_bytes(65536))
                     if not result['ok']:
                         raise RuntimeError('Local computation failed')
                     if result['peak_rss_bytes'] > config.memory_bytes:
                         raise RuntimeError('Local worker peak RSS exceeded memory limit')
+                    if time.monotonic() - started > config.deadline_seconds:
+                        raise RuntimeError('Local worker deadline exceeded')
                     print(f"Worker peak RSS bytes: {result['peak_rss_bytes']}", flush=True)
                     return result['identity']
         finally:
-            if process.is_alive():
-                try:
-                    if os.getpgid(process.pid) == process.pid:
-                        os.killpg(process.pid, signal.SIGKILL)
-                    else:
-                        process.kill()
-                except ProcessLookupError:
-                    pass
-            process.join(timeout=2)
-            process.close()
-            parent.close()
+            _stop_worker(process, parent, job_handle, sender)

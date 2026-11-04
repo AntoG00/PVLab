@@ -167,7 +167,7 @@ class TaskBCanonicalScheduleTests(unittest.TestCase):
         self.enterContext(frozen_baseline_weather_context())
         fixture_path = Path(os.environ['PV_LEGACY_DATA_ROOT']).parents[1] / 'compatibility/ac_heating_compatibility_fixtures.npz'
         self.assertTrue(fixture_path.exists())
-        npz = np.load(fixture_path)
+        npz = self.enterContext(np.load(fixture_path))
         d = engine.data()
 
         # Test baseline saved scenario (morning 8..12, evening 16..20)

@@ -4,6 +4,7 @@ from email.message import Message
 from http.cookies import SimpleCookie
 import http.client
 import json
+import re
 import threading
 
 import pytest
@@ -235,3 +236,134 @@ def test_http_evidence_job_ownership_error_sanitization_and_deletion(tmp_path, m
             raise OSError('secret source path')
         monkeypatch.setattr(store, 'uploads', fail)
         assert request(server, 'GET', '/api/evidence/datasets', cookie=cookie2)[:2] == (500, {'error': 'Storage operation failed'})
+
+
+def test_sessions_pair_and_join_capabilities(tmp_path):
+    store = TenantStore(tmp_path / 'store')
+    sessions = Sessions(store)
+    body1, cookie1 = sessions.create()
+    t1 = body1['tenant_id']
+
+    paired = sessions.pair(t1)
+    assert 'code' in paired and paired['expires_in'] == 300
+    code = paired['code']
+    assert len(code) == 43 and re.fullmatch(r'[A-Za-z0-9_-]{43}', code)
+
+    body_joined, cookie_joined = sessions.join(code)
+    assert body_joined['tenant_id'] == t1
+    assert 'HttpOnly' in cookie_joined and 'SameSite=Lax' in cookie_joined and 'Path=/' in cookie_joined
+    assert cookie_joined != cookie1
+
+    # Single-use: consuming again must raise Unauthorized
+    with pytest.raises(Unauthorized):
+        sessions.join(code)
+
+    # Invalid code format raises Unauthorized
+    with pytest.raises(Unauthorized):
+        sessions.join('invalid_short')
+
+
+def test_http_session_pairing_flow_over_network(tmp_path):
+    with http_service(tmp_path) as (server, store):
+        # Session 1
+        status, one, h1 = request(server, 'POST', '/api/session')
+        assert status == 201
+        cookie1 = h1['Set-Cookie']
+
+        # Session 1 pairs
+        status, pair_data, pair_headers = request(server, 'POST', '/api/session/pair', cookie=cookie1)
+        assert status == 200 and pair_headers.get('Cache-Control') == 'no-store'
+        code = pair_data['code']
+        assert pair_data['expires_in'] == 300
+
+        # Session 2
+        status, two, h2 = request(server, 'POST', '/api/session')
+        assert status == 201
+        cookie2 = h2['Set-Cookie']
+
+        # Missing CSRF rejected
+        status, _, _ = request(server, 'POST', '/api/session/join', body={'code': code}, cookie=cookie2,
+                               headers={'X-CSRF-Token': 'bad-csrf'})
+        assert status == 403
+
+        # Cross-origin rejected
+        status, _, _ = request(server, 'POST', '/api/session/join', body={'code': code}, cookie=cookie2,
+                               headers={'Origin': 'http://attacker.invalid'})
+        assert status == 403
+
+        # Successful join
+        status, join_data, join_headers = request(server, 'POST', '/api/session/join', body={'code': code}, cookie=cookie2)
+        assert status == 200 and join_headers.get('Cache-Control') == 'no-store'
+        assert join_data['tenant_id'] == one['tenant_id']
+        cookie_joined = join_headers['Set-Cookie']
+        assert cookie_joined != cookie2
+
+        # Verify joined session over HTTP
+        status, sess_check, _ = request(server, 'GET', '/api/session', cookie=cookie_joined)
+        assert status == 200 and sess_check['tenant_id'] == one['tenant_id']
+
+        # Single-use over HTTP: consuming same code again returns 401
+        status, err_data, _ = request(server, 'POST', '/api/session/join', body={'code': code}, cookie=cookie2)
+        assert status == 401 and err_data['error'] == 'Session unavailable'
+
+
+def test_recover_profiles_cli_and_joining(tmp_path, monkeypatch, capsys):
+    from feasibility import recover_profiles
+    data_root = tmp_path / 'isolated_data'
+    monkeypatch.setenv('PV_DATA_ROOT', str(data_root))
+    store = TenantStore()
+
+    # 1. Nonexistent name
+    exit_code = recover_profiles.main(['--name', 'Missing Household'])
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert 'No matching active household found' in captured.err
+
+    # 2. Local recovery by exact profile name
+    t1 = store.create_tenant()
+    p1 = store.create_profile(t1, name='Unique Roof', defaults={'rate': 0.15})
+    store.publish(t1, p1['id'], p1['revision'], scenario={'tilt': 25})
+
+    exit_code = recover_profiles.main(['--name', 'Unique Roof'])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert 'One-time code' in captured.out
+    code1 = captured.out.strip().splitlines()[-1]
+    assert len(code1) == 43 and re.fullmatch(r'[A-Za-z0-9_-]{43}', code1)
+
+    # 3. Generated code joining and accessing existing data
+    sessions = Sessions(store)
+    joined_body, joined_cookie = sessions.join(code1)
+    assert joined_body['tenant_id'] == t1
+    assert sessions.authenticate(cookie_header(joined_cookie)) == t1
+    retrieved = store.snapshot(t1, p1['id'])
+    assert retrieved['scenario'] == {'tilt': 25}
+    assert retrieved['defaults'] == {'rate': 0.15}
+    with pytest.raises(Unauthorized):
+        sessions.join(code1)
+
+    # 4. Ambiguity requiring tenant
+    t2 = store.create_tenant()
+    store.create_profile(t2, name='Shared Name')
+    t3 = store.create_tenant()
+    store.create_profile(t3, name='Shared Name')
+
+    exit_code = recover_profiles.main(['--name', 'Shared Name'])
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert 'Multiple tenants match; repeat with --tenant' in captured.err
+    assert t2 in captured.err and t3 in captured.err
+
+    # Disambiguation with --tenant
+    exit_code = recover_profiles.main(['--name', 'Shared Name', '--tenant', t3])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    code3 = captured.out.strip().splitlines()[-1]
+    joined_t3, _ = sessions.join(code3)
+    assert joined_t3['tenant_id'] == t3
+
+    # Ambiguity resolved with wrong/non-matching tenant returns error
+    exit_code = recover_profiles.main(['--name', 'Shared Name', '--tenant', 'nonexistent_tenant_id'])
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert 'No matching active household found' in captured.err

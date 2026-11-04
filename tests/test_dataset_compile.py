@@ -1,5 +1,6 @@
 """Synthetic compiler and fail-closed v2 loader integration tests."""
 from dataclasses import replace
+import os
 import hashlib
 import io
 import json
@@ -204,7 +205,11 @@ def test_candidate_rename_failure_cleans_reservation(tmp_path, monkeypatch):
     c = compile_dataset(*inputs())
     def fail(*args):
         raise OSError('injected rename failure')
-    monkeypatch.setattr(dc.os, 'rename', fail)
+    if os.name == 'nt':
+        from feasibility import windows_storage
+        monkeypatch.setattr(windows_storage, 'move', fail)
+    else:
+        monkeypatch.setattr(dc.os, 'rename', fail)
     with pytest.raises(OSError, match='injected'):
         c.write_candidate(tmp_path/'candidate')
     assert not (tmp_path/'candidate').exists()
@@ -301,10 +306,13 @@ def test_gap_records_wiring_and_report_disclosures():
         assert rec['zero_fill_sensitivity']['delta_kwh_per_kwp'] == 0.5
 
     # Test profile_disclosures exposure
-    disc = profile_disclosures(profile, audit, revision='rev1', years=[2023, 2024, 2028])
+    audit_with_tou = dict(audit, projection=dict(audit['projection'], tou_mode='arera_f1_f2_f3'))
+    disc = profile_disclosures(profile, audit_with_tou, revision='rev1', years=[2023, 2024, 2028])
     assert 'solar_gap_records' in disc
     assert disc['solar_gap_records']['status'] == 'audited'
     assert len(disc['solar_gap_records']['gap_records']) == 3
+    assert disc['load_provenance']['tou_mode'] == 'arera_f1_f2_f3'
+    assert disc['load_provenance'] == audit_with_tou['projection']
 
     # Test owned report rendering
     result_mock = {'metrics': {'npv_eur': 1200.0}}

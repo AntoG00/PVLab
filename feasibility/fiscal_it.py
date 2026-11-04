@@ -140,6 +140,11 @@ class ItalyFiscalPolicy:
         export_tax=np.maximum(gross-(fees if s['export_fee_tax_deductible'] else 0),0)*tax
         return dict(gross=gross,fees=fees,tax=export_tax,net=gross-export_tax-fees)
 
+    def deduction_rates(self):
+        if self.legacy_mode or 'deduction_rate' not in self.parameters:
+            return (0, 0.36, 0.5)
+        return (self.parameters['deduction_rate'],)
+
     def investment_terms(self, capex, settings):
         s=self.settings(settings)
         eligible=min(capex*s['deduction_eligible_fraction'],96000)

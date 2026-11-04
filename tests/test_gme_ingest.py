@@ -1,4 +1,5 @@
 """Synthetic-only GME parser security, series and civil-time contracts."""
+import os
 import copy
 import shutil
 import stat
@@ -182,7 +183,14 @@ def test_gaps_and_unknown_format(tmp_path):
 
 @pytest.mark.parametrize('name', ['../20250101MGPPrezzi.xml', '/20250101MGPPrezzi.xml', 'a\\20250101MGPPrezzi.xml', 'inner.zip', 'C:20250101MGPPrezzi.xml'])
 def test_archive_paths_and_nested_archives(tmp_path, name):
-    write_zip(tmp_path / 'input.zip', {name: day_xml('2025-01-01')})
+    # ZipInfo normalizes the platform separator on Windows. Preserve the
+    # malformed member name in both headers to exercise the parser.
+    if os.sep == '\\' and '\\' in name:
+        path = tmp_path / 'input.zip'
+        write_zip(path, {name: day_xml('2025-01-01')})
+        path.write_bytes(path.read_bytes().replace(name.replace('\\', '/').encode(), name.encode()))
+    else:
+        write_zip(tmp_path / 'input.zip', {name: day_xml('2025-01-01')})
     with pytest.raises(ValueError):
         prep.ingest_mgp_data(tmp_path, '2025-01-01', '2025-01-02')
 

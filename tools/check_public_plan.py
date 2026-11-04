@@ -192,7 +192,12 @@ def build_commands(runtime, root, manifest_path, run, workers):
 
 def run_gate(private, workers=None, physical_cores=None):
     private = Path(private)
-    if private == ROOT or ROOT in private.parents or private.stat().st_mode & 0o077:
+    if os.name == 'nt':
+        from feasibility.windows_storage import directory
+        with directory(private.absolute(), ()):
+            pass
+    if (private == ROOT or ROOT in private.parents
+            or (os.name != 'nt' and private.stat().st_mode & 0o077)):
         raise ValueError('Private root must be external and owner-only')
     if any((ancestor / '.git').exists() for ancestor in (private, *private.parents)):
         raise ValueError('Private root must be outside Git ancestry')

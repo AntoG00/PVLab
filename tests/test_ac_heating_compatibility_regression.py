@@ -50,6 +50,7 @@ class AcHeatingCompatibilityRegressionTests(unittest.TestCase):
                 "  PYTHONPATH=feasibility/vendor:. python tests/fixtures/generate_ac_heating_fixtures.py --overwrite"
             )
         cls.npz = np.load(NPZ_PATH)
+        cls.addClassCleanup(cls.npz.close)
         cls.metadata = json.loads(METADATA_PATH.read_text())
         cls.weather_data = engine.data()
 

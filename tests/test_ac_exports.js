@@ -2,6 +2,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const vm = require('node:vm');
 
@@ -1199,7 +1200,7 @@ test('10. Missing production test: result settings and source settings retain un
   assert.equal(payload.result.settings.unrelated_result_custom_metric, 'result_preserved_xyz');
 });
 
-test('11. Browser QA artifact capture: write production onePage() HTML into /tmp/ac-heating-final-print-qa.html', async () => {
+test('11. Browser QA artifact capture: write production onePage() HTML into the OS temporary directory', async () => {
   const harness = createExportHarness();
   await initDefaultHarness(harness);
 
@@ -1250,7 +1251,8 @@ test('11. Browser QA artifact capture: write production onePage() HTML into /tmp
   assert.match(qaHtml, /actual equipment capacity and comfort remain unassessed/);
 
   // Write artifact for manager browser QA
-  fs.writeFileSync('/tmp/ac-heating-final-print-qa.html', qaHtml, 'utf8');
-  assert.ok(fs.existsSync('/tmp/ac-heating-final-print-qa.html'), 'artifact captured at /tmp/ac-heating-final-print-qa.html');
+  const artifactPath = path.join(os.tmpdir(), 'ac-heating-final-print-qa.html');
+  fs.writeFileSync(artifactPath, qaHtml, 'utf8');
+  assert.ok(fs.existsSync(artifactPath), `artifact captured at ${artifactPath}`);
 });
 

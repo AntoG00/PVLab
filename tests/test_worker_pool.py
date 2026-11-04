@@ -92,7 +92,8 @@ def test_real_spawn_interleaves_distinct_owned_arrays_and_immutable_revision(tmp
 
 def waiting_child(pipe, manifest):
     """Spawn target for deterministic lifecycle tests, no scientific initialization."""
-    os.setsid()
+    if os.name != 'nt':
+        os.setsid()
     pipe.recv_bytes()
     time.sleep(30)
 
@@ -134,6 +135,9 @@ def test_worker_termination_failure_and_deletion(tmp_path, monkeypatch, failure)
         assert result['result_ref'] is None
     finally:
         pool.close()
+    if failure == 'memory':
+        diagnostic = store.job_directory(owner, job['id']) / 'diagnostic.json'
+        assert json.loads(diagnostic.read_bytes())['error_code'] == 'COMPUTE_MEMORY'
 
 
 def test_queue_caps_tenant_caps_recovery_and_invalid_configuration(tmp_path, monkeypatch):
@@ -178,7 +182,11 @@ def test_owned_export_labels_formula_prefixes_and_disclosures():
         'synthetic_training_fraction': .8}, 'synthesized_fraction': 1.0}, 'revision', [2023])
     malicious = {'=SUM(1,1)': ' \t=HYPERLINK("x")', 'label': '<img src=x onerror=alert(1)>'}
     markdown = owned_report_text(malicious, {'input_revision': 'revision'}, disclosure)
-    assert '<img' not in markdown and '&lt;img' in markdown
+    parsed = json.loads('\n'.join(line[4:] for line in markdown.splitlines() if line.startswith('    ')))
+    assert parsed['result'] == malicious
+    from feasibility.worker_pool import render_owned_result
+    html_report = render_owned_result(malicious, {'input_revision': 'revision'})
+    assert b'&lt;img' in html_report and b'<img' not in html_report
     assert 'Synthetic timing scenario sensitivity: pending' in markdown
     rows = list(csv.reader(io.StringIO(owned_report_csv(malicious, {}, disclosure))))
     formula = next(row for row in rows if row[1].startswith("'=SUM"))
@@ -208,6 +216,14 @@ assert 'south_panels' not in presentation['settings']
 assert ctx.dataset['audit']['baseline_cooling_kwh'] == ctx.household_profile['default_settings']['baseline_cooling_kwh']
 first=engine.validate({'roof_panels':{'plane0':0},'battery_kwh':0,'battery_modules':0})
 assert engine.validate(first) == first
+cooling_settings = {'roof_panels': {'plane0': 0}, 'battery_kwh': 0, 'battery_modules': 0, 'baseline_cooling_kwh': 120}
+quote_res = _compute('quote', cooling_settings, {'quote': {}})
+assert 'headline_energy_flows' in quote_res
+quote_ref_res = _compute('quote', cooling_settings, {'quote': {'price_basis': 'summary_candidate', 'reference_settings': cooling_settings}})
+assert 'headline_energy_flows' in quote_ref_res
+sizing_res = _compute('sizing', cooling_settings, {'search': {}})
+assert sizing_res['status'] in ('ok', 'SCENARIO_PENDING')
+assert 'baseline_cooling_kwh' not in sizing_res['best_candidate']['settings']
 """
     result = subprocess.run([sys.executable, '-c', script, json.dumps(manifest)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
@@ -226,3 +242,188 @@ def test_legacy_report_label_is_optional_private_metadata_and_never_read_for_v2(
     monkeypatch.setattr(runtime_context, 'runtime_if_initialized', lambda: SimpleNamespace(household_profile={}))
     monkeypatch.setattr(profile_store, 'ProfileStore', lambda: (_ for _ in ()).throw(AssertionError('v2 read legacy metadata')))
     assert report._legacy_report_label() == 'PV Lab'
+
+
+
+def test_quote_and_sizing_jobs_strip_cooling_setting(tmp_path):
+    store = TenantStore(tmp_path / 'store')
+    owner = store.create_tenant()
+    p, manifest = owned_manifest(store, owner)
+    pool = WorkerPool(store)
+    try:
+        settings = {'roof_panels': {'plane0': 0}, 'battery_kwh': 0, 'battery_modules': 0, 'baseline_cooling_kwh': 150}
+        job_q = store.create_job(owner, p['id'], p['revision'], 'd'*64)
+        pool.submit(job_q, manifest, 'quote', settings, {'quote': {}})
+        assert wait_job(store, owner, job_q)['state'] == 'complete'
+        q_res = json.loads((store.job_directory(owner, job_q['id']) / 'result.json').read_bytes())
+        assert 'baseline_cooling_kwh' not in q_res.get('result', {}).get('settings', {})
+
+        job_s = store.create_job(owner, p['id'], p['revision'], 'e'*64)
+        pool.submit(job_s, manifest, 'sizing', settings, {'search': {}})
+        assert wait_job(store, owner, job_s)['state'] == 'complete'
+        s_res = json.loads((store.job_directory(owner, job_s['id']) / 'result.json').read_bytes())
+        assert 'baseline_cooling_kwh' not in s_res.get('best_candidate', {}).get('settings', {})
+    finally:
+        pool.close()
+
+
+@pytest.mark.parametrize('operation,options', [
+    ('monthly', {'weather_year': 2023, 'month': 6}),
+    ('forecast-monthly', {'month': 6}),
+])
+def test_monthly_dayhour_worker_serialization(tmp_path, operation, options):
+    store = TenantStore(tmp_path / 'store')
+    owner = store.create_tenant()
+    profile, manifest = owned_manifest(store, owner)
+    pool = WorkerPool(store)
+    try:
+        job = store.create_job(owner, profile['id'], profile['revision'], 'd' * 64)
+        settings = {'roof_panels': {'plane0': 0}, 'battery_kwh': 0, 'battery_modules': 0}
+        pool.submit(job, manifest, operation, settings, options)
+        assert wait_job(store, owner, job)['state'] == 'complete'
+        result = json.loads((store.job_directory(owner, job['id']) / 'result.json').read_bytes())
+        assert set(result['coverage']['sample_counts']) == {str(hour) for hour in range(24)}
+        assert all(count > 0 for count in result['coverage']['sample_counts'].values())
+    finally:
+        pool.close()
+
+
+def test_darwin_ru_maxrss_byte_conversion():
+    from feasibility.worker_pool import _maxrss_to_bytes
+    # On Linux: ru_maxrss is in KiB and converted to bytes
+    assert _maxrss_to_bytes(100, platform='linux') == 100 * 1024
+    assert _maxrss_to_bytes(51200, platform='linux') == 52428800
+    # On Darwin: ru_maxrss is already in bytes and preserved as-is
+    assert _maxrss_to_bytes(100, platform='darwin') == 100
+    assert _maxrss_to_bytes(52428800, platform='darwin') == 52428800
+
+
+def test_darwin_live_rss_proc_pid_rusage(monkeypatch):
+    import ctypes
+    import sys
+    from feasibility import worker_pool as module
+
+    monkeypatch.setattr(sys, 'platform', 'darwin')
+
+    class FakeLibProc:
+        def __init__(self, resident_size, ret=0):
+            self.resident_size = resident_size
+            self.ret = ret
+
+        def proc_pid_rusage(self, pid, flavor, buf):
+            if self.ret == 0:
+                ctypes.cast(buf, ctypes.POINTER(module._RusageInfoV0)).contents.ri_resident_size = self.resident_size
+            return self.ret
+
+    fake_lib = FakeLibProc(resident_size=64 * 1024 * 1024)
+    monkeypatch.setattr(module, '_get_libproc', lambda: fake_lib)
+
+    # Normal query returns resident memory in bytes
+    assert module._rss(9999) == 64 * 1024 * 1024
+
+    # Process exit (ESRCH) returns 0
+    fake_lib.ret = -1
+    monkeypatch.setattr(ctypes, 'get_errno', lambda: 3)
+    assert module._rss(9999) == 0
+
+    # Unexpected errno raises watchdog unavailable
+    monkeypatch.setattr(ctypes, 'get_errno', lambda: 22)
+    with pytest.raises(RuntimeError, match='watchdog unavailable'):
+        module._rss(9999)
+
+
+def test_darwin_live_limit_enforcement(tmp_path, monkeypatch):
+    import ctypes
+    import sys
+    from feasibility import worker_pool as module
+
+    store = TenantStore(tmp_path / 'store')
+    monkeypatch.setattr(module, '_child', waiting_child)
+    monkeypatch.setattr(sys, 'platform', 'darwin')
+
+    class FakeLibProc:
+        def proc_pid_rusage(self, pid, flavor, buf):
+            ctypes.cast(buf, ctypes.POINTER(module._RusageInfoV0)).contents.ri_resident_size = 50 * 1024 * 1024
+            return 0
+
+    monkeypatch.setattr(module, '_get_libproc', lambda: FakeLibProc())
+
+    # Limit is 10 MB, fake Darwin live RSS reports 50 MB
+    cfg = PoolConfig(deadline_seconds=10, memory_bytes=10 * 1024 * 1024)
+    pool = WorkerPool(store, cfg)
+    owner, job, manifest = pool_job(store)
+    try:
+        pool.submit(job, manifest, 'evaluate', {}, {})
+        result = wait_job(store, owner, job, timeout=5)
+        assert result['state'] == 'failed'
+    finally:
+        pool.close()
+
+
+def nonreading_child(pipe, manifest):
+    """Simulate a worker that cannot drain its request during startup."""
+    time.sleep(5)
+
+
+if os.name == 'nt':
+    def test_windows_timeout_while_request_is_blocked(tmp_path, monkeypatch):
+        from feasibility import worker_pool as module
+
+        store = TenantStore(tmp_path / 'store')
+        monkeypatch.setattr(module, '_child', nonreading_child)
+        pool = WorkerPool(store, PoolConfig(deadline_seconds=1))
+        owner, job, manifest = pool_job(store)
+        try:
+            pool.submit(job, manifest, 'evaluate', {}, {'payload': 'x' * (1024 * 1024)})
+            result = wait_job(store, owner, job, timeout=4)
+            assert result['state'] == 'failed'
+            assert result['result_ref'] is None
+            diagnostic = store.job_directory(owner, job['id']) / 'diagnostic.json'
+            assert json.loads(diagnostic.read_bytes())['error_code'] == 'COMPUTE_TIMEOUT'
+            assert not pool._workers
+        finally:
+            pool.close()
+
+
+    def descendant_child(pipe, manifest):
+        import subprocess
+        import sys
+
+        request = json.loads(pipe.recv_bytes())
+        proc = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
+        marker = Path(request['destination']) / 'child-pid'
+        marker.with_suffix('.tmp').write_text(str(proc.pid))
+        marker.with_suffix('.tmp').replace(marker)
+        proc.wait()
+
+
+    @pytest.mark.parametrize('action', ['cancel', 'timeout', 'close'])
+    def test_windows_termination_reaps_descendants(tmp_path, monkeypatch, action):
+        import _winapi
+        from feasibility import worker_pool as module
+
+        store = TenantStore(tmp_path / 'store')
+        monkeypatch.setattr(module, '_child', descendant_child)
+        pool = WorkerPool(store, PoolConfig(deadline_seconds=5 if action == 'timeout' else 30))
+        owner, job, manifest = pool_job(store)
+        try:
+            pool.submit(job, manifest, 'evaluate', {}, {})
+            marker = store.job_directory(owner, job['id']) / 'child-pid'
+            until = time.monotonic() + 4
+            while not marker.exists() and time.monotonic() < until:
+                time.sleep(.02)
+            handle = _winapi.OpenProcess(0x100000, False, int(marker.read_text()))  # SYNCHRONIZE
+            try:
+                if action == 'cancel':
+                    pool.cancel(owner, job['id'])
+                elif action == 'close':
+                    pool.close()
+                assert _winapi.WaitForSingleObject(handle, 8000) == 0
+                result = wait_job(store, owner, job, timeout=5)
+                assert result['state'] == ('cancelled' if action == 'cancel' else 'failed')
+                assert result['result_ref'] is None
+                assert not pool._workers
+            finally:
+                _winapi.CloseHandle(handle)
+        finally:
+            pool.close()

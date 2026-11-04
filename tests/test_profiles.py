@@ -676,3 +676,85 @@ def test_consumption_load_fields_reject_invalid_inputs(valid_draft_payload, bad_
     payload['consumption'].update(bad_consumption)
     with pytest.raises(ValueError):
         parse_profile(payload)
+
+
+def test_consumption_tou_fields_roundtrip_and_backward_compatibility(valid_draft_payload):
+    import hashlib
+
+    profile_legacy = parse_profile(valid_draft_payload)
+    assert profile_legacy.consumption.monthly_f1 is None
+    assert profile_legacy.consumption.monthly_f2 is None
+    assert profile_legacy.consumption.monthly_f3 is None
+    exported_legacy = profile_to_dict(profile_legacy)
+    assert 'monthly_f1' not in exported_legacy['consumption']
+    assert 'monthly_f2' not in exported_legacy['consumption']
+    assert 'monthly_f3' not in exported_legacy['consumption']
+    cjson_legacy = canonical_json(profile_legacy)
+    assert cjson_legacy == canonical_json(valid_draft_payload)
+    expected_legacy_sha256 = 'f4ed7ace3a371544ff9bada9bb580d80c69b692273ba4e1a6ec03344cc16e535'
+    assert hashlib.sha256(cjson_legacy).hexdigest() == expected_legacy_sha256
+
+    payload_auto = copy.deepcopy(valid_draft_payload)
+    f1 = [10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 35.0, 30.0, 25.0, 20.0, 15.0]
+    f2 = [20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 45.0, 40.0, 35.0, 30.0, 25.0]
+    f3 = [70.0, 60.0, 50.0, 40.0, 30.0, 20.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0]
+    payload_auto['consumption']['monthly_f1'] = f1
+    payload_auto['consumption']['monthly_f2'] = f2
+    payload_auto['consumption']['monthly_f3'] = f3
+    profile_auto = parse_profile(payload_auto)
+    expected_totals = tuple(f1[i] + f2[i] + f3[i] for i in range(12))
+    assert profile_auto.consumption.monthly_f1 == tuple(f1)
+    assert profile_auto.consumption.monthly_f2 == tuple(f2)
+    assert profile_auto.consumption.monthly_f3 == tuple(f3)
+    assert profile_auto.consumption.monthly_totals == expected_totals
+
+    exported_auto = profile_to_dict(profile_auto)
+    assert exported_auto['consumption']['monthly_f1'] == f1
+    assert exported_auto['consumption']['monthly_f2'] == f2
+    assert exported_auto['consumption']['monthly_f3'] == f3
+    assert exported_auto['consumption']['monthly_totals'] == list(expected_totals)
+    assert parse_profile(exported_auto) == profile_auto
+
+    payload_matching = copy.deepcopy(payload_auto)
+    payload_matching['consumption']['monthly_totals'] = list(expected_totals)
+    profile_matching = parse_profile(payload_matching)
+    assert profile_matching.consumption.monthly_totals == expected_totals
+
+
+@pytest.mark.parametrize(
+    'bad_tou',
+    [
+        {'monthly_f1': [10.0] * 12},
+        {'monthly_f2': [10.0] * 12},
+        {'monthly_f3': [10.0] * 12},
+        {'monthly_f1': [10.0] * 12, 'monthly_f2': [20.0] * 12},
+        {'monthly_f1': [10.0] * 12, 'monthly_f3': [30.0] * 12},
+        {'monthly_f2': [20.0] * 12, 'monthly_f3': [30.0] * 12},
+        {'monthly_f1': None, 'monthly_f2': [20.0] * 12, 'monthly_f3': [30.0] * 12},
+        {'monthly_f1': [10.0] * 12, 'monthly_f2': None, 'monthly_f3': [30.0] * 12},
+        {'monthly_f1': [10.0] * 12, 'monthly_f2': [20.0] * 12, 'monthly_f3': None},
+        {'monthly_f1': [None] * 12, 'monthly_f2': [20.0] * 12, 'monthly_f3': [30.0] * 12},
+        {'monthly_f1': [10.0] * 11, 'monthly_f2': [20.0] * 12, 'monthly_f3': [30.0] * 12},
+        {'monthly_f1': [10.0] * 13, 'monthly_f2': [20.0] * 12, 'monthly_f3': [30.0] * 12},
+        {'monthly_f1': [10.0] * 12, 'monthly_f2': [20.0] * 11, 'monthly_f3': [30.0] * 12},
+        {'monthly_f1': [10.0] * 12, 'monthly_f2': [20.0] * 12, 'monthly_f3': [30.0] * 13},
+        {'monthly_f1': [10.0] * 11 + [float('nan')], 'monthly_f2': [20.0] * 12, 'monthly_f3': [30.0] * 12},
+        {'monthly_f1': [10.0] * 12, 'monthly_f2': [20.0] * 11 + [float('inf')], 'monthly_f3': [30.0] * 12},
+        {'monthly_f1': [10.0] * 12, 'monthly_f2': [20.0] * 12, 'monthly_f3': [30.0] * 11 + [float('-inf')]},
+        {'monthly_f1': [10.0] * 11 + [-1.0], 'monthly_f2': [20.0] * 12, 'monthly_f3': [30.0] * 12},
+        {'monthly_f1': [10.0] * 11 + [True], 'monthly_f2': [20.0] * 12, 'monthly_f3': [30.0] * 12},
+        {'monthly_f1': [10.0] * 12, 'monthly_f2': [20.0] * 11 + [False], 'monthly_f3': [30.0] * 12},
+        {'monthly_f1': [1e308] * 12, 'monthly_f2': [1e308] * 12, 'monthly_f3': [1e308] * 12},
+        {
+            'monthly_totals': [100.0] * 12,
+            'monthly_f1': [30.0] * 12,
+            'monthly_f2': [30.0] * 12,
+            'monthly_f3': [30.0] * 11 + [45.0],
+        },
+    ],
+)
+def test_consumption_tou_fields_rejections(valid_draft_payload, bad_tou):
+    payload = copy.deepcopy(valid_draft_payload)
+    payload['consumption'].update(bad_tou)
+    with pytest.raises(ValueError):
+        parse_profile(payload)

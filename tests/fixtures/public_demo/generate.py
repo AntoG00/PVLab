@@ -223,7 +223,11 @@ def prepare_test_inputs(destination):
     data_dir = root / 'legacy' / 'data'
     runtime = root / 'runtime'
     data_dir.mkdir(parents=True, mode=0o700)
-    runtime.mkdir(mode=0o700)
+    if os.name == 'nt':
+        from feasibility.profile_store import ProfileStore
+        ProfileStore(runtime)
+    else:
+        runtime.mkdir(mode=0o700)
     os.environ['PV_LEGACY_DATA_ROOT'] = str(data_dir)
     os.environ['PV_DATA_ROOT'] = str(runtime)
     arrays = generate(5)

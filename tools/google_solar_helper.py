@@ -101,7 +101,13 @@ def build_suggestions(latitude, longitude, output, *, transport=None, now=None):
         limitations='Suggestions only; verify roof geometry and structural suitability independently. Display with required Google Maps attribution; do not display on a non-Google map.',
         roof_sections=sections)
     # New external directory, private permissions; no key or raw response retained.
-    output.mkdir(parents=True, mode=0o700)
+    if os.name == 'nt':
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from feasibility.windows_storage import mkdir_private
+        output.parent.mkdir(parents=True, exist_ok=True)
+        mkdir_private(output)
+    else:
+        output.mkdir(parents=True, mode=0o700)
     path = output / 'roof-suggestions.json'
     with path.open('x', encoding='utf-8') as f:
         os.chmod(path, 0o600)

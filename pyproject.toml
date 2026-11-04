@@ -15,6 +15,7 @@ dependencies = [
   "numba==0.68.0",
   "scipy==1.18.1",
   "defusedxml==0.7.1",
+  "tzdata==2026.6",
 ]
 
 [project.optional-dependencies]
@@ -36,6 +37,7 @@ only-include = [
   "feasibility/evidence_formats.py",
   "feasibility/evidence_priority.py",
   "feasibility/evidence_store.py",
+  "feasibility/file_lock.py",
   "feasibility/fiscal.py",
   "feasibility/fiscal_it.py",
   "feasibility/gas_taxes.py",
@@ -62,6 +64,7 @@ only-include = [
   "feasibility/schedule_optimizer.py",
   "feasibility/server.py",
   "feasibility/sessions.py",
+  "feasibility/recover_profiles.py",
   "feasibility/shared_state.py",
   "feasibility/soc_statistics.py",
   "feasibility/solar_candidate.py",
@@ -71,6 +74,8 @@ only-include = [
   "feasibility/weather_candidate.py",
   "feasibility/weather_dataset.py",
   "feasibility/web/app.js",
+  "feasibility/web/consumption-csv.js",
+  "feasibility/web/diagnostics.js",
   "feasibility/web/evidence-datasets.css",
   "feasibility/web/evidence-datasets.js",
   "feasibility/web/favicon.png",
@@ -80,6 +85,7 @@ only-include = [
   "feasibility/web/schedule.js",
   "feasibility/web/style.css",
   "feasibility/web/sync.js",
+  "feasibility/windows_storage.py",
   "feasibility/worker_pool.py",
 ]
 
@@ -105,6 +111,7 @@ only-include = [
   "feasibility/evidence_formats.py",
   "feasibility/evidence_priority.py",
   "feasibility/evidence_store.py",
+  "feasibility/file_lock.py",
   "feasibility/fiscal.py",
   "feasibility/fiscal_it.py",
   "feasibility/gas_taxes.py",
@@ -133,6 +140,7 @@ only-include = [
   "feasibility/schedule_optimizer.py",
   "feasibility/server.py",
   "feasibility/sessions.py",
+  "feasibility/recover_profiles.py",
   "feasibility/shared_state.py",
   "feasibility/soc_statistics.py",
   "feasibility/solar_candidate.py",
@@ -142,6 +150,8 @@ only-include = [
   "feasibility/weather_candidate.py",
   "feasibility/weather_dataset.py",
   "feasibility/web/app.js",
+  "feasibility/web/consumption-csv.js",
+  "feasibility/web/diagnostics.js",
   "feasibility/web/evidence-datasets.css",
   "feasibility/web/evidence-datasets.js",
   "feasibility/web/favicon.png",
@@ -151,6 +161,7 @@ only-include = [
   "feasibility/web/schedule.js",
   "feasibility/web/style.css",
   "feasibility/web/sync.js",
+  "feasibility/windows_storage.py",
   "feasibility/worker_pool.py",
   "pyproject.toml",
   "requirements-build.lock",

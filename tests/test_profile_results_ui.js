@@ -203,6 +203,20 @@ test('quality distinguishes projected targets and synthetic timing pending from 
  const html=ctx.renderProfileDisclosures({profile_id:'<img>',input_revision:'rev',quality:{measured_training_fraction:.25,synthetic_training_fraction:.75,projected_output_fraction:1},weather_years:[2022,2023],limitations:['Historical weather min–max is a scenario range, not a confidence interval.','Synthetic timing scenario sensitivity: pending independent jobs; no range has been calculated.']});
  assert.match(html,/25.0%/);assert.match(html,/75.0%/);assert.match(html,/100.0%/);assert.match(html,/Synthetic timing.*pending/);assert.match(html,/Historical weather/);assert.doesNotMatch(html,/<img>/);
 });
+test('provenance renders ARERA bands label only when load provenance tou_mode is exactly arera_f1_f2_f3',()=>{
+ const ctx=loadFunctions(['renderProfileDisclosures'],{esc:s=>String(s??'').replaceAll('<','&lt;'),nf:v=>v.toFixed(1)});
+ const base={profile_id:'p',input_revision:'rev',quality:{},weather_years:[2022],limitations:[]};
+ const htmlMatch=ctx.renderProfileDisclosures({...base,load_provenance:{tou_mode:'arera_f1_f2_f3'}});
+ assert.match(htmlMatch,/Hourly shape: ARERA F1\/F2\/F3 bands/);
+ const htmlAbsent=ctx.renderProfileDisclosures({...base,load_provenance:{}});
+ assert.doesNotMatch(htmlAbsent,/Hourly shape: ARERA F1\/F2\/F3 bands/);
+ const htmlNoProv=ctx.renderProfileDisclosures(base);
+ assert.doesNotMatch(htmlNoProv,/Hourly shape: ARERA F1\/F2\/F3 bands/);
+ const htmlOther=ctx.renderProfileDisclosures({...base,load_provenance:{tou_mode:'other_mode'}});
+ assert.doesNotMatch(htmlOther,/Hourly shape: ARERA F1\/F2\/F3 bands/);
+ const htmlBool=ctx.renderProfileDisclosures({...base,load_provenance:{tou_mode:true}});
+ assert.doesNotMatch(htmlBool,/Hourly shape: ARERA F1\/F2\/F3 bands/);
+});
 test('CSV neutralizes formula prefixes after whitespace and retains safe labels',()=>{
  const ctx=loadFunctions(['csvSafeCell']);
  for(const v of ['=1+1',' +2','\t@cmd','-99','\r=1'])assert.equal(ctx.csvSafeCell(v),"'"+v);
@@ -236,7 +250,7 @@ test('tab computations serialize inside the server quota and reject stale queued
 test('zone and window controls invalidate curves and downloads until a new revision is compiled',()=>{
  const nodes=new Map(),$=id=>{if(!nodes.has(id))nodes.set(id,{value:'',textContent:'',hidden:false,disabled:false,appendChild(){},closest:()=>null});return nodes.get(id);};const main={hidden:false};let cleared=0;
  const profile={...profileWith(1),market:{zone:'NORD',series:'NORD',valuation_mode:'flat'}};
- const ctx=loadFunctions(['invalidateProfileResults','setupProfileResults'],{activeResultProfile:profile,settings:{panel_watts:400},schema:{catalog:{series:['NORD','SARD','PUN'],windows:[['2024-01-01','2025-01-01']],revision:'new'}},optimizerPrefs:{},document:{querySelectorAll:()=>[],querySelector:()=>main,createElement:()=>({})},$,householdClient:{invalidate:()=>cleared++},renderProfileRoofControls:()=>{},renderProfileMarketMetadata:()=> 'market',requestId:0,current:{old:true},activeResultJob:{id:'old'},acceptedInputFingerprint:'old',candidateEvalCache:new Map([['old',{}]]),empiricalCache:{old:{}},markSolarSizingStale:()=>{},markBatterySizingStale:()=>{},clearOptimizerResults:()=>{}});
+ const ctx=loadFunctions(['updateActionableWarnings','needsEligibilityWarning','invalidateProfileResults','setupProfileResults'],{activeResultProfile:profile,settings:{panel_watts:400},schema:{catalog:{series:['NORD','SARD','PUN'],windows:[['2024-01-01','2025-01-01']],revision:'new'}},optimizerPrefs:{},document:{querySelectorAll:()=>[],querySelector:()=>main,createElement:()=>({})},$,householdClient:{invalidate:()=>cleared++},renderProfileRoofControls:()=>{},renderProfileMarketMetadata:()=> 'market',requestId:0,current:{old:true},activeResultJob:{id:'old'},acceptedInputFingerprint:'old',candidateEvalCache:new Map([['old',{}]]),empiricalCache:{old:{}},markSolarSizingStale:()=>{},markBatterySizingStale:()=>{},clearOptimizerResults:()=>{}});
  ctx.setupProfileResults();assert.equal($('solarDeduction').value,'0');assert.equal($('solarDeduction').disabled,true);for(const id of ['profileMarketZone','profileMarketWindow']){ctx.current={old:true};ctx.activeResultJob={id:'old'};$(id).onchange();assert.equal(ctx.current,null);assert.equal(ctx.activeResultJob,null);assert.equal(main.hidden,true);assert.equal($('ownedReportHtml').disabled,true);}assert.equal(cleared,2);
 });
 test('owned report download uses its completed job and revision, including a late-body switch',async()=>{
@@ -244,4 +258,29 @@ test('owned report download uses its completed job and revision, including a lat
  const ctx=loadFunctions(['downloadOwnedReport'],{activeResultJob:{id:'owned'},householdClient:client,getExportBlockReason:()=>null,download:(...args)=>downloads.push(args)});
  await ctx.downloadOwnedReport('md');assert.equal(paths[0],'/report.md?job_id=owned');assert.equal(downloads[0][0],'# report');
  let release;client.fetcher=async()=>({ok:true,text:()=>new Promise(r=>release=r)});const pending=ctx.downloadOwnedReport('md');await new Promise(r=>setImmediate(r));client.generation++;release('old body');await assert.rejects(pending,/STALE_RESPONSE/);assert.equal(downloads.length,1);
+});
+
+test('updateActionableWarnings hides projection checkbox when horizon inside pinned dates and preserves outside-date visibility', () => {
+ const nodes = new Map(), $ = id => {
+  if (!nodes.has(id)) nodes.set(id, { textContent: '', hidden: false });
+  return nodes.get(id);
+ };
+ const profile = { fiscal: { parameters: { deduction_rate: 0.5, effective_from: '2025-01-01', effective_to: '2046-01-01' } } };
+ const settings = { installation_year: 2026, horizon_years: 10, deduction_eligible_confirmed: false, pmg_election: false, unsupported_fiscal_year_acknowledged: false };
+ const ctx = loadFunctions(['updateActionableWarnings', 'needsEligibilityWarning'], {
+  activeResultProfile: profile, settings, current: { result: {} }, activeResultJob: { id: 'j1' }, $
+ });
+ ctx.updateActionableWarnings();
+ assert.equal($('lbl_unsupported_fiscal_year_acknowledged').hidden, true);
+ assert.equal($('lbl_deduction_eligible_confirmed').hidden, false);
+ assert.equal($('profileConfirmationsFieldset').hidden, false);
+ assert.doesNotMatch($('profileActionableWarning').textContent, /Selected project horizon exceeds pinned fiscal dates/);
+ ctx.settings.horizon_years = 25;
+ ctx.updateActionableWarnings();
+ assert.equal($('lbl_unsupported_fiscal_year_acknowledged').hidden, false);
+ assert.match($('profileActionableWarning').textContent, /Selected project horizon exceeds pinned fiscal dates/);
+ ctx.settings.unsupported_fiscal_year_acknowledged = true;
+ ctx.updateActionableWarnings();
+ assert.equal($('lbl_unsupported_fiscal_year_acknowledged').hidden, false);
+ assert.doesNotMatch($('profileActionableWarning').textContent, /Selected project horizon exceeds pinned fiscal dates/);
 });

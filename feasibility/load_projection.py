@@ -4,9 +4,13 @@ All target slots start on UTC hours. Both mappings are normalized using the
 fixed UTC+1 compatibility months consumed by the existing engine. Civil shape
 training uses Europe/Rome, including both DST folds as separate elapsed hours.
 These are modeled hourly kWh, never newly claimed measurements.
+
+Month vs band semantics: fixed UTC+1 calendar months partition monthly totals,
+while Europe/Rome civil clock classifies hourly ARERA TOU bands (1, 2, 3) across
+both civil and standard arrays.
 """
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from types import MappingProxyType
 from zoneinfo import ZoneInfo
 import calendar
@@ -22,6 +26,57 @@ SYNTHETIC_SHAPE_VERSION = 'synthetic-shape-v1'
 UTC = timezone.utc
 STANDARD = timezone(timedelta(hours=1))
 ROME = ZoneInfo('Europe/Rome')
+
+
+_ITALIAN_NATIONAL_HOLIDAYS = {
+    (1, 1), (1, 6), (4, 25), (5, 1), (6, 2),
+    (8, 15), (11, 1), (12, 8), (12, 25), (12, 26)
+}
+
+
+def _easter_monday(year: int) -> date:
+    """Compute Easter Monday using the Anonymous Gregorian algorithm."""
+    a = year % 19
+    b = year // 100
+    c = year % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    L = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * L) // 451
+    month = (h + L - 7 * m + 114) // 31
+    day = ((h + L - 7 * m + 114) % 31) + 1
+    return date(year, month, day) + timedelta(days=1)
+
+
+def arera_band(dt_rome: datetime) -> int:
+    """Classify datetime into ARERA TOU band (1=F1, 2=F2, 3=F3) under Europe/Rome civil clock."""
+    if dt_rome.tzinfo is None:
+        dt = dt_rome.replace(tzinfo=ROME)
+    else:
+        dt = dt_rome.astimezone(ROME)
+
+    if (dt.month, dt.day) in _ITALIAN_NATIONAL_HOLIDAYS or dt.date() == _easter_monday(dt.year):
+        return 3
+
+    weekday = dt.weekday()
+    if weekday == 6:  # Sunday
+        return 3
+    hour = dt.hour
+    if weekday < 5:  # Monday to Friday
+        if 8 <= hour < 19:
+            return 1
+        if hour == 7 or 19 <= hour < 23:
+            return 2
+        return 3
+    # Saturday
+    if 7 <= hour < 23:
+        return 2
+    return 3
 
 
 def immutable_array(value):
@@ -53,6 +108,9 @@ class ProjectionPolicy:
     synthetic_completion: bool = False
     variant: str = 'evening'
     annual_kwh: float | None = None
+    monthly_f1: tuple[float, ...] | None = None
+    monthly_f2: tuple[float, ...] | None = None
+    monthly_f3: tuple[float, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -86,6 +144,14 @@ def _totals(value):
             not math.isfinite(sum(values))):
         raise ValueError('twelve finite nonnegative monthly totals required')
     return tuple(float(x) for x in values)
+
+
+def aggregate_tou_to_monthly(monthly_f1, monthly_f2, monthly_f3):
+    """Pure aggregation of 12 monthly F1/F2/F3 values into monthly totals."""
+    t1 = _totals(monthly_f1)
+    t2 = _totals(monthly_f2)
+    t3 = _totals(monthly_f3)
+    return _totals(a + b + c for a, b, c in zip(t1, t2, t3))
 
 
 def _train(source, zone):
@@ -146,6 +212,29 @@ def project_load(intervals, monthly_totals, years, policy):
             any(type(x) is not bool for x in (policy.acknowledged, policy.synthetic_completion))):
         raise ValueError('explicit projection/leap/reference-year policy required')
     synthetic_weights(years[0], policy.variant)  # Validate even for measured mode.
+    has_f1 = policy.monthly_f1 is not None
+    has_f2 = policy.monthly_f2 is not None
+    has_f3 = policy.monthly_f3 is not None
+    has_bands = has_f1 or has_f2 or has_f3
+    if has_bands:
+        if not (has_f1 and has_f2 and has_f3):
+            raise ValueError('all three TOU bands (monthly_f1, monthly_f2, monthly_f3) must be provided together')
+        if policy.mode != 'synthetic':
+            raise ValueError('TOU bands require synthetic mode')
+        if policy.annual_kwh is not None:
+            raise ValueError('cannot specify both annual_kwh and TOU bands')
+        f1_totals = _totals(policy.monthly_f1)
+        f2_totals = _totals(policy.monthly_f2)
+        f3_totals = _totals(policy.monthly_f3)
+        band_totals = aggregate_tou_to_monthly(monthly_f1=f1_totals, monthly_f2=f2_totals, monthly_f3=f3_totals)
+        if monthly_totals is None:
+            monthly_totals = band_totals
+        else:
+            reconciled = _totals(monthly_totals)
+            for pt, bt in zip(reconciled, band_totals):
+                if not math.isclose(pt, bt, rel_tol=1e-9, abs_tol=1e-6):
+                    raise ValueError('provided monthly totals do not reconcile with TOU band sums')
+            monthly_totals = band_totals
     if policy.mode == 'synthetic':
         if intervals is not None:
             raise ValueError('synthetic mode must not discard supplied measurements')
@@ -173,6 +262,7 @@ def project_load(intervals, monthly_totals, years, policy):
     for yi, year in enumerate(years):
         slots = utc_slots(year)
         norm_month = np.array([t.astimezone(STANDARD).month for t in slots])
+        slot_bands = np.array([arera_band(t) for t in slots]) if has_bands else None
         template = synthetic_weights(year, policy.variant)
         for oi, zone in enumerate((ROME, STANDARD)):
             if shape_pairs is None:
@@ -195,18 +285,35 @@ def project_load(intervals, monthly_totals, years, policy):
                     scale = float(observed.mean()) if observed.size else 1.0
                     weights[needed] = fallback[needed] * scale
                     completed += int(needed.sum())
-            for month, total in enumerate(totals, 1):
-                use = norm_month == month
-                if total == 0:
-                    weights[use] = 0
-                    continue
-                mass = float(weights[use].sum())
-                if not math.isfinite(mass) or mass <= 0:
-                    raise ValueError('positive monthly target has zero shape mass')
-                weights[use] *= total / mass
-                # Remove floating summation residue from one positive slot.
-                index = np.flatnonzero(use & (weights > 0))[-1]
-                weights[index] += total - float(weights[use].sum())
+            if has_bands:
+                for month in range(1, 13):
+                    for b_id, b_target in ((1, f1_totals[month - 1]),
+                                           (2, f2_totals[month - 1]),
+                                           (3, f3_totals[month - 1])):
+                        use = (norm_month == month) & (slot_bands == b_id)
+                        if b_target == 0:
+                            weights[use] = 0
+                            continue
+                        mass = float(weights[use].sum())
+                        if not math.isfinite(mass) or mass <= 0:
+                            raise ValueError('positive monthly target has zero shape mass')
+                        weights[use] *= b_target / mass
+                        # Remove floating summation residue from one positive slot.
+                        index = np.flatnonzero(use & (weights > 0))[-1]
+                        weights[index] += b_target - float(weights[use].sum())
+            else:
+                for month, total in enumerate(totals, 1):
+                    use = norm_month == month
+                    if total == 0:
+                        weights[use] = 0
+                        continue
+                    mass = float(weights[use].sum())
+                    if not math.isfinite(mass) or mass <= 0:
+                        raise ValueError('positive monthly target has zero shape mass')
+                    weights[use] *= total / mass
+                    # Remove floating summation residue from one positive slot.
+                    index = np.flatnonzero(use & (weights > 0))[-1]
+                    weights[index] += total - float(weights[use].sum())
             if not np.all(np.isfinite(weights)) or np.any(weights < 0):
                 raise ValueError('invalid projected energy')
             outputs[oi][yi, :len(slots)] = weights
@@ -224,6 +331,8 @@ def project_load(intervals, monthly_totals, years, policy):
                       measured_training_fraction=(1 - completed / slots_used) if intervals else 0.0,
                       synthetic_training_fraction=(completed / slots_used) if intervals else 1.0,
                       limitations=('Modeled month/hour load; no intrahour peaks or inferred heating.',))
+    if has_bands:
+        provenance['tou_mode'] = 'arera_f1_f2_f3'
     frozen = tuple(immutable_array(x) for x in outputs)
     digest = projection_digest(years, totals, provenance, frozen, policy.acknowledged)
     # Every target value is a model, including values trained on measured data.

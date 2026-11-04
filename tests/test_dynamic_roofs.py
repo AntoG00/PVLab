@@ -45,6 +45,52 @@ def bind(monkeypatch, n=2, order=None):
     return ctx
 
 
+@pytest.mark.parametrize('scope,cash_mode,finance_key', [
+    ('solar', 'cash', 'pv_incremental'),
+    ('solar', 'loan', 'solar_equity'),
+    ('package', 'cash', 'whole_package'),
+    ('package', 'loan', 'package_equity'),
+])
+def test_summary_yield_preserves_near_capacity_roof(monkeypatch, scope, cash_mode, finance_key):
+    bind(monkeypatch, 1)
+    settings = {'roof_panels': {'plane0': 10}, 'panel_watts': 490, 'inverter_kw': 10,
+                'quote_total': 5000, 'quote_vat_included': True, 'loan_fraction': 0.5}
+    original = deepcopy(settings)
+    baseline = e.evaluate(settings)
+    result = e.summary_sensitivity(settings, scope=scope, cash_mode=cash_mode)
+    assert settings == original
+    assert result['base_npv_eur'] == pytest.approx(baseline['finance'][finance_key]['npv']['mean'])
+    npvs = []
+    for endpoint, factor in [('minus_10_pct', 0.9), ('plus_10_pct', 1.1)]:
+        perturbed = e.evaluate({**settings, '_pv_yield_multiplier': factor})
+        assert perturbed['layout'] == baseline['layout']
+        assert perturbed['finance']['capex_eur'] == baseline['finance']['capex_eur']
+        npv = perturbed['finance'][finance_key]['npv']['mean']
+        assert result['pv_yield'][endpoint]['npv_eur'] == pytest.approx(npv)
+        npvs.append(npv)
+    assert npvs[0] < result['base_npv_eur'] < npvs[1]
+    applied = result['all_adverse_together']['applied_settings']
+    assert 'panel_watts' not in applied
+    joint = e.evaluate({**settings, **applied})
+    assert result['all_adverse_together']['npv_eur'] == pytest.approx(joint['finance'][finance_key]['npv']['min'])
+    assert e.evaluate(settings)['finance'][finance_key]['npv'] == baseline['finance'][finance_key]['npv']
+
+
+def test_yield_scaling_keeps_cached_profile_and_cache_identity(monkeypatch):
+    bind(monkeypatch, 1)
+    settings = e.validate({'roof_panels': {'plane0': 10}, 'panel_watts': 490})
+    profile = e.pv_profile(settings).copy()
+    low = e.validate({**settings, '_pv_yield_multiplier': 0.9})
+    high = e.validate({**settings, '_pv_yield_multiplier': 1.1})
+    np.testing.assert_allclose(e.pv_profile(low), profile * 0.9)
+    np.testing.assert_allclose(e.pv_profile(high), profile * 1.1)
+    np.testing.assert_array_equal(e.pv_profile(settings), profile)
+    assert e._energy_key(low) != e._energy_key(settings) != e._energy_key(high)
+    for invalid in [True, -1, 3, float('nan'), float('inf'), '1.1']:
+        with pytest.raises(ValueError, match='PV yield multiplier'):
+            e.validate({**settings, '_pv_yield_multiplier': invalid})
+
+
 @pytest.mark.parametrize('n', [0, 1, 2, 7, 12])
 def test_direct_evaluation_and_labels(monkeypatch, n):
     ctx = bind(monkeypatch, n)

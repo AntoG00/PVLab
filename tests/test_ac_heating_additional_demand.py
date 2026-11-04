@@ -48,6 +48,7 @@ class AcHeatingAdditionalDemandTests(IsolatedDefaultsTestCase):
         if not NPZ_PATH.exists() or not METADATA_PATH.exists():
             raise FileNotFoundError("Compatibility fixtures or metadata missing")
         cls.npz = np.load(NPZ_PATH)
+        cls.addClassCleanup(cls.npz.close)
         with open(METADATA_PATH, 'r', encoding='utf-8') as f:
             cls.metadata = json.load(f)
         cls.weather_data = engine.data()

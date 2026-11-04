@@ -23,8 +23,13 @@ def test_suggestions_attribution_expiry_permissions_no_key(tmp_path,monkeypatch)
     assert obj['roof_sections'][0]['candidate_panel_count']==2
     assert obj['attribution']=='Google Maps'
     assert datetime.fromisoformat(obj['delete_by'])==now+timedelta(days=30)
-    assert stat.S_IMODE(f.stat().st_mode)==0o600
-    assert stat.S_IMODE(f.parent.stat().st_mode)==0o700
+    if os.name == 'nt':
+        from feasibility.windows_storage import directory, file
+        with directory(f.parent, ()), file(f):
+            pass
+    else:
+        assert stat.S_IMODE(f.stat().st_mode)==0o600
+        assert stat.S_IMODE(f.parent.stat().st_mode)==0o700
     assert list(f.parent.iterdir())==[f]
 
 

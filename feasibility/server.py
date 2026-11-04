@@ -12,7 +12,7 @@ from feasibility import engine, assumptions, shared_state, evidence_store, weath
 JOB={'state':'idle','progress':''};JOB_LOCK=threading.Lock()
 RESTART_LOCK=threading.Lock();RESTART_SCHEDULED=False
 INSTANCE_ID=uuid.uuid4().hex
-STATIC_ASSETS={'/':'web/index.html','/favicon.png':'web/favicon.png','/app.js':'web/app.js','/schedule.js':'web/schedule.js','/evidence-datasets.js':'web/evidence-datasets.js','/evidence-datasets.css':'web/evidence-datasets.css','/sync.js':'web/sync.js','/onboarding.js':'web/onboarding.js','/restart.js':'web/restart.js','/style.css':'web/style.css'}
+STATIC_ASSETS={'/':'web/index.html','/favicon.png':'web/favicon.png','/diagnostics.js':'web/diagnostics.js','/app.js':'web/app.js','/schedule.js':'web/schedule.js','/evidence-datasets.js':'web/evidence-datasets.js','/evidence-datasets.css':'web/evidence-datasets.css','/sync.js':'web/sync.js','/onboarding.js':'web/onboarding.js','/consumption-csv.js':'web/consumption-csv.js','/restart.js':'web/restart.js','/style.css':'web/style.css'}
 
 def restart_exec_argv():
     """Preserve the current interpreter flags and script arguments on replacement."""
@@ -266,7 +266,7 @@ class Handler(LegacyLocalHandler):
                 if len(lengths) != 1 or not lengths[0].isascii() or not lengths[0].isdigit() or len(lengths[0]) > 12:
                     raise StoreError()
                 length = int(lengths[0])
-                upload = self.path.split('?')[0].endswith('/consumption') or self.path.split('?')[0] == '/api/evidence/datasets'
+                upload = self.path.split('?')[0].endswith(('/consumption', '/market-catalog')) or self.path.split('?')[0] == '/api/evidence/datasets'
                 if self.path.split('?')[0] == '/api/evidence/datasets':
                     from urllib.parse import unquote
                     if Path(unquote(self.headers.get('X-Dataset-Filename', ''))).suffix.lower() == '.json':
@@ -311,6 +311,11 @@ class Handler(LegacyLocalHandler):
 
 
 if __name__=='__main__':
+    import signal
+    if hasattr(signal, 'SIGBREAK'):
+        signal.signal(signal.SIGBREAK, signal.default_int_handler)
+    if hasattr(signal, 'SIGTERM'):
+        signal.signal(signal.SIGTERM, signal.default_int_handler)
     ap=argparse.ArgumentParser();ap.add_argument('--host',default='127.0.0.1');ap.add_argument('--port',type=int,default=8000);ap.add_argument('--allowed-host',action='append',default=[]);ap.add_argument('--local-admin-restart',action='store_true');ap.add_argument('--price-catalog',type=Path);args=ap.parse_args()
     from feasibility.tenant_store import TenantStore
     server=ThreadingHTTPServer((args.host,args.port),Handler)
@@ -320,6 +325,8 @@ if __name__=='__main__':
     print(f'PV Lab ready at http://{args.host}:{args.port}',flush=True)
     try:
         server.serve_forever()
+    except KeyboardInterrupt:
+        pass
     finally:
         server.pool.close()
         server.server_close()

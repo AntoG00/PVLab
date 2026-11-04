@@ -1,9 +1,8 @@
 """Owner-partitioned immutable profile storage; no active-runtime integration.
 
 Owners are authenticated, server-generated IDs supplied by internal callers.
-All traversal uses directory descriptors and O_NOFOLLOW, including root ancestors.
-Published files use atomic no-replace links followed by directory fsync; failures
-may leave unreachable inputs but never make a partial revision current.
+Traversal checks every component, including root ancestors. Published files
+are flushed and installed without replacement before they can be referenced.
 """
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -19,6 +18,9 @@ from feasibility.profiles import (
     HouseholdProfileV1, canonical_json, identifier, object_fields, parse_profile,
     profile_to_dict, strict_json, validate_ready,
 )
+
+if os.name == 'nt':
+    from feasibility import windows_storage
 
 KINDS = ('consumption', 'solar', 'weather', 'prices', 'thermal', 'dataset_manifest')
 MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
@@ -46,7 +48,12 @@ def resolve_data_root(root=None):
     if path == Path(path.anchor):
         raise ValueError('Profile root cannot be a filesystem root')
     repo = Path(__file__).absolute().parents[1]
-    if path == repo or repo in path.parents or any((p / '.git').exists() for p in (path, *path.parents)):
+    # Check Windows short-name aliases without using a resolved path for traversal.
+    candidate = path.resolve() if os.name == 'nt' else path
+    if os.name == 'nt':
+        repo = repo.resolve()
+    if candidate == repo or repo in candidate.parents or any(
+            (parent / '.git').exists() for parent in (candidate, *candidate.parents)):
         raise ValueError('Profile root must be outside repositories')
     return path
 
@@ -89,19 +96,30 @@ class ProfileStore:
 
     @contextmanager
     def _directory(self, parts, create=False):
+        if os.name == 'nt':
+            try:
+                with windows_storage.directory(self.root, parts, create) as path:
+                    yield path
+            except OSError as exc:
+                raise ValueError('Store path unavailable or unsafe') from exc
+            return
         fd = os.open('/', os.O_RDONLY | os.O_DIRECTORY)
         try:
             root_parts = self.root.parts[1:]
             for index, part in enumerate((*root_parts, *parts)):
                 if part in ('', '.', '..') or '/' in part:
                     raise ValueError('Unsafe store path')
-                if create:
+                try:
+                    next_fd = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+                except FileNotFoundError:
+                    if not create:
+                        raise
                     try:
                         os.mkdir(part, 0o700, dir_fd=fd)
                         os.fsync(fd)
                     except FileExistsError:
                         pass
-                next_fd = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+                    next_fd = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
                 os.close(fd)
                 fd = next_fd
                 if index >= len(root_parts) - 1:
@@ -119,14 +137,25 @@ class ProfileStore:
         return identifier(owner_id, 'owner id', opaque=True)
 
     @staticmethod
-    def _read(fd, name, limit):
+    @contextmanager
+    def _open_read(fd, name):
+        if os.name == 'nt':
+            path = windows_storage.child(fd, name)
+            with windows_storage.file(path), path.open('rb') as stream:
+                yield stream
+            return
+        file_fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+        with os.fdopen(file_fd, 'rb') as stream:
+            info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+                raise ValueError('Unsafe stored file')
+            yield stream
+
+    @classmethod
+    def _read(cls, fd, name, limit):
         try:
-            file_fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
-            with os.fdopen(file_fd, 'rb') as stream:
-                info = os.fstat(stream.fileno())
-                if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
-                    raise ValueError('Unsafe stored file')
-                if info.st_size > limit:
+            with cls._open_read(fd, name) as stream:
+                if os.fstat(stream.fileno()).st_size > limit:
                     raise ValueError('Stored file exceeds limit')
                 raw = stream.read(limit + 1)
                 if len(raw) > limit:
@@ -139,6 +168,19 @@ class ProfileStore:
     def _write_once(fd, name, raw):
         """Flush a unique temp file, then publish atomically without replacement."""
         temp = '.tmp-' + new_id()
+        if os.name == 'nt':
+            destination = windows_storage.child(fd, name)
+            temporary = windows_storage.child(fd, temp)
+            stream = temporary.open('xb')
+            try:
+                with stream:
+                    stream.write(raw)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                windows_storage.move(temporary, destination)
+            finally:
+                temporary.unlink(missing_ok=True)
+            return
         file_fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=fd)
         try:
             with os.fdopen(file_fd, 'wb') as stream:

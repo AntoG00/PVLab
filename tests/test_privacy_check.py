@@ -445,3 +445,30 @@ def test_staged_public_metadata_uses_index_policy_not_unstaged_approval(tmp_path
     assert subprocess.run(argv,capture_output=True).returncode==1
     subprocess.run(['git','-C',str(repo),'add','tools/export_allowlist.json'],check=True)
     assert subprocess.run(argv,capture_output=True).returncode==0
+
+
+def test_reviewed_readme_screenshot_requires_exact_owner_approval():
+    import hashlib
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('privacy_screenshot_test', TOOL_PATH)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    raw = b'\x89PNG\r\n\x1a\nfictional demo pixels'
+    path = 'screenshots/demo.png'
+    asset = dict(path=path, sha256=hashlib.sha256(raw).hexdigest(), synthetic=True,
+                 public_screenshot=True, reason='Owner-approved fictional README capture')
+
+    def reasons(payload, location=path, record=asset):
+        scanner = module.Scanner([], allowlist=[record])
+        scanner.scan(payload, location)
+        return {finding['reason'] for finding in scanner.findings}
+
+    assert reasons(raw) == set()
+    assert 'private-path' in reasons(raw + b'changed')
+    assert 'private-path' in reasons(raw, 'screenshots/other.png')
+    assert 'private-path' in reasons(raw, record={**asset, 'public_screenshot': False})
+    nested = 'screenshots/uploads/demo.png'
+    assert 'private-path' in reasons(raw, nested, {**asset, 'path': nested})
+    private = raw + b' password=' + b'a' * 20
+    assert 'credential-candidate' in reasons(
+        private, record={**asset, 'sha256': hashlib.sha256(private).hexdigest()})

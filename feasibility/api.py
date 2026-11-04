@@ -7,6 +7,7 @@ import hmac
 import html
 import json
 from pathlib import Path
+import re
 import secrets
 import threading
 import time
@@ -42,6 +43,98 @@ ALIASES = {'evaluate': 'quote', 'loan-solve': 'loan', 'dayhour': 'dayhour',
     'summary-sensitivity': 'summary-sensitivity', 'behavior-matrix': 'matrix', 'study': 'study'}
 
 
+def get_verified_repo_url(repo_root=None):
+    """Derive verified GitHub repository URL from git configuration.
+
+    Returns an https://github.com/<owner>/<repo> URL if and only if
+    a git remote origin URL exists and strictly matches a valid GitHub repository.
+    Never returns unverified, non-GitHub, or malformed URLs.
+    """
+    if repo_root is None:
+        repo_root = Path(__file__).resolve().parents[1]
+    git_config = Path(repo_root) / '.git' / 'config'
+    if not git_config.is_file():
+        return None
+    try:
+        content = git_config.read_text(encoding='utf-8', errors='replace')
+        match = re.search(r'\[remote\s+"origin"\][^\[]*?url\s*=\s*([^\r\n]+)', content, re.DOTALL)
+        if not match:
+            return None
+        raw_url = match.group(1).strip()
+        gh_match = re.match(
+            r'^(?:https://github\.com/|git@github\.com:)([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+?)(?:\.git)?$',
+            raw_url
+        )
+        if not gh_match:
+            return None
+        owner, repo = gh_match.group(1), gh_match.group(2)
+        if '..' in owner or '..' in repo or '/' in owner or '/' in repo:
+            return None
+        return f'https://github.com/{owner}/{repo}'
+    except Exception:
+        return None
+
+
+ALLOWLISTED_ERROR_CODES = {
+    'COMPUTE_EXCEPTION', 'COMPUTE_TIMEOUT', 'COMPUTE_MEMORY', 'PROCESS_EXIT',
+    'INTERRUPTED', 'QUEUE_TIMEOUT', 'SOLAR_TIMEOUT', 'SOLAR_NETWORK_ERROR',
+    'SOLAR_DATA_GAPS', 'SOLAR_PROVIDER_ERROR', 'JOB_FAILED',
+    'SYNTHETIC_COMPLETION_REQUIRED'
+}
+
+ALLOWLISTED_OPERATIONS = {
+    'compute', 'evaluate', 'quote', 'loan', 'dayhour', 'summary-sensitivity', 'matrix', 'study', 'solar'
+}
+
+ALLOWLISTED_ERROR_NAMES = {
+    'ComputationError', 'WorkerProcessDied', 'WorkerMemoryExceeded',
+    'WorkerDeadlineExceeded', 'QueueTimeout', 'ServerInterrupted',
+    'TimeoutError', 'ConnectionError', 'SolarDataGapError',
+    'ZeroDivisionError', 'ValueError', 'TypeError', 'KeyError',
+    'IndexError', 'OverflowError', 'FloatingPointError', 'RuntimeError'
+}
+
+ACTIONABLE_EXPLANATIONS = {
+    'COMPUTE_EXCEPTION': 'Calculation engine encountered an internal mathematical or logic error. Review inputs or inspect the sanitized bug report.',
+    'COMPUTE_TIMEOUT': 'Calculation timed out before completing. Try reducing the calculation scope or selected weather years.',
+    'COMPUTE_MEMORY': 'Calculation exceeded worker memory limit. Try reducing weather years or scenario complexity.',
+    'PROCESS_EXIT': 'Calculation worker process terminated unexpectedly. Review inputs or report this issue.',
+    'INTERRUPTED': 'Calculation was interrupted by server reload or restart. Retry the calculation.',
+    'QUEUE_TIMEOUT': 'Calculation expired while waiting in queue. Retry when server capacity is available.',
+    'SOLAR_TIMEOUT': 'Solar data request timed out; retry later.',
+    'SOLAR_NETWORK_ERROR': 'Solar data request network error; retry later.',
+    'SOLAR_DATA_GAPS': 'PVGIS data gaps exceed the supported repair limits. Review the selected weather years; no years were omitted.',
+    'SOLAR_PROVIDER_ERROR': 'Solar provider request failed; review inputs and retry.',
+    'JOB_FAILED': 'Job failed; review inputs and retry.',
+    'SYNTHETIC_COMPLETION_REQUIRED': 'Interval training data does not cover required month/hour cells; enable explicit synthetic completion or supply complete coverage.',
+}
+
+
+def _build_diagnostic_payload(job_id, error_code, error_name, operation, message, version, build_id, repo_url=None, traceback=None):
+    code = error_code if error_code in ALLOWLISTED_ERROR_CODES else 'COMPUTE_EXCEPTION'
+    op = operation if operation in ALLOWLISTED_OPERATIONS else 'compute'
+    name = error_name if error_name in ALLOWLISTED_ERROR_NAMES else 'ComputationError'
+    payload = {
+        'job_id': job_id,
+        'error_code': code,
+        'error_name': name,
+        'operation': op,
+        'version': version,
+        'model_build_id': build_id,
+        'actionable_message': message,
+    }
+    if repo_url:
+        payload['repo_url'] = repo_url
+    if isinstance(traceback, list) and traceback:
+        safe_tb = []
+        for frame in traceback[:12]:
+            if isinstance(frame, str) and re.fullmatch(r'feasibility/(?:[A-Za-z_][A-Za-z0-9_]*/)*[A-Za-z_][A-Za-z0-9_]*\.py:[0-9]+ in [A-Za-z_<>][A-Za-z0-9_<>]*', frame):
+                safe_tb.append(frame[:120])
+        if safe_tb:
+            payload['traceback'] = safe_tb
+    return payload
+
+
 class Service:
     def __init__(self, config, store, pool):
         self.config, self.store, self.pool = dict(config), store, pool
@@ -50,7 +143,7 @@ class Service:
         if not self.hosts or '*' in self.hosts or config.get('internet_hosted'):
             raise ValueError('Explicit local/LAN hosts required; internet hosting is unsupported')
         self.limits = dict(json_bytes=2 * 1024**2, upload_bytes=16 * 1024**2,
-                           requests_per_minute=60, uploads_per_hour=10,
+                           requests_per_minute=60, uploads_per_hour=10, market_uploads_per_hour=36,
                            ip_per_minute=120, sessions_per_hour=10)
         for name, value in config.get('limits', {}).items():
             if name not in self.limits or type(value) is not int or not 0 < value <= self.limits[name]:
@@ -111,6 +204,35 @@ class Service:
         doc = self._document(owner, snap)
         return snap, doc
 
+    def _resolve_catalog_dir(self, owner, profile_id, pinned_rev=None):
+        tenant_dir = self.store.profile_catalog_path(owner, profile_id)
+        admin_dir = Path(self.config['catalog_root']).resolve() if self.config.get('catalog_root') else None
+        if pinned_rev:
+            if not isinstance(pinned_rev, str) or not re.fullmatch(r'[0-9a-f]{64}', pinned_rev):
+                return None
+            if (tenant_dir / 'revisions' / pinned_rev / 'manifest.json').is_file():
+                return tenant_dir
+            if admin_dir and (admin_dir / 'revisions' / pinned_rev / 'manifest.json').is_file():
+                return admin_dir
+            return None
+        if (tenant_dir / 'current.json').is_file():
+            return tenant_dir
+        if admin_dir and (admin_dir / 'current.json').is_file():
+            return admin_dir
+        return None
+
+    def _get_profile_market_catalog_metadata(self, owner, profile_id, pinned_rev=None):
+        from feasibility.runtime_context import available_price_catalog
+        catalog_dir = self._resolve_catalog_dir(owner, profile_id, pinned_rev)
+        if catalog_dir:
+            try:
+                metadata = available_price_catalog(catalog_dir, pinned_rev)
+                metadata['source'] = 'private' if catalog_dir == self.store.profile_catalog_path(owner, profile_id) else 'admin'
+                return metadata
+            except (ValueError, OSError):
+                return None
+        return None
+
     def _manifest(self, owner, profile_id, revision, *, solar=False):
         snap, doc = self._snapshot(owner, profile_id)
         if snap['revision'] != revision:
@@ -125,7 +247,10 @@ class Service:
         candidate = doc.get('candidate')
         if not candidate or doc['profile'] is None:
             raise InvalidDomain()
-        if doc['profile']['market']['valuation_mode'] != 'flat' and not self.config.get('catalog_root'):
+        market = doc['profile']['market']
+        pinned_rev = market.get('price_revision')
+        catalog_dir = self._resolve_catalog_dir(owner, profile_id, pinned_rev)
+        if market['valuation_mode'] != 'flat' and not catalog_dir:
             raise InvalidDomain()
         # A compiled candidate can only come from an owned completed solar job.
         producer = self.store.job(owner, candidate['job_id'])
@@ -138,7 +263,55 @@ class Service:
         defaults.update({k: v['value'] for k, v in snap['defaults'].get('overrides', {}).items()})
         return {**manifest, 'kind': 'v2', 'candidate': str(directory),
             'dataset_digest': candidate['digest'], 'profile': doc['profile'], 'defaults': defaults,
-            'catalog_root': self.config.get('catalog_root')}
+            'catalog_root': str(catalog_dir) if catalog_dir else None}
+
+    def _compiled_candidate(self, owner, profile_id, doc):
+        candidate = doc.get('candidate')
+        if not candidate or not isinstance(candidate, dict):
+            return None
+        job_id = candidate.get('job_id')
+        digest = candidate.get('digest')
+        if not isinstance(job_id, str) or not isinstance(digest, str):
+            return None
+        try:
+            producer = self.store.job(owner, job_id)
+            if producer.get('profile_id') != profile_id or producer.get('state') != 'complete':
+                return None
+            with self.store.files._directory(('tenants', owner, 'jobs', producer['id'], 'candidate')) as fd:
+                raw_manifest = self.store.files._read(fd, 'manifest.json', self.limits['json_bytes'])
+            if hashlib.sha256(raw_manifest).hexdigest() != digest:
+                return None
+            manifest = strict_json(raw_manifest)
+            years = [int(y) for y in manifest.get('years', []) if isinstance(y, int) and not isinstance(y, bool)]
+            if not years:
+                return None
+            result = {'years': years}
+            try:
+                with self.store.files._directory(('tenants', owner, 'jobs', producer['id'])) as fd:
+                    raw_source = self.store.files._read(fd, 'source.json', self.limits['json_bytes'])
+                source = strict_json(raw_source)
+                solar = source.get('solar')
+                if isinstance(solar, dict):
+                    solar_meta = {}
+                    if isinstance(solar.get('loss_percent'), (int, float)) and not isinstance(solar.get('loss_percent'), bool):
+                        solar_meta['loss_percent'] = solar['loss_percent']
+                    if isinstance(solar.get('mounting'), str) and solar['mounting'] in ('Free standing 2025', 'Integrated 2025'):
+                        solar_meta['mounting'] = solar['mounting']
+                    if isinstance(solar.get('technology'), str) and solar['technology'] in ('cSi',):
+                        solar_meta['technology'] = solar['technology']
+                    if solar_meta:
+                        result['solar'] = solar_meta
+                load = source.get('load')
+                if isinstance(load, dict):
+                    policy = load.get('policy')
+                    if isinstance(policy, dict) and isinstance(policy.get('reference_year'), int) and not isinstance(policy.get('reference_year'), bool):
+                        if 1900 <= policy['reference_year'] <= 2100:
+                            result['reference_year'] = policy['reference_year']
+            except Exception:
+                pass
+            return result
+        except Exception:
+            return None
 
     def _submit(self, owner, body):
         if set(body) - {'profile_id', 'revision', 'operation', 'settings', 'options'}:
@@ -180,24 +353,101 @@ class Service:
             raise Conflict()
         return result
 
-    def _annotate_solar_timeout(self, owner, job_id, result):
+    def _annotate_job_failure(self, owner, job_id, result):
         if result.get('state') == 'failed':
+            from feasibility.runtime_context import model_build_digest
+            from feasibility.worker_pool import get_package_version
+            build_id = model_build_digest()
+            pkg_version = get_package_version()
+            result['version'] = pkg_version
+            result['model_build_id'] = build_id
+            repo_url = get_verified_repo_url()
+            if repo_url:
+                result['repo_url'] = repo_url
+
+            has_solar = False
             try:
                 with self.store.files._directory(('tenants', owner, 'jobs', job_id)) as fd:
                     raw = self.store.files._read(fd, 'candidate.status.json', 4096)
                     err = strict_json(raw).get('error')
+                    has_solar = True
                     if err == 'TimeoutError':
-                        result['error'] = 'Solar data request timed out; retry later.'
+                        result['error'] = ACTIONABLE_EXPLANATIONS['SOLAR_TIMEOUT']
                         result['error_code'] = 'SOLAR_TIMEOUT'
                     elif err in ('ConnectionError', 'OSError', 'HTTPException', 'ConnectionRefusedError'):
-                        result['error'] = 'Solar data request network error; retry later.'
+                        result['error'] = ACTIONABLE_EXPLANATIONS['SOLAR_NETWORK_ERROR']
                         result['error_code'] = 'SOLAR_NETWORK_ERROR'
                     elif err == 'SolarDataGapError':
-                        result['error'] = 'PVGIS data gaps exceed the supported repair limits. Review the selected weather years; no years were omitted.'
+                        result['error'] = ACTIONABLE_EXPLANATIONS['SOLAR_DATA_GAPS']
                         result['error_code'] = 'SOLAR_DATA_GAPS'
             except Exception:
                 pass
+
+            diag = None
+            try:
+                with self.store.files._directory(('tenants', owner, 'jobs', job_id)) as fd:
+                    raw = self.store.files._read(fd, 'diagnostic.json', 65536)
+                    diag = strict_json(raw)
+            except Exception:
+                pass
+
+            if diag:
+                err_code = diag.get('error_code', 'COMPUTE_EXCEPTION')
+                # Legacy compatibility: older diagnostic.json files recorded generic COMPUTE_EXCEPTION
+                # for the synthetic completion ValueError. Classify only the exact known frame from release v0.1:
+                # 'feasibility/load_projection.py:280 in project_load'. Unrelated ValueErrors in project_load
+                # or other lines remain COMPUTE_EXCEPTION.
+                if err_code == 'SYNTHETIC_COMPLETION_REQUIRED' or (
+                    diag.get('error_name') == 'ValueError'
+                    and any(frame == 'feasibility/load_projection.py:280 in project_load' for frame in (diag.get('traceback') or []))
+                ):
+                    err_code = 'SYNTHETIC_COMPLETION_REQUIRED'
+                elif err_code not in ALLOWLISTED_ERROR_CODES:
+                    err_code = 'COMPUTE_EXCEPTION'
+                result['error_code'] = err_code
+                msg = ACTIONABLE_EXPLANATIONS.get(err_code, 'Computation failed; review inputs and retry.')
+                result['error'] = msg
+                result['diagnostic'] = _build_diagnostic_payload(
+                    job_id=job_id,
+                    error_code=err_code,
+                    error_name=diag.get('error_name', 'ComputationError'),
+                    operation=diag.get('operation', 'compute'),
+                    message=msg,
+                    version=pkg_version,
+                    build_id=build_id,
+                    repo_url=repo_url,
+                    traceback=diag.get('traceback'),
+                )
+            elif has_solar and 'error_code' in result:
+                err_code = result['error_code']
+                msg = result.get('error') or ACTIONABLE_EXPLANATIONS.get(err_code, 'Solar calculation failed; review inputs and retry.')
+                result['diagnostic'] = _build_diagnostic_payload(
+                    job_id=job_id,
+                    error_code=err_code,
+                    error_name=err_code,
+                    operation='solar',
+                    message=msg,
+                    version=pkg_version,
+                    build_id=build_id,
+                    repo_url=repo_url,
+                )
+            elif result.get('error') == 'Computation interrupted':
+                result['error_code'] = 'INTERRUPTED'
+                msg = ACTIONABLE_EXPLANATIONS['INTERRUPTED']
+                result['error'] = msg
+                result['diagnostic'] = _build_diagnostic_payload(
+                    job_id=job_id,
+                    error_code='INTERRUPTED',
+                    error_name='ServerInterrupted',
+                    operation='compute',
+                    message=msg,
+                    version=pkg_version,
+                    build_id=build_id,
+                    repo_url=repo_url,
+                )
         return result
+
+    _annotate_solar_timeout = _annotate_job_failure
 
     def request(self, method, path, *, headers=None, body=b'', client_ip='127.0.0.1', _transport_checked=False, local_authority=None):
         headers = headers or {}
@@ -236,6 +486,20 @@ class Service:
                     raise Forbidden()
                 if not isinstance(supplied, str) or not hmac.compare_digest(supplied, self._csrf(headers)):
                     raise Forbidden()
+            if path == '/api/session/pair' and method == 'POST':
+                if self._object(body):
+                    raise StoreError()
+                self._rate(('pair', owner), 10, 3600)
+                return Response(body=self.sessions.pair(owner), headers={'Cache-Control': 'no-store'})
+            if path == '/api/session/join' and method == 'POST':
+                self._rate(('join', client_ip), 10, 3600)
+                value = self._object(body)
+                if set(value) != {'code'}:
+                    raise StoreError()
+                result, cookie = self.sessions.join(value['code'])
+                token = cookie.split(';')[0]
+                return Response(body={**result, 'csrf_token': self._csrf({'Cookie': token})},
+                                headers={'Set-Cookie': cookie, 'Cache-Control': 'no-store'})
             if path == '/api/session':
                 if method == 'GET':
                     return Response(body={'tenant_id': owner, 'csrf_token': self._csrf(headers)})
@@ -314,7 +578,8 @@ class Service:
                 if len(parts) == 3:
                     if method == 'GET':
                         return Response(body={'id': profile_id, 'revision': snap['revision'], 'profile': doc['profile'],
-                                              'compiled': bool(doc.get('candidate'))})
+                                              'compiled': bool(doc.get('candidate')),
+                                              'compiled_candidate': self._compiled_candidate(owner, profile_id, doc)})
                     if method == 'PATCH':
                         value = self._object(body)
                         if set(value) != {'profile'} or headers.get('If-Match', '').strip('"') != snap['revision']:
@@ -353,14 +618,15 @@ class Service:
                         if not profile['consumption']['acknowledged']:
                             blockers.append('CONSUMPTION_ACKNOWLEDGEMENT_REQUIRED')
                         if (profile['market']['valuation_mode'] != 'flat' and
-                                (not profile['market']['price_revision'] or not self.config.get('catalog_root'))):
+                                (not profile['market']['price_revision'] or not self._resolve_catalog_dir(owner, profile_id, profile['market']['price_revision']))):
                             blockers.append('PRICE_CATALOG_REQUIRED')
                     if not doc.get('candidate'):
                         blockers.append('COMPILED_CANDIDATE_REQUIRED')
                     return Response(body={'revision': snap['revision'], 'has_profile': profile is not None,
                         'compiled': bool(doc.get('candidate')), 'ready': not blockers,
                         'blockers': blockers, 'fiscal_rule_revision': fiscal_revision,
-                        'consumption': doc.get('consumption')})
+                        'consumption': doc.get('consumption'),
+                        'compiled_candidate': self._compiled_candidate(owner, profile_id, doc)})
                 if len(parts) == 4 and parts[3] == 'consumption' and method == 'POST':
                     self._rate(('upload', owner), self.limits['uploads_per_hour'], 3600)
                     if len(body) > self.limits['upload_bytes']:
@@ -396,10 +662,49 @@ class Service:
                         'counts': dict(parsed_csv.summary_counts)}, candidate=None)
                     result = self._publish(owner, profile_id, snap['revision'], doc)
                     return Response(201, {'revision': result['revision'], **doc['consumption']})
+                if len(parts) == 4 and parts[3] == 'market-catalog':
+                    if method == 'GET':
+                        catalog = self._get_profile_market_catalog_metadata(owner, profile_id, query.get('revision', [None])[0])
+                        return Response(body={'catalog': catalog})
+                    if method == 'POST':
+                        self._rate(('market-upload', owner), self.limits['market_uploads_per_hour'], 3600)
+                        if len(body) > self.limits['upload_bytes']:
+                            raise TooLarge()
+                        filename = unquote(headers.get('X-Filename', ''), errors='strict')
+                        if not filename or not filename.lower().endswith('.zip'):
+                            raise StoreError('Expected .zip filename in X-Filename header')
+                        from feasibility.prepare_market_prices import ingest_mgp_archive
+                        from feasibility.market_catalog import update_catalog
+                        from feasibility.runtime_context import available_price_catalog
+                        from defusedxml.common import DefusedXmlException
+                        from xml.etree.ElementTree import ParseError
+                        import zipfile
+                        try:
+                            replace = query.get('replace', [''])[0] in ('1', 'true', 'yes')
+                            ingest = ingest_mgp_archive(body)
+                            tenant_catalog_dir = self.store.profile_catalog_path(owner, profile_id)
+                            update_catalog(tenant_catalog_dir, ingest, publish=True, replace=replace)
+                            catalog = {**available_price_catalog(tenant_catalog_dir), 'source': 'private'}
+                        except (ValueError, zipfile.BadZipFile, DefusedXmlException, ParseError) as exc:
+                            msg = str(exc)
+                            if 'contiguous' in msg.lower():
+                                code = 'DELIVERY_DATES_NONCONTIGUOUS'
+                            elif 'conflicting day' in msg.lower():
+                                code = 'DELIVERY_DAY_CONFLICT'
+                            elif any(text in msg.lower() for text in ('no valid', 'no delivery', 'no price', 'unexpected or nested archive member')):
+                                code = 'EMPTY_OR_INVALID_ARCHIVE'
+                            elif 'zip' in msg.lower():
+                                code = 'INVALID_ZIP_ARCHIVE'
+                            else:
+                                code = 'PARSE_ERROR'
+                            return Response(422, {'error': msg, 'code': code, 'diagnostic': {'code': code, 'message': msg}})
+                        return Response(body={'catalog': catalog})
                 if len(parts) == 4 and parts[3] == 'solar-jobs' and method == 'POST':
                     value = self._object(body)
-                    if set(value) != {'revision', 'years', 'solar', 'load'}:
+                    if set(value) != {'consent', 'revision', 'years', 'solar', 'load'}:
                         raise StoreError()
+                    if value.get('consent') is not True:
+                        return Response(400, {'error': 'Explicit user consent required before external network requests', 'consent_required': True})
                     manifest = self._manifest(owner, profile_id, value['revision'], solar=True)
                     # No request can provide file paths, providers, URLs or cache locations.
                     if set(value['load']) - {'monthly_totals', 'policy'}:
@@ -439,10 +744,11 @@ class Service:
                     if doc.get('profile') is None:
                         raise InvalidDomain()
                     self._rate(('solar-coverage', owner), self.limits['uploads_per_hour'], 3600)
-                    from feasibility.solar_provider import check_solar_coverage
+                    from feasibility.solar_provider import check_solar_coverage, TenantCache
                     transport = self.config.get('solar_transport')
+                    cache = TenantCache(self.store.root, owner)
                     try:
-                        coverage = check_solar_coverage(doc['profile'], transport=transport)
+                        coverage = check_solar_coverage(doc['profile'], transport=transport, cache=cache)
                     except TimeoutError:
                         return Response(504, {'error': 'Solar provider timed out; retry later', 'error_code': 'SOLAR_TIMEOUT'})
                     except (ConnectionError, OSError):
@@ -542,10 +848,7 @@ class Service:
                 profile_id = query.get('profile_id', [''])[0]
                 snap, doc = self._snapshot(owner, profile_id)
                 state = TenantState(self.store, owner, profile_id).get_state()
-                catalog = None
-                if self.config.get('catalog_root'):
-                    from feasibility.runtime_context import available_price_catalog
-                    catalog = available_price_catalog(self.config['catalog_root'])
+                catalog = self._get_profile_market_catalog_metadata(owner, profile_id)
                 # Descriptors only: values remain the selected profile's explicit inputs.
                 from feasibility import assumptions
                 records = []

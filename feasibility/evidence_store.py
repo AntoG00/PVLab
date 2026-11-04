@@ -33,6 +33,10 @@ def _atomic_new(path, content):
             stream.write(content)
             stream.flush()
             os.fsync(stream.fileno())
+        if os.name == 'nt':
+            from .windows_storage import move
+            move(temporary, path)
+            return
         try:
             os.link(temporary, path)
         except OSError as error:

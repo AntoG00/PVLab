@@ -166,6 +166,57 @@ def test_evaluate_energy_means_and_ensemble_autarky(asymmetric_setup):
     np.testing.assert_allclose(energy["ensemble_autarky"], ratio_of_means, rtol=1e-10, atol=1e-8)
 
 
+def test_zero_load_autarky_consistent_with_ensemble_autarky(asymmetric_setup):
+    settings, annual, h, w = asymmetric_setup
+    mock_data = {
+        "audit": {"annual_kwh": 3200.0, "limitations": []},
+        "years": np.array([2001, 2002, 2003, 2004, 2005]),
+        "valid": np.ones((w, 8760), dtype=bool),
+    }
+
+    # 1. Complete zero-load across all weather years: autarky envelope must match ensemble_autarky (0.0)
+    annual_zero = annual.copy()
+    annual_zero[:, :, 0] = 0.0
+    annual_zero[:, :, 5] = 0.0
+
+    with patch.object(e, "_energy_cache", return_value=(annual_zero, {})), \
+         patch.object(e, "data", return_value=mock_data), \
+         patch.object(e, "price_profile", return_value=(None, "flat_solar_capture_benchmark", 0.10)), \
+         patch.object(e, "electric_bill", side_effect=lambda kwh, *args: np.asarray(kwh, dtype=float) * 0.25), \
+         patch.object(e, "gas_bill", return_value=600.0), \
+         patch.object(e, "weather_period", return_value=(w, 2001, 2005, "2001–2005")):
+        res_zero = e.evaluate(settings)
+
+    energy_zero = res_zero["energy"]
+    assert energy_zero["ensemble_autarky"] == 0.0
+    for stat in ("min", "median", "mean", "max", "p10", "p90"):
+        assert energy_zero["autarky"][stat] == 0.0
+
+    # 2. Mixed load: weather 0 has zero load, weathers 1..4 have positive load
+    annual_mixed = annual.copy()
+    annual_mixed[:, 0, 0] = 0.0
+    annual_mixed[:, 0, 5] = 0.0
+
+    with patch.object(e, "_energy_cache", return_value=(annual_mixed, {})), \
+         patch.object(e, "data", return_value=mock_data), \
+         patch.object(e, "price_profile", return_value=(None, "flat_solar_capture_benchmark", 0.10)), \
+         patch.object(e, "electric_bill", side_effect=lambda kwh, *args: np.asarray(kwh, dtype=float) * 0.25), \
+         patch.object(e, "gas_bill", return_value=600.0), \
+         patch.object(e, "weather_period", return_value=(w, 2001, 2005, "2001–2005")):
+        res_mixed = e.evaluate(settings)
+
+    energy_mixed = res_mixed["energy"]
+    first_mixed = annual_mixed[0]
+    expected_autarky_by_weather = np.array([
+        0.0 if load <= 0 else (1.0 - imp / load)
+        for load, imp in zip(first_mixed[:, 0], first_mixed[:, 5])
+    ])
+    np.testing.assert_allclose(energy_mixed["autarky"]["min"], expected_autarky_by_weather.min(), rtol=1e-10, atol=1e-8)
+    np.testing.assert_allclose(energy_mixed["autarky"]["mean"], expected_autarky_by_weather.mean(), rtol=1e-10, atol=1e-8)
+    expected_ens_autarky = 1.0 - float(np.mean(first_mixed[:, 5])) / float(np.mean(first_mixed[:, 0]))
+    np.testing.assert_allclose(energy_mixed["ensemble_autarky"], expected_ens_autarky, rtol=1e-10, atol=1e-8)
+
+
 def test_ensemble_annual_flows_sankey_conservation():
     settings = e.validate({
         "pv_dispatch_model": "physical", "pv_battery_coupling": "ac_equivalent",

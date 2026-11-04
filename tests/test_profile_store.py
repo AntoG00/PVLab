@@ -31,7 +31,11 @@ def artifact_path(store, owner, ref):
 
 
 def revision_path(store, owner, rev):
-    return store.root / 'tenants' / owner / 'profiles' / rev.profile_id / 'revisions' / rev.revision / 'manifest.json'
+    path = store.root / 'tenants' / owner / 'profiles' / rev.profile_id / 'revisions' / rev.revision / 'manifest.json'
+    if os.name == 'nt':
+        from feasibility.windows_storage import native_path
+        return Path(native_path(path))
+    return path
 
 
 def test_draft_roundtrip_and_permissions(store, owner, valid_draft_payload):
@@ -42,7 +46,15 @@ def test_draft_roundtrip_and_permissions(store, owner, valid_draft_payload):
     with pytest.raises(ValueError, match='Draft not ready'):
         store.validate_ready(owner, profile.id, rev.revision)
     for path in store.root.rglob('*'):
-        assert stat.S_IMODE(path.stat().st_mode) == (0o700 if path.is_dir() else 0o600)
+        if os.name == 'nt':
+            from feasibility import windows_storage
+            is_directory = Path(windows_storage.native_path(path)).is_dir()
+            check = (windows_storage.directory(path, ()) if is_directory
+                     else windows_storage.file(path))
+            with check:
+                pass
+        else:
+            assert stat.S_IMODE(path.stat().st_mode) == (0o700 if path.is_dir() else 0o600)
 
 
 def test_canonical_keys_refs_and_no_timestamp_identity(store, owner, valid_draft_payload):
@@ -52,10 +64,11 @@ def test_canonical_keys_refs_and_no_timestamp_identity(store, owner, valid_draft
     rev = store.publish_revision(owner, p, [a, b])
     path = revision_path(store, owner, rev)
     before = path.stat().st_mtime_ns
-    os.utime(path, ns=(1, 1))
+    changed = 1_000_000_000
+    os.utime(path, ns=(changed, changed))
     reversed_keys = {k: valid_draft_payload[k] for k in reversed(valid_draft_payload)}
     assert store.publish_revision(owner, parse_profile(reversed_keys), [b, a]) == rev
-    assert path.stat().st_mtime_ns == 1 != before
+    assert path.stat().st_mtime_ns == changed != before
 
 
 def test_roof_order_and_defaults_change_revision(store, owner, valid_draft_payload):
@@ -140,7 +153,10 @@ def test_root_symlink_ancestor_denied(tmp_path):
 def test_atomic_failure_does_not_publish_revision(store, owner, valid_draft_payload, monkeypatch):
     def fail(*args, **kwargs):
         raise OSError('injected link failure')
-    monkeypatch.setattr(storage.os, 'link', fail)
+    if os.name == 'nt':
+        monkeypatch.setattr(storage.windows_storage, 'move', fail)
+    else:
+        monkeypatch.setattr(storage.os, 'link', fail)
     with pytest.raises(ValueError):
         store.publish_revision(owner, parse_profile(valid_draft_payload), [])
     assert not list(store.root.rglob('manifest.json'))
@@ -202,7 +218,7 @@ def test_insecure_existing_root_rejected(tmp_path):
     root = tmp_path / 'insecure'
     root.mkdir(mode=0o755)
     root.chmod(0o755)
-    with pytest.raises(ValueError, match='owner-only'):
+    with pytest.raises(ValueError, match='owner-only|Unsafe store ownership or permissions'):
         ProfileStore(root)
 
 

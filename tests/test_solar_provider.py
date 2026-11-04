@@ -1207,3 +1207,200 @@ def test_check_solar_coverage_invalid_v5_units_raise_value_error(synthetic_trans
 
     with pytest.raises(ValueError, match="unit mismatch for P"):
         solar_provider.check_solar_coverage(req.profile, transport=client)
+
+
+def test_check_solar_coverage_caching_and_bounded_freshness(synthetic_transport_factory, solar_request_factory, tmp_path):
+    client, calls = synthetic_transport_factory()
+    req = solar_request_factory()
+    cache = solar_provider.TenantCache(tmp_path / 'cache', 'b' * 32)
+
+    # First call: cache miss, probes provider (4 calls)
+    res1 = solar_provider.check_solar_coverage(req.profile, transport=client, cache=cache)
+    assert res1['supported'] is True
+    assert len(calls) == 4
+    first_date = res1['retrieval_date_utc']
+
+    # Second call: cache hit, 0 provider calls, exact original retrieval timestamp preserved
+    res2 = solar_provider.check_solar_coverage(req.profile, transport=client, cache=cache)
+    assert res2['supported'] is True
+    assert len(calls) == 4
+    assert res2['retrieval_date_utc'] == first_date
+    assert res2['retrieval_date'] == first_date
+    assert res2['years'] == res1['years']
+
+    # Expired freshness triggers live re-probe
+    res3 = solar_provider.check_solar_coverage(req.profile, transport=client, cache=cache, max_age_seconds=0)
+    assert res3['supported'] is True
+    assert len(calls) == 8
+
+    # Integrity mismatch raises ValueError (no silent fallback)
+    cov_files = list(cache.directory.glob('coverage-*.json'))
+    assert len(cov_files) == 1
+    cov_files[0].write_text('{"bad": "json"}')
+    with pytest.raises(ValueError, match="cache integrity mismatch"):
+        solar_provider.check_solar_coverage(req.profile, transport=client, cache=cache)
+
+
+def test_hourly_response_validation_before_cache_persistence(synthetic_transport_factory, solar_request_factory, tmp_path):
+    def bad_v6(obj, params):
+        obj['power'][10] = -50.0  # Physical violation
+
+    client_bad, _ = synthetic_transport_factory(v6_modify=bad_v6)
+    client_good, _ = synthetic_transport_factory()
+    req = solar_request_factory(years=(2020,))
+    cache = solar_provider.TenantCache(tmp_path / 'cache', 'c' * 32)
+    req_cached = solar_provider.SolarRequest(
+        req.profile, req.years, req.loss_percent, req.mounting, req.technology, req.source_policy, cache=cache
+    )
+
+    # Validation failure raises error
+    with pytest.raises(ValueError, match="invalid physical array: power"):
+        solar_provider.fetch_pvgis(req_cached, transport=client_bad)
+
+    # CRITICAL: Verify NO cache file was persisted for the invalid response!
+    assert list(cache.directory.glob('*.json')) == []
+
+    # Valid response succeeds and is cached
+    source_good = solar_provider.fetch_pvgis(req_cached, transport=client_good)
+    assert len(list(cache.directory.glob('*.json'))) == 2  # 1 solar + 1 temperature
+
+    # Subsequent call with failing client succeeds by reading the valid cache entry
+    source_cached = solar_provider.fetch_pvgis(req_cached, transport=client_bad)
+    assert source_cached.artifact.source_digest == source_good.artifact.source_digest
+
+
+
+@pytest.mark.parametrize("invalid_loss", [-1.0, -0.01, 100.01, 105.0, float('nan'), float('inf'), float('-inf'), '14', None, True])
+def test_loss_percent_backend_contract_rejections(solar_request_factory, synthetic_transport_factory, invalid_loss):
+    client, calls = synthetic_transport_factory()
+    req = solar_request_factory(years=(2020,), loss=invalid_loss)
+    with pytest.raises(ValueError, match="invalid loss"):
+        solar_provider.fetch_pvgis(req, transport=client)
+    assert not calls
+
+
+@pytest.mark.parametrize("valid_loss", [0.0, 0, 14.5, 99.9, 100.0, 100])
+def test_loss_percent_backend_contract_boundaries_and_fractions(solar_request_factory, synthetic_transport_factory, valid_loss):
+    client, calls = synthetic_transport_factory()
+    req = solar_request_factory(years=(2020,), loss=valid_loss)
+    source = solar_provider.fetch_pvgis(req, transport=client)
+    assert source is not None
+    v6_params = [p for endpoint, p in calls if endpoint == solar_provider.PVGIS_URL][0]
+    expected_eff = 1.0 - float(valid_loss) / 100.0
+    assert abs(v6_params['system_efficiency'] - expected_eff) < 1e-6
+
+
+
+def test_v6_negative_power_clamping_and_provenance(synthetic_transport_factory, solar_request_factory):
+    observed_sample = -0.0024951226
+    raw_digest_holder = []
+
+    def modify_v6(obj, params):
+        # Inject observed live PVGIS 6 sample at index 100
+        obj['power'][100] = observed_sample
+        raw_digest_holder.append(solar_provider._digest(solar_provider.canonical_json(obj)))
+
+    client, calls = synthetic_transport_factory(v6_modify=modify_v6)
+    req = solar_request_factory(years=(2025,))
+
+    source = solar_provider.fetch_pvgis(req, transport=client)
+    assert source is not None
+
+    # Power in artifact is clamped to zero
+    power_kw = source.artifact.power[0, 0, :]
+    assert power_kw[100] == 0.0
+
+    # Provenance contains correction count and min
+    prov = json.loads(source.provenance_bytes)['solar'][0]
+    assert prov['correction_count'] == 1
+    assert prov['correction_min'] == observed_sample
+
+    # Raw provider response digest preserved
+    assert prov['response_sha256'] == raw_digest_holder[0]
+
+
+@pytest.mark.parametrize("invalid_power", [
+    -0.010001,   # Larger negative than -0.01 W
+    -0.02,       # Larger negative than -0.01 W
+    -1.0,        # Substantial negative
+])
+def test_v6_negative_power_rejections(synthetic_transport_factory, solar_request_factory, invalid_power):
+    def modify_v6(obj, params):
+        obj['power'][50] = invalid_power
+
+    client, _ = synthetic_transport_factory(v6_modify=modify_v6)
+    req = solar_request_factory(years=(2025,))
+
+    with pytest.raises(ValueError, match="invalid physical array: power"):
+        solar_provider.fetch_pvgis(req, transport=client)
+
+
+@pytest.mark.parametrize("nonfinite", [float('nan'), float('inf'), float('-inf')])
+def test_v6_negative_power_nonfinite_rejected(nonfinite):
+    slots = [100.0] * 8760
+    slots[50] = nonfinite
+    with pytest.raises(ValueError, match="invalid physical array: power"):
+        solar_provider._validate_and_clamp_v6_power(slots, 8760)
+
+
+def test_v6_repeated_isolated_negatives_rejected(synthetic_transport_factory, solar_request_factory):
+    def modify_v6(obj, params):
+        # Two isolated small negatives in same roof-year
+        obj['power'][50] = -0.0024951226
+        obj['power'][60] = -0.005
+
+    client, _ = synthetic_transport_factory(v6_modify=modify_v6)
+    req = solar_request_factory(years=(2025,))
+
+    with pytest.raises(ValueError, match="invalid physical array: power"):
+        solar_provider.fetch_pvgis(req, transport=client)
+
+
+def test_v6_negative_boundary_exact_minus_point_zero_one(synthetic_transport_factory, solar_request_factory):
+    def modify_v6(obj, params):
+        obj['power'][50] = -0.01  # Exact inclusive boundary
+
+    client, _ = synthetic_transport_factory(v6_modify=modify_v6)
+    req = solar_request_factory(years=(2025,))
+
+    source = solar_provider.fetch_pvgis(req, transport=client)
+    assert source.artifact.power[0, 0, 50] == 0.0
+    prov = json.loads(source.provenance_bytes)['solar'][0]
+    assert prov['correction_count'] == 1
+    assert prov['correction_min'] == -0.01
+
+
+def test_v6_negative_power_coverage_and_cache_validation(synthetic_transport_factory, solar_request_factory, tmp_path):
+    observed_sample = -0.0024951226
+
+    def modify_v6_valid_neg(obj, params):
+        obj['power'][10] = observed_sample
+
+    # 1. check_solar_coverage succeeds with isolated small negative
+    client_valid, _ = synthetic_transport_factory(v6_modify=modify_v6_valid_neg)
+    req = solar_request_factory()
+    res = solar_provider.check_solar_coverage(req.profile, transport=client_valid)
+    assert res['supported'] is True
+
+    # 2. check_solar_coverage rejects larger negative (-0.02)
+    def modify_v6_large_neg(obj, params):
+        obj['power'][10] = -0.02
+
+    client_bad, _ = synthetic_transport_factory(v6_modify=modify_v6_large_neg)
+    with pytest.raises(ValueError, match="invalid physical array: power"):
+        solar_provider.check_solar_coverage(req.profile, transport=client_bad)
+
+    # 3. Cache validation with fetch_pvgis: valid small negative is cached with raw digest
+    cache = solar_provider.TenantCache(tmp_path / 'cache', 'd' * 32)
+    req_cached = solar_provider.SolarRequest(
+        req.profile, (2025,), req.loss_percent, req.mounting, req.technology, req.source_policy, cache=cache
+    )
+    source = solar_provider.fetch_pvgis(req_cached, transport=client_valid)
+    assert source.artifact.power[0, 0, 10] == 0.0
+
+    # Ensure cache entry was created and contains raw negative
+    cache_files = list(cache.directory.glob('*.json'))
+    assert len(cache_files) == 2  # solar + temp
+    solar_cache = [f for f in cache_files if 'v6' in str(f.read_text()) or 'power' in str(f.read_text())][0]
+    cached_data = solar_provider.strict_json(solar_cache.read_bytes())
+    assert cached_data['response']['power'][10] == observed_sample

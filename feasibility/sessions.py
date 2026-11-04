@@ -108,6 +108,17 @@ class Sessions:
             raise
         return {'tenant_id': tenant_id}, self._cookie(token)
 
+    def pair(self, tenant_id):
+        code = secrets.token_urlsafe(32)
+        self.store.create_pairing_code(tenant_id, token_hash(code))
+        return {'code': code, 'expires_in': 300}
+
+    def join(self, code):
+        digest = token_hash(code)
+        token = secrets.token_urlsafe(32)
+        tenant_id = self.store.consume_pairing_code(digest, token_hash(token))
+        return {'tenant_id': tenant_id}, self._cookie(token)
+
     @staticmethod
     def _token(headers):
         try:

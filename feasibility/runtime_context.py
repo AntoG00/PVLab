@@ -113,13 +113,85 @@ def mutable_copy(value):
 
 
 def available_price_catalog(catalog_dir, revision=None):
-    """Verified administrator metadata; selecting it never refreshes a runtime."""
-    from .market_catalog import read_revision
+    """Verified catalog metadata; selecting it never refreshes a runtime."""
+    import calendar
+    from datetime import timedelta
+    from .prepare_market_prices import civil_date, compute_empirical_window
+    from .market_catalog import read_revision, SERIES
     catalog = read_revision(catalog_dir, revision)
     manifest = catalog['manifest']
+    days = catalog.get('days', {})
+    years_present = sorted({int(d[:4]) for d in days}) if days else []
+
+    years_meta = {}
+    complete_years = []
+    all_missing_months = []
+    for y in years_present:
+        y_missing = []
+        for m in range(1, 13):
+            expected_days = calendar.monthrange(y, m)[1]
+            m_prefix = f"{y}-{m:02d}"
+            month_days = [stamp for stamp in days if stamp.startswith(m_prefix)]
+            if len(month_days) < expected_days or any(not days[stamp].get('records') for stamp in month_days):
+                y_missing.append(m_prefix)
+        is_complete = len(y_missing) == 0
+        if is_complete:
+            complete_years.append(y)
+        else:
+            all_missing_months.extend(y_missing)
+        y_stamps = sorted(d for d in days if d.startswith(f"{y}-"))
+        y_cov = [y_stamps[0], (civil_date(y_stamps[-1]) + timedelta(days=1)).isoformat()] if y_stamps else []
+
+        y_shapes = {}
+        for s in manifest.get('series', SERIES):
+            if is_complete:
+                if manifest.get('window') == [f"{y}-01-01", f"{y + 1}-01-01"] and manifest.get('products'):
+                    y_shapes[s] = manifest['products'].get(s, {}).get('normalized_shape') is not None
+                else:
+                    prod = compute_empirical_window(days, f"{y}-01-01", f"{y + 1}-01-01", series=s)
+                    y_shapes[s] = prod['normalized_shape'] is not None
+            else:
+                y_shapes[s] = False
+
+        years_meta[str(y)] = {
+            'complete': is_complete,
+            'coverage': y_cov,
+            'missing_months': y_missing,
+            'shape_eligible': is_complete and any(y_shapes.values()),
+            'proxy_eligible': bool(y_stamps),
+            'shape_available': y_shapes,
+        }
+
+    # Select a usable default window: prefer most recent complete calendar year
+    if complete_years:
+        latest = max(complete_years)
+        default_window = [f"{latest}-01-01", f"{latest + 1}-01-01"]
+        shape_available = dict(years_meta[str(latest)]['shape_available'])
+    else:
+        default_window = list(manifest['window'])
+        products = manifest.get('products', {})
+        shape_available = {
+            s: products.get(s, {}).get('normalized_shape') is not None
+            for s in manifest.get('series', SERIES)
+        }
+
+    windows = [default_window]
+    for cy in reversed(complete_years):
+        w = [f"{cy}-01-01", f"{cy + 1}-01-01"]
+        if w not in windows:
+            windows.append(w)
+    cov_win = list(manifest['coverage'])
+    if cov_win not in windows:
+        windows.append(cov_win)
+    for y in reversed(years_present):
+        y_cov = years_meta[str(y)]['coverage']
+        if y_cov and y_cov not in windows:
+            windows.append(y_cov)
+
     return {'revision': catalog['revision'], 'series': list(manifest['series']),
-            'coverage': list(manifest['coverage']), 'window': list(manifest['window']),
-            'windows': [list(manifest['window'])]}
+            'coverage': list(manifest['coverage']), 'window': default_window,
+            'windows': windows, 'shape_available': shape_available,
+            'missing_months': all_missing_months, 'years': years_meta}
 
 
 def resolve_profile_prices(profile, catalog_dir=None):

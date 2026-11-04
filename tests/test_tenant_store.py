@@ -1,6 +1,7 @@
 import concurrent.futures
+import os
 import pytest
-from feasibility.tenant_store import Conflict, NotFound, TenantStore
+from feasibility.tenant_store import Conflict, NotFound, StoreError, TenantStore, Unauthorized
 
 
 def test_tenant_profile_lifecycle_and_partial_publish(tmp_path):
@@ -218,8 +219,8 @@ def test_delete_revokes_first_calls_shutdown_and_preserves_other_tenant(tmp_path
     other_upload, _ = store.put_upload(other, b'other', {})
     folder = store.root / 'tenants' / owner
     for kind in ('quarantine', 'cache', 'results'):
-        (folder / kind).mkdir()
-        (folder / kind / 'sample').write_bytes(b'synthetic')
+        with store.files._directory(('tenants', owner, kind), create=True) as directory:
+            store.files._write_once(directory, 'sample', b'synthetic')
     called = []
     def shutdown(tenant):
         called.append(tenant)
@@ -265,12 +266,11 @@ def test_janitor_removes_owned_orphans_without_touching_foreign_files(tmp_path):
     item, _ = store.put_upload(owner, b'live', {})
     for kind in ('uploads', 'results', 'quarantine', 'cache'):
         path = store.root / 'tenants' / owner / kind / ('.stage-' + new_id())
-        path.mkdir(parents=True, mode=0o700)
-        path.parent.chmod(0o700)
-        (path / 'partial').write_bytes(b'partial')
+        with store.files._directory(('tenants', owner, kind, path.name), create=True) as directory:
+            store.files._write_once(directory, 'partial', b'partial')
     unknown = store.root / 'tenants' / new_id()
-    unknown.mkdir(mode=0o700)
-    (unknown / 'preserve').write_bytes(b'not created by TenantStore')
+    with store.files._directory(('tenants', unknown.name), create=True) as directory:
+        store.files._write_once(directory, 'preserve', b'not created by TenantStore')
     other_upload, _ = store.put_upload(other, b'other', {})
     assert store.janitor()['orphan_uploads'] == 4
     assert (unknown / 'preserve').exists()
@@ -301,7 +301,11 @@ def test_explicit_legacy_dry_run_apply_once_and_readonly_backup(tmp_path):
     assert len(backup) == 1
     for index, raw in enumerate(blobs):
         path = backup[0] / f'{index}.json'
-        assert path.read_bytes() == raw and stat.S_IMODE(path.stat().st_mode) == 0o400
+        assert path.read_bytes() == raw
+        if os.name == 'nt':
+            assert path.stat().st_file_attributes & stat.FILE_ATTRIBUTE_READONLY
+        else:
+            assert stat.S_IMODE(path.stat().st_mode) == 0o400
     assert scenario.read_bytes() == blobs[0] and defaults.read_bytes() == blobs[1]
     with pytest.raises(Conflict):
         store.migrate_legacy(owner, profile['id'], applied['revision'], apply=True, **kwargs)
@@ -351,9 +355,19 @@ def test_database_file_permissions_and_audit_payload_exclusion(tmp_path, caplog)
     store.publish(owner, profile['id'], profile['revision'], scenario={'text': private})
     store.put_upload(owner, private.encode(), {'filename': private})
     assert private not in repr([r.__dict__ for r in caplog.records])
-    assert stat.S_IMODE(store.db_path.stat().st_mode) == 0o600
-    assert stat.S_IMODE(store.root.stat().st_mode) == 0o700
-    store.db_path.chmod(0o644)
+    if os.name == 'nt':
+        from feasibility import windows_storage
+        with windows_storage.directory(store.root, ()), windows_storage.file(store.db_path, mutable=True):
+            pass
+    else:
+        assert stat.S_IMODE(store.db_path.stat().st_mode) == 0o600
+        assert stat.S_IMODE(store.root.stat().st_mode) == 0o700
+    if os.name == 'nt':
+        import subprocess
+        subprocess.run(['icacls', str(store.db_path), '/grant', '*S-1-1-0:R'],
+                       check=True, capture_output=True)
+    else:
+        store.db_path.chmod(0o644)
     with pytest.raises(ValueError):
         TenantStore(store.root)
 
@@ -543,3 +557,90 @@ def test_profile_schema_v1_migration_to_v2_idempotent(tmp_path):
         "revision": p3["revision"],
         "name": "Post-Migration Profile",
     }
+
+
+def test_pairing_code_store_lifecycle_and_single_use(tmp_path):
+    store = TenantStore(root=tmp_path / "store")
+    tenant_id = store.create_tenant()
+    code_hash = "a" * 64
+    store.create_pairing_code(tenant_id, code_hash)
+
+    with store._connection() as db:
+        row = db.execute("SELECT * FROM pairing_codes WHERE code_hash=?", (code_hash,)).fetchone()
+        assert row is not None
+        assert row["tenant_id"] == tenant_id
+        assert row["expires"] > store.clock()
+
+    session_hash = "b" * 64
+    assigned_tenant = store.consume_pairing_code(code_hash, session_hash)
+    assert assigned_tenant == tenant_id
+
+    # Session is active and bound to tenant
+    assert store.resolve_session(session_hash) == tenant_id
+
+    # Pairing code is deleted immediately upon consumption (single-use)
+    with store._connection() as db:
+        assert db.execute("SELECT * FROM pairing_codes WHERE code_hash=?", (code_hash,)).fetchone() is None
+
+    # Subsequent consumption of same code must fail
+    with pytest.raises(Unauthorized):
+        store.consume_pairing_code(code_hash, "c" * 64)
+
+
+def test_pairing_code_store_expiry_and_pruning(tmp_path):
+    now = [1000.0]
+    store = TenantStore(root=tmp_path / "store", clock=lambda: now[0])
+    t1 = store.create_tenant()
+
+    code_hash1 = "1" * 64
+    store.create_pairing_code(t1, code_hash1)
+    with store._connection() as db:
+        row = db.execute("SELECT expires FROM pairing_codes WHERE code_hash=?", (code_hash1,)).fetchone()
+        assert row["expires"] == 1300.0
+
+    # Before expiry (299s later), consumption succeeds
+    now[0] = 1299.0
+    code_hash_valid = "2" * 64
+    store.create_pairing_code(t1, code_hash_valid)
+    assert store.consume_pairing_code(code_hash_valid, "a" * 64) == t1
+
+    # After expiry (> 300s since creation), consumption fails
+    now[0] = 1301.0
+    with pytest.raises(Unauthorized):
+        store.consume_pairing_code(code_hash1, "b" * 64)
+
+    # Creating a new pairing code prunes expired records
+    code_hash3 = "3" * 64
+    store.create_pairing_code(t1, code_hash3)
+    with store._connection() as db:
+        assert db.execute("SELECT * FROM pairing_codes WHERE code_hash=?", (code_hash1,)).fetchone() is None
+        assert db.execute("SELECT * FROM pairing_codes WHERE code_hash=?", (code_hash3,)).fetchone() is not None
+
+
+def test_pairing_code_store_validation_and_errors(tmp_path):
+    store = TenantStore(root=tmp_path / "store")
+    tenant_id = store.create_tenant()
+
+    # Invalid code_hash format
+    with pytest.raises(StoreError):
+        store.create_pairing_code(tenant_id, "invalid_hash")
+    with pytest.raises(StoreError):
+        store.create_pairing_code(tenant_id, "g" * 64)
+
+    # Invalid consume inputs
+    with pytest.raises(Unauthorized):
+        store.consume_pairing_code("invalid", "a" * 64)
+    with pytest.raises(Unauthorized):
+        store.consume_pairing_code("a" * 64, "invalid")
+
+    # Nonexistent code hash
+    with pytest.raises(Unauthorized):
+        store.consume_pairing_code("e" * 64, "f" * 64)
+
+    # Pairing code created for tenant that gets deleted
+    del_tenant = store.create_tenant()
+    del_code = "d" * 64
+    store.create_pairing_code(del_tenant, del_code)
+    store.delete_tenant(del_tenant)
+    with pytest.raises((NotFound, Unauthorized)):
+        store.consume_pairing_code(del_code, "9" * 64)

@@ -16,7 +16,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 FORBIDDEN = {'.git', '.env', '.agent-out', 'private', 'runtime', 'uploads', 'quarantine',
-             'backups', 'screenshots', 'plan-state', 'public-export', 'vendor', '__pycache__'}
+             'backups', 'plan-state', 'public-export', 'vendor', '__pycache__'}
 GENERATED = {'PUBLIC_EXPORT_MANIFEST.json', 'SOFTWARE_MANIFEST.json'}
 
 
@@ -34,6 +34,7 @@ def relative_path(value):
         raise ValueError('Invalid export path')
     p=PurePosixPath(value)
     if (p.is_absolute() or str(p)!=value or '..' in p.parts or set(p.parts)&FORBIDDEN
+        or ('screenshots' in p.parts and (p.parent != PurePosixPath('screenshots') or p.suffix.lower() not in {'.png','.jpg'}))
         or any(c in value for c in '*?[') or any(x.startswith('.env.') for x in p.parts)
         or value.startswith(('docs/public-plan/','feasibility/data/','feasibility/reports/'))
         or p.suffix.lower() in {'.pem','.key','.sqlite','.db','.npz','.npy','.tif','.tiff','.zip','.gz'}
@@ -78,7 +79,7 @@ def manifest_for(destination, names):
                             size=path.stat().st_size,mode=oct(stat.S_IMODE(path.stat().st_mode))))
     core=[x for x in entries if x['path'] not in {'docs/PUBLICATION_CHECKLIST.md','SOFTWARE_MANIFEST.json'}]
     core_digest=hashlib.sha256(json.dumps(core,sort_keys=True,separators=(',',':')).encode()).hexdigest()
-    return dict(schema_version=1,distribution='source-code-only',history='fresh-local-Git-only; publication not performed',
+    return dict(schema_version=1,distribution='source-code-only',history='curated-public-Git-only; publication not performed',
                 files=entries,reviewed_source_sha256=core_digest,
                 digest_scope='reviewed_source_sha256 excludes checklist and generated manifests; files includes all payload except this manifest')
 
@@ -109,7 +110,9 @@ def export_committed(root, destination, patterns=()):
         path.chmod(mode)
     software=dict(schema_version=1,project='pv-lab',distribution='source-code-only',classification='source-available',
         original_code_license='PolyForm-Noncommercial-1.0.0',third_party_notices='THIRD_PARTY_NOTICES.md',
-        runtime='Linux CPython 3.12',tests_node='24.22.1',bundled_provider_data=False,bundled_dependencies=False,
+        runtime='CPython 3.12',platforms=['Linux','Windows x64','macOS Apple silicon'],
+        platform_validation='See README; native macOS validation pending. This manifest does not attest a native platform test run.',
+        tests_node='24.22.1',bundled_provider_data=False,bundled_dependencies=False,
         lock_sha256={name:hashlib.sha256(raw).hexdigest() for name,raw,_ in payload if name.startswith('requirements') and name.endswith('.lock')})
     (destination/'SOFTWARE_MANIFEST.json').write_text(json.dumps(software,indent=2)+'\n')
     (destination/'SOFTWARE_MANIFEST.json').chmod(0o644)

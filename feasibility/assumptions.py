@@ -2,7 +2,6 @@
 from copy import deepcopy
 from contextlib import contextmanager
 import datetime as dt
-import fcntl
 import json
 import math
 import os
@@ -13,6 +12,7 @@ import threading
 DATE = '2026-10-06'
 USER_DEFAULTS_PATH = Path(os.environ.get('PV_LEGACY_DATA_ROOT', Path(__file__).resolve().parent / 'data')) / 'user_defaults.json'
 _DEFAULTS_LOCK = threading.RLock()
+from feasibility.file_lock import file_lock
 from feasibility.schedule import (
     DEFAULT_AC_HEATING_WINDOWS,
     SCHEDULE_SETTINGS,
@@ -200,12 +200,9 @@ def _saved_defaults(path=None):
 
 @contextmanager
 def _defaults_file_lock(path):
-    lock_path=Path(str(path)+'.lock')
-    lock_path.parent.mkdir(parents=True,exist_ok=True)
-    with _DEFAULTS_LOCK, lock_path.open('a+') as lock_file:
-        fcntl.flock(lock_file.fileno(),fcntl.LOCK_EX)
-        try:yield
-        finally:fcntl.flock(lock_file.fileno(),fcntl.LOCK_UN)
+    with file_lock(path, _DEFAULTS_LOCK):
+        yield
+
 
 def _resolve_saved_schedule(overrides, base_windows=None, base_mode=None):
     """Resolve saved schedule settings and legacy heating overrides against base/factory."""

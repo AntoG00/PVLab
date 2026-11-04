@@ -238,12 +238,18 @@ def main(argv=None):
         root = args.root.resolve(strict=True)
         if not os.environ.get('PV_PRIVATE_ROOT'):
             raise Blocked('PV_PRIVATE_ROOT required')
-        private = Path(os.environ['PV_PRIVATE_ROOT']).resolve(strict=True)
+        private = Path(os.environ['PV_PRIVATE_ROOT'])
+        if os.name == 'nt':
+            sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+            from feasibility.windows_storage import directory
+            with directory(private.absolute(), ()):
+                pass
+        private = private.resolve(strict=True)
         if private == root or root in private.parents:
             raise Blocked('Private root must be outside checkout')
         if any((x / '.git').exists() for x in [private, *private.parents]):
             raise Blocked('Private root is inside a repository')
-        if private.stat().st_mode & 0o077:
+        if os.name != 'nt' and private.stat().st_mode & 0o077:
             raise Blocked('Private root must be owner-only')
         if args.command == 'require':
             require(args.phase, root, private)

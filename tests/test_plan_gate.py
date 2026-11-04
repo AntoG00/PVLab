@@ -20,7 +20,12 @@ def setup(tmp_path):
     root = tmp_path / 'repo'
     root.mkdir()
     private = tmp_path / 'private'
-    private.mkdir(mode=0o700)
+    if os.name == 'nt':
+        from feasibility.windows_storage import directory
+        with directory(private, (), create=True):
+            pass
+    else:
+        private.mkdir(mode=0o700)
     subprocess.run(['git', 'init', '-q', str(root)], check=True)
     for key, value in [('user.name', 'Fixture'), ('user.email', 'fixture@example.invalid')]:
         subprocess.run(['git', '-C', str(root), 'config', key, value], check=True)
@@ -70,7 +75,11 @@ def test_private_evidence_inside_checkout_rejected(tmp_path):
 
 def test_shared_private_directory_rejected(tmp_path):
     root, private = setup(tmp_path)
-    private.chmod(0o755)
+    if os.name == 'nt':
+        private.rmdir()
+        private.mkdir()  # Inherit the runner's ordinary ACL rather than a private DACL.
+    else:
+        private.chmod(0o755)
     assert invoke(root, private, 'require', '0').returncode == 1
 
 

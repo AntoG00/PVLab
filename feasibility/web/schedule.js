@@ -619,7 +619,10 @@
     const target = document.getElementById('switchHourOptimizer');
     if (!target) return;
     if (message) {
-      target.innerHTML = `<div class="schedule-optimizer-reset muted" style="padding:12px;text-align:center;"><p style="margin:0;">${safeEsc(message)}</p></div>`;
+      const isPending = typeof message === 'string' && (message.includes('Waiting for dispatch simulation') || message.includes('Simulation pending'));
+      const spinnerText = isPending ? '<span class="progress-spinner" aria-hidden="true"></span> ' : '';
+      const busyAttrs = isPending ? ' role="status" aria-live="polite" aria-busy="true"' : '';
+      target.innerHTML = `<div class="schedule-optimizer-reset muted" style="padding:12px;text-align:center;"${busyAttrs}><p style="margin:0;display:inline-flex;align-items:center;justify-content:center;gap:8px;">${spinnerText}${safeEsc(message)}</p></div>`;
     } else {
       target.innerHTML = '';
     }

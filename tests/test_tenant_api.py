@@ -66,7 +66,7 @@ def test_solar_coverage_requires_consent_and_current_revision(tmp_path, monkeypa
                'Cookie': cookie, 'X-CSRF-Token': csrf, 'If-Match': created['revision']}
     calls = []
     monkeypatch.setattr(solar_provider, 'check_solar_coverage',
-                        lambda profile, transport=None: calls.append(profile) or
+                        lambda profile, transport=None, cache=None: calls.append(profile) or
                         {'supported': True, 'years': [2024, 2025]})
     def post(consent, revision):
         return svc.request('POST', path, headers=headers,
@@ -77,6 +77,41 @@ def test_solar_coverage_requires_consent_and_current_revision(tmp_path, monkeypa
     result = post(True, created['revision'])
     assert result.status == 200 and result.body['years'] == [2024, 2025]
     assert len(calls) == 1
+
+
+def test_solar_jobs_requires_consent(tmp_path):
+    from tests.test_profiles import valid_draft_payload
+    svc = _svc(tmp_path)
+    session = _req(svc, 'POST', '/api/session', body={})
+    cookie, csrf = _cookie(session), session.body['csrf_token']
+    created = _req(svc, 'POST', '/api/profiles', cookie=cookie, csrf=csrf,
+                   body={'profile': valid_draft_payload.__wrapped__()}).body
+    path = '/api/profiles/' + created['id'] + '/solar-jobs'
+    headers = {'Host': 'localhost:8765', 'Origin': 'http://localhost:8765',
+               'Cookie': cookie, 'X-CSRF-Token': csrf}
+    base_payload = {
+        'revision': created['revision'],
+        'years': [2024],
+        'solar': {'loss_percent': 14, 'mounting': 'free', 'technology': 'cSi', 'source_policy': 'policy'},
+        'load': {'monthly_totals': [100] * 12, 'policy': {'mode': 'synthetic'}}
+    }
+    def post(p):
+        return svc.request('POST', path, headers=headers, body=json.dumps(p).encode())
+
+    assert post(base_payload).status == 400
+    res_false = post({**base_payload, 'consent': False})
+    assert res_false.status == 400
+    assert res_false.body['consent_required'] is True
+    assert res_false.body['error'] == 'Explicit user consent required before external network requests'
+    assert post({**base_payload, 'consent': 'true'}).status == 400
+    assert post({**base_payload, 'consent': 1}).status == 400
+    assert post({**base_payload, 'consent': True, 'revision': 'stale'}).status == 409
+    assert not svc.pool.calls
+    res_true = post({**base_payload, 'consent': True})
+    assert res_true.status == 202
+    assert res_true.body['state'] == 'queued'
+    assert len(svc.pool.calls) == 1
+    assert svc.pool.calls[0][3] == 'solar'
 
 
 def test_two_clients_isolation(tmp_path):
@@ -125,7 +160,7 @@ def test_auth_and_mutation_guards(tmp_path):
 
 
 def test_real_jobs_reports_stale_results_and_owner_binding(tmp_path):
-    import shutil
+    from pathlib import Path
     from tests.test_worker_pool import owned_manifest, wait_job
     from feasibility.worker_pool import WorkerPool
     from feasibility.profiles import canonical_json
@@ -143,7 +178,10 @@ def test_real_jobs_reports_stale_results_and_owner_binding(tmp_path):
             snap = store.publish(owner, profile['id'], profile['revision'], manifest_ref=upload['id'],
                 defaults={'factory': {'pmg_election': False}, 'overrides': {}})
             producer = store.create_job(owner, profile['id'], snap['revision'], 'd'*64)
-            shutil.copytree(manifest['candidate'], store.job_directory(owner, producer['id']) / 'candidate')
+            with store.files._directory(('tenants', owner, 'jobs', producer['id'], 'candidate'),
+                                        create=True) as directory:
+                for artifact in Path(manifest['candidate']).iterdir():
+                    store.files._write_once(directory, artifact.name, artifact.read_bytes())
             store.publish_result(owner, producer['id'], {})
             compiled = _req(svc, 'POST', f"/api/profiles/{profile['id']}/compile", cookie=cookie, csrf=csrf,
                             body={'revision': snap['revision'], 'job_id': producer['id']})
@@ -653,3 +691,301 @@ def test_solar_job_data_gaps_error_exposed(tmp_path):
     q_data = _body(r_query)
     assert q_data['error'] == 'PVGIS data gaps exceed the supported repair limits. Review the selected weather years; no years were omitted.'
     assert q_data['error_code'] == 'SOLAR_DATA_GAPS'
+
+
+def test_session_pair_and_join_flow_cookie_and_csrf(tmp_path):
+    svc = _svc(tmp_path)
+
+    # First authenticated session (source tenant)
+    s1 = _req(svc, 'POST', '/api/session', body={})
+    assert s1.status == 201
+    c1, csrf1, t1 = _cookie(s1), _body(s1)['csrf_token'], _body(s1)['tenant_id']
+
+    # Existing session POST /api/session/pair with CSRF returns code and expires_in (300)
+    r_pair = _req(svc, 'POST', '/api/session/pair', cookie=c1, csrf=csrf1, body={})
+    assert r_pair.status == 200
+    assert r_pair.headers.get('Cache-Control') == 'no-store'
+    pair_body = _body(r_pair)
+    assert 'code' in pair_body and 'expires_in' in pair_body
+    code = pair_body['code']
+    assert isinstance(code, str) and len(code) == 43
+    assert re.fullmatch(r'[A-Za-z0-9_-]{43}', code)
+    assert pair_body['expires_in'] == 300
+
+    # Second authenticated session
+    s2 = _req(svc, 'POST', '/api/session', body={})
+    assert s2.status == 201
+    c2, csrf2, t2 = _cookie(s2), _body(s2)['csrf_token'], _body(s2)['tenant_id']
+    assert t1 != t2 and c1 != c2 and csrf1 != csrf2
+
+    # Second session POST /api/session/join with CSRF and JSON {code}
+    r_join = _req(svc, 'POST', '/api/session/join', cookie=c2, csrf=csrf2, body={'code': code})
+    assert r_join.status == 200
+    assert r_join.headers.get('Cache-Control') == 'no-store'
+    join_body = _body(r_join)
+
+    # Attaches to source tenant and provides new CSRF token
+    assert join_body['tenant_id'] == t1
+    assert 'csrf_token' in join_body
+    csrf_joined = join_body['csrf_token']
+    c_joined = _cookie(r_join)
+
+    # Changes cookie (different from c2 and c1)
+    assert c_joined != ''
+    assert c_joined != c2
+    assert c_joined != c1
+    assert csrf_joined != csrf2
+
+    # Subsequent requests with new cookie and new CSRF act as source tenant
+    s_check = _req(svc, 'GET', '/api/session', cookie=c_joined)
+    assert s_check.status == 200
+    assert _body(s_check)['tenant_id'] == t1
+    assert _body(s_check)['csrf_token'] == csrf_joined
+
+    # Original session continues to act as source tenant
+    s1_check = _req(svc, 'GET', '/api/session', cookie=c1)
+    assert s1_check.status == 200
+    assert _body(s1_check)['tenant_id'] == t1
+
+
+def test_session_pairing_single_use_and_expiry(tmp_path):
+    now = [1000.0]
+    store = TenantStore(tmp_path / 'store', clock=lambda: now[0])
+    svc = create_service({'allowed_hosts': ['localhost:8765']}, store, FakePool())
+
+    # Session 1 generates code
+    s1 = _req(svc, 'POST', '/api/session', body={})
+    c1, csrf1 = _cookie(s1), _body(s1)['csrf_token']
+    code1 = _body(_req(svc, 'POST', '/api/session/pair', cookie=c1, csrf=csrf1, body={}))['code']
+
+    # Session 2 consumes the code at 299s (within 300s expiration window)
+    now[0] = 1299.0
+    s2 = _req(svc, 'POST', '/api/session', body={})
+    c2, csrf2 = _cookie(s2), _body(s2)['csrf_token']
+    r_join1 = _req(svc, 'POST', '/api/session/join', cookie=c2, csrf=csrf2, body={'code': code1})
+    assert r_join1.status == 200
+
+    # Single-use: consuming the same code again fails
+    s3 = _req(svc, 'POST', '/api/session', body={})
+    c3, csrf3 = _cookie(s3), _body(s3)['csrf_token']
+    r_join_repeat = _req(svc, 'POST', '/api/session/join', cookie=c3, csrf=csrf3, body={'code': code1})
+    assert r_join_repeat.status == 401
+
+    # New pairing code expires in 300s
+    code2 = _body(_req(svc, 'POST', '/api/session/pair', cookie=c1, csrf=csrf1, body={}))['code']
+
+    # Advance clock past 300s (+301s)
+    now[0] = 1299.0 + 301.0
+    s4 = _req(svc, 'POST', '/api/session', body={})
+    c4, csrf4 = _cookie(s4), _body(s4)['csrf_token']
+    r_join_expired = _req(svc, 'POST', '/api/session/join', cookie=c4, csrf=csrf4, body={'code': code2})
+    assert r_join_expired.status == 401
+
+
+def test_session_pairing_invalid_codes_and_payloads(tmp_path):
+    svc = _svc(tmp_path)
+    s = _req(svc, 'POST', '/api/session', body={})
+    c, csrf = _cookie(s), _body(s)['csrf_token']
+
+    # Unauthenticated requests rejected
+    assert _req(svc, 'POST', '/api/session/pair', body={}).status == 401
+    assert _req(svc, 'POST', '/api/session/join', body={'code': 'a' * 43}).status == 401
+
+    # Pair requires empty JSON object body
+    assert _req(svc, 'POST', '/api/session/pair', cookie=c, csrf=csrf, body={'invalid': 1}).status == 400
+    assert _req(svc, 'POST', '/api/session/pair', cookie=c, csrf=csrf, body=b'not json').status == 400
+
+    # Join with invalid code formats rejected with 401 (use different IPs to avoid join rate limits)
+    bad_codes = ['', 'short', 'x' * 42, 'x' * 44, '!' * 43, 12345, None]
+    for idx, bad_code in enumerate(bad_codes):
+        ip = f'127.0.1.{idx + 1}'
+        headers = {'Host': 'localhost:8765', 'Origin': 'http://localhost:8765', 'Cookie': c, 'X-CSRF-Token': csrf}
+        body = json.dumps({'code': bad_code}).encode()
+        res = svc.request('POST', '/api/session/join', headers=headers, body=body, client_ip=ip)
+        assert res.status == 401, f'Expected 401 for code {bad_code!r}, got {res.status}'
+
+    # Join with non-existent code of valid length rejected with 401
+    res_nonexistent = svc.request('POST', '/api/session/join', headers=headers,
+                                  body=json.dumps({'code': 'A' * 43}).encode(), client_ip='127.0.2.1')
+    assert res_nonexistent.status == 401
+
+    # Join with invalid payload structures rejected with 400
+    assert _req(svc, 'POST', '/api/session/join', cookie=c, csrf=csrf, body={}).status == 400
+    assert _req(svc, 'POST', '/api/session/join', cookie=c, csrf=csrf, body={'code': 'a' * 43, 'extra': 1}).status == 400
+    assert _req(svc, 'POST', '/api/session/join', cookie=c, csrf=csrf, body={'wrong_key': 'a' * 43}).status == 400
+    assert _req(svc, 'POST', '/api/session/join', cookie=c, csrf=csrf, body=b'not json').status == 400
+
+
+def test_session_pairing_csrf_and_cross_origin_guards(tmp_path):
+    svc = _svc(tmp_path)
+    s = _req(svc, 'POST', '/api/session', body={})
+    c, csrf = _cookie(s), _body(s)['csrf_token']
+
+    # Missing or invalid CSRF on pair
+    assert _req(svc, 'POST', '/api/session/pair', cookie=c, csrf=None, body={}).status == 403
+    assert _req(svc, 'POST', '/api/session/pair', cookie=c, csrf='bad-csrf-token', body={}).status == 403
+
+    # Cross-origin and invalid Host on pair
+    assert _req(svc, 'POST', '/api/session/pair', cookie=c, csrf=csrf, origin='http://attacker.invalid', body={}).status == 403
+    assert _req(svc, 'POST', '/api/session/pair', cookie=c, csrf=csrf, host='attacker.invalid', body={}).status == 403
+
+    # Missing or invalid CSRF on join
+    assert _req(svc, 'POST', '/api/session/join', cookie=c, csrf=None, body={'code': 'a' * 43}).status == 403
+    assert _req(svc, 'POST', '/api/session/join', cookie=c, csrf='bad-csrf-token', body={'code': 'a' * 43}).status == 403
+
+    # Cross-origin and invalid Host on join
+    assert _req(svc, 'POST', '/api/session/join', cookie=c, csrf=csrf, origin='http://attacker.invalid', body={'code': 'a' * 43}).status == 403
+    assert _req(svc, 'POST', '/api/session/join', cookie=c, csrf=csrf, host='attacker.invalid', body={'code': 'a' * 43}).status == 403
+
+
+def test_session_pairing_original_tenant_data_stays_isolated(tmp_path):
+    svc = _svc(tmp_path)
+
+    # Session 1 (Tenant 1) creates Profile 1 and state
+    s1 = _req(svc, 'POST', '/api/session', body={})
+    c1, csrf1, t1 = _cookie(s1), _body(s1)['csrf_token'], _body(s1)['tenant_id']
+    rp1 = _req(svc, 'POST', '/api/profiles', cookie=c1, csrf=csrf1, body={'name': 'Profile T1'})
+    p1_id, p1_rev = _body(rp1)['id'], _body(rp1)['revision']
+    _req(svc, 'POST', '/api/state', cookie=c1, csrf=csrf1,
+         body={'profile_id': p1_id, 'revision': p1_rev, 'settings': {'tilt': 15}})
+
+    # Session 2 (Tenant 2) creates Profile 2 and state before joining
+    s2 = _req(svc, 'POST', '/api/session', body={})
+    c2, csrf2, t2 = _cookie(s2), _body(s2)['csrf_token'], _body(s2)['tenant_id']
+    rp2 = _req(svc, 'POST', '/api/profiles', cookie=c2, csrf=csrf2, body={'name': 'Profile T2'})
+    p2_id, p2_rev = _body(rp2)['id'], _body(rp2)['revision']
+    _req(svc, 'POST', '/api/state', cookie=c2, csrf=csrf2,
+         body={'profile_id': p2_id, 'revision': p2_rev, 'settings': {'tilt': 25}})
+
+    # Session 3 (Tenant 3) creates Profile 3 (unrelated third party)
+    s3 = _req(svc, 'POST', '/api/session', body={})
+    c3, csrf3, t3 = _cookie(s3), _body(s3)['csrf_token'], _body(s3)['tenant_id']
+    rp3 = _req(svc, 'POST', '/api/profiles', cookie=c3, csrf=csrf3, body={'name': 'Profile T3'})
+    p3_id = _body(rp3)['id']
+
+    # Before pairing: Tenant 2 cannot access Profile 1
+    assert _req(svc, 'GET', f'/api/profiles/{p1_id}', cookie=c2).status == 404
+    assert _req(svc, 'GET', f'/api/state?profile_id={p1_id}', cookie=c2).status == 404
+
+    # Pair Session 1 and join Session 2
+    r_pair = _req(svc, 'POST', '/api/session/pair', cookie=c1, csrf=csrf1, body={})
+    code = _body(r_pair)['code']
+    r_join = _req(svc, 'POST', '/api/session/join', cookie=c2, csrf=csrf2, body={'code': code})
+    c_joined = _cookie(r_join)
+
+    # Joined session (now Tenant 1) accesses Profile 1
+    assert _req(svc, 'GET', f'/api/profiles/{p1_id}', cookie=c_joined).status == 200
+    st1 = _req(svc, 'GET', f'/api/state?profile_id={p1_id}', cookie=c_joined)
+    assert st1.status == 200 and _body(st1)['settings']['tilt'] == 15
+
+    # Original Tenant 2 data is isolated and NOT accessible under Tenant 1 session
+    assert _req(svc, 'GET', f'/api/profiles/{p2_id}', cookie=c_joined).status == 404
+    assert _req(svc, 'GET', f'/api/state?profile_id={p2_id}', cookie=c_joined).status == 404
+
+    # Third tenant data is isolated from joined session
+    assert _req(svc, 'GET', f'/api/profiles/{p3_id}', cookie=c_joined).status == 404
+
+    # Third tenant cannot access Tenant 1 or Tenant 2 data
+    assert _req(svc, 'GET', f'/api/profiles/{p1_id}', cookie=c3).status == 404
+    assert _req(svc, 'GET', f'/api/profiles/{p2_id}', cookie=c3).status == 404
+
+
+def test_session_pairing_access_to_saved_profile_and_results_persists(tmp_path):
+    from feasibility.runtime_context import model_build_digest
+    root = tmp_path / 'persist_store'
+    store1 = TenantStore(root=root)
+    svc1 = create_service({'allowed_hosts': ['localhost:8765']}, store1, FakePool())
+
+    # Tenant 1 sets up profile, state and job result
+    s1 = _req(svc1, 'POST', '/api/session', body={})
+    c1, csrf1, t1 = _cookie(s1), _body(s1)['csrf_token'], _body(s1)['tenant_id']
+    rp = _req(svc1, 'POST', '/api/profiles', cookie=c1, csrf=csrf1, body={'name': 'Production Roof'})
+    p_id, rev = _body(rp)['id'], _body(rp)['revision']
+
+    r_state = _req(svc1, 'POST', '/api/state', cookie=c1, csrf=csrf1,
+                   body={'profile_id': p_id, 'revision': rev, 'settings': {'system_size': 8.5}})
+    assert r_state.status == 200
+    rev = _body(r_state)['revision']
+
+    # Publish completed job result
+    job = store1.create_job(t1, p_id, rev, '0' * 64)
+    result_payload = {'model_build_id': model_build_digest(), 'annual_kwh': 9400, 'co2_avoided': 4.2}
+    store1.publish_result(t1, job['id'], result_payload)
+
+    # Session 2 pairs with Tenant 1
+    code = _body(_req(svc1, 'POST', '/api/session/pair', cookie=c1, csrf=csrf1, body={}))['code']
+    s2 = _req(svc1, 'POST', '/api/session', body={})
+    c2, csrf2 = _cookie(s2), _body(s2)['csrf_token']
+    r_join = _req(svc1, 'POST', '/api/session/join', cookie=c2, csrf=csrf2, body={'code': code})
+    c_joined = _cookie(r_join)
+    csrf_joined = _body(r_join)['csrf_token']
+
+    # Verify access before recreation
+    assert _req(svc1, 'GET', f'/api/profiles/{p_id}', cookie=c_joined).status == 200
+    assert _req(svc1, 'GET', f'/api/job?id={job["id"]}', cookie=c_joined).status == 200
+
+    # Simulate full restart / store and service recreation
+    store2 = TenantStore(root=root)
+    svc2 = create_service({'allowed_hosts': ['localhost:8765']}, store2, FakePool())
+
+    # Joined session (Session 2) persists and retains full access to profile, state, and results
+    sess_res = _req(svc2, 'GET', '/api/session', cookie=c_joined)
+    assert sess_res.status == 200
+    assert _body(sess_res)['tenant_id'] == t1
+    csrf_recreated = _body(sess_res)['csrf_token']
+    assert isinstance(csrf_recreated, str) and len(csrf_recreated) == 64
+
+    prof_res = _req(svc2, 'GET', f'/api/profiles/{p_id}', cookie=c_joined)
+    assert prof_res.status == 200
+    assert _body(prof_res)['id'] == p_id
+    assert _body(prof_res)['revision'] == rev
+
+    list_res = _req(svc2, 'GET', '/api/profiles', cookie=c_joined)
+    assert list_res.status == 200
+    assert any(p['id'] == p_id and p['name'] == 'Production Roof' for p in _body(list_res)['profiles'])
+
+    state_res = _req(svc2, 'GET', f'/api/state?profile_id={p_id}', cookie=c_joined)
+    assert state_res.status == 200
+    assert _body(state_res)['settings']['system_size'] == 8.5
+
+    job_res = _req(svc2, 'GET', f'/api/job?id={job["id"]}', cookie=c_joined)
+    assert job_res.status == 200
+    assert _body(job_res)['state'] == 'complete'
+
+    # Store-level result persistence check
+    assert store2.read_result(t1, job['id'])['annual_kwh'] == 9400
+
+    # Original Session 1 session also remains functional across recreation
+    assert _req(svc2, 'GET', f'/api/profiles/{p_id}', cookie=c1).status == 200
+    assert _req(svc2, 'GET', f'/api/job?id={job["id"]}', cookie=c1).status == 200
+
+def test_compiled_candidate_metadata_and_solar_coverage_cache(tmp_path, monkeypatch):
+    from tests.test_profiles import valid_draft_payload
+    from feasibility import solar_provider
+    from feasibility.solar_provider import TenantCache
+    svc = _svc(tmp_path)
+    session = _req(svc, 'POST', '/api/session', body={})
+    cookie, csrf = _cookie(session), session.body['csrf_token']
+    created = _req(svc, 'POST', '/api/profiles', cookie=cookie, csrf=csrf,
+                   body={'profile': valid_draft_payload.__wrapped__()}).body
+    profile_id = created['id']
+
+    # Draft profile has no compiled candidate
+    val = _req(svc, 'GET', f'/api/profiles/{profile_id}/validation', cookie=cookie, csrf=csrf)
+    assert val.body.get('compiled_candidate') is None
+    prof = _req(svc, 'GET', f'/api/profiles/{profile_id}', cookie=cookie, csrf=csrf)
+    assert prof.body.get('compiled_candidate') is None
+
+    # Solar coverage passes TenantCache
+    cache_calls = []
+    monkeypatch.setattr(solar_provider, 'check_solar_coverage',
+                        lambda profile, transport=None, cache=None: cache_calls.append(cache) or {'supported': True, 'years': [2020, 2021]})
+    cov_path = f'/api/profiles/{profile_id}/solar-coverage'
+    headers = {'Host': 'localhost:8765', 'Origin': 'http://localhost:8765',
+               'Cookie': cookie, 'X-CSRF-Token': csrf, 'If-Match': created['revision']}
+    res = svc.request('POST', cov_path, headers=headers,
+                      body=json.dumps({'consent': True, 'revision': created['revision']}).encode())
+    assert res.status == 200
+    assert len(cache_calls) == 1
+    assert isinstance(cache_calls[0], TenantCache)
+    assert cache_calls[0].directory.name == 'solar-cache'

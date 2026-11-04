@@ -741,7 +741,7 @@ def dayhour_monthly(settings,weather_year,month,hour=None):
             total_possible_samples=days_in_month*24,
             missing_samples=days_in_month*24-len(indices),
             partial=len(indices)<days_in_month*24,
-            sample_counts={row['hour']:row['sample_count'] for row in records}
+            sample_counts={str(row['hour']):row['sample_count'] for row in records}
         )
     )
     if active_hp:
@@ -1869,7 +1869,7 @@ def dayhour_forecast_monthly(settings,month,hour=None,scenario=None,representati
             total_possible_samples=days_in_month*24,
             missing_samples=0,
             partial=False,
-            sample_counts={row['hour']:row['sample_count'] for row in records}
+            sample_counts={str(row['hour']):row['sample_count'] for row in records}
         )
     )
     if active_hp:
@@ -1890,8 +1890,12 @@ def validate(settings=None, base=None, supplied=None):
             settings[canonical] = settings[alias]
         settings.pop(alias, None)
     storage_cost_mode = settings.pop('storage_cost_mode', None)
-    unknown=set(settings)-set(SPEC)-LEGACY_HEATING_KEYS-STRUCTURAL_SETTINGS-set(CONFIRMATIONS)
+    unknown=set(settings)-set(SPEC)-LEGACY_HEATING_KEYS-STRUCTURAL_SETTINGS-set(CONFIRMATIONS)-{_PV_YIELD_SETTING}
     if unknown: raise ValueError('Unknown settings: '+', '.join(sorted(unknown)))
+    if _PV_YIELD_SETTING in settings:
+        factor = settings[_PV_YIELD_SETTING]
+        if isinstance(factor, bool) or not isinstance(factor, (int, float)) or not math.isfinite(factor) or not 0 <= factor <= 2:
+            raise ValueError('PV yield multiplier must be a finite number between 0 and 2')
     roofs = _dynamic_roofs()
     if roofs is not None:
         if LEGACY_ROOF_KEYS.intersection(settings):
@@ -2469,6 +2473,8 @@ PV_PROFILE_KEYS=('south_panels','west_panels','east_panels','dormer_panels',
                  'flat_panels','secondary_south_panels','panel_watts',
                  'dormer_south_proxy','shade_strength','diffuse_suppression')
 
+_PV_YIELD_SETTING = '_pv_yield_multiplier'
+
 def _energy_key(s, keys=None):
     # Legacy scalar key shape stays compatible with private reference consumers.
     keys = ENERGY_KEYS if keys is None else keys
@@ -2477,6 +2483,9 @@ def _energy_key(s, keys=None):
     key = tuple((k, freeze(s.get(k))) for k in keys)
     if s.get('roof_panels') is not None:
         key += (('roof_panels', freeze(s['roof_panels'])),)
+    # Sensitivity changes production, while rated capacity and roof counts stay fixed.
+    if _PV_YIELD_SETTING in s:
+        key += ((_PV_YIELD_SETTING, s[_PV_YIELD_SETTING]),)
     return key
 
 
@@ -2484,7 +2493,9 @@ def pv_profile(s):
     key = tuple(s.get(k) for k in PV_PROFILE_KEYS)
     if s.get('roof_panels') is not None:
         key += (freeze(s['roof_panels']),)
-    return _pv_profile_cached(current_runtime().key, key)
+    profile = _pv_profile_cached(current_runtime().key, key)
+    factor = s.get(_PV_YIELD_SETTING, 1.0)
+    return profile if factor == 1.0 else profile * factor
 
 @lru_cache(maxsize=24)
 def _pv_profile_cached(runtime_key, key):
@@ -3394,7 +3405,7 @@ def evaluate(settings=None,detail=False):
     energy['charged_from_normal_solar_kwh']=envelope(charge_first-recaptured)
     produced_ac,self_consumed_pv=_pv_metric_basis(s,first)
     energy['pv_kwh']=envelope(produced_ac)
-    autarky=1-np.divide(first[:,5],first[:,0],out=np.zeros(len(first)),where=first[:,0]>0)
+    autarky=1-np.divide(first[:,5],first[:,0],out=np.ones(len(first)),where=first[:,0]>0)
     self_consumption=np.divide(self_consumed_pv,produced_ac,out=np.zeros(len(first)),where=produced_ac>0)
     useful=np.divide(first[:,2]+first[:,4],produced_ac,out=np.zeros(len(first)),where=produced_ac>0)
     mean_load=float(first[:,0].mean());mean_imp=float(first[:,5].mean())
@@ -3909,7 +3920,7 @@ def sweep(settings=None):
     scenarios=[]
     # Joint coherent paths, not independent cherry-picked best/worst parameters.
     for path,rate in [('lower',-.02),('flat',0),('higher',.03)]:
-        for deduction in [0,.36,.5]:
+        for deduction in current_policy().deduction_rates():
             params={**s,'energy_real_escalation':rate,'gas_real_escalation':rate,'deduction_rate':deduction}
             r=evaluate(params);scenarios.append(dict(id=f'{path}_deduction_{deduction}',energy_path=path,deduction_rate=deduction,metrics=r['metrics'],finance=r['finance']))
     inverter_bounds=SPEC['inverter_kw'][2]
@@ -4185,18 +4196,18 @@ def optimize_configuration(settings=None,search=None):
     summary=dict(objective=objective,exact=exact,search_method='exhaustive_integer_enumeration' if exact else 'sampled_discrete_coordinate_refinement',evaluated_count=len(rows),search_space_size=space,evaluation_budget=budget,best_found=not exact,certified_global_optimum=exact,requested_panel_maxima=roof_max,battery_min_modules=batt_min,battery_max_modules=batt_max,include_theoretical=include_theoretical,best_at_panel_maxima={name:_panel_counts(best_result['settings'])[name]==roof_max[name] for name in _search_roofs()},best_at_battery_maximum=best_result['settings']['battery_modules']==batt_max)
     return dict(status='SCENARIO_PENDING',objective=objective,best_candidate=best_result,recommended_id=best_id,candidates=rows,pareto_ids=[row['id'] for row in rows if row['pareto']],search=summary,definition='Candidate rows are compact; best_candidate contains the full evaluated result for applying or inspecting the selected configuration. Candidate layouts use the selected inverter, charge/discharge limits, panel wattage, usable battery module capacity, aging, finance, and household scenario. Alternate layouts use the benchmark cost model instead of any selected quote total.',limitations=['Large searches are best-found results from deterministic discrete coordinate refinement and are not certified global optima.'] if not exact else [])
 
-def calibration():
+def calibration(settings=None):
     """Every numerical report assertion is emitted here, never computed in prose."""
     if _thermal_reference() is not None:
         ref = _thermal_reference()
-        s = defaults()
+        s = defaults() if settings is None else settings
         from .heatpump_finance import calculate_thermal_finance
         return dict(annual_kwh=data()['audit']['annual_kwh'],
             annual_gas_smc=ref.annual_gas_smc if any(u.carrier == 'gas' for u in ref.end_uses.values()) else None,
             annual_electric_bill_eur=electric_bill(data()['audit']['annual_kwh'], s),
             thermal_baseline=calculate_thermal_finance({**s, 'load_scenario':'baseline'}),
             invoice=None, research=None, legacy_reference_applicable=False)
-    s=defaults();audit=data()['audit'];research=mutable_copy(current_runtime().metadata['calibration'])
+    s=defaults() if settings is None else settings;audit=data()['audit'];research=mutable_copy(current_runtime().metadata['calibration'])
     benchmark = current_runtime().metadata['presentation']['calibration_benchmarks']
     roofs=[]
     for i,(name,yields) in enumerate(audit['pvgis_yields'].items()):
@@ -4419,7 +4430,7 @@ def study(settings=None,progress=None):
     """Single-process deterministic candidate and financial-scenario computation."""
     s=validate(settings);base=sweep(s);allrows=[];rankings=[]
     for path,rate in [('lower',-.02),('flat',0),('higher',.03)]:
-        for deduction in [0,.36,.5]:
+        for deduction in current_policy().deduction_rates():
             scenario=f'{path}_deduction_{deduction}';rows=[]
             for c in base['candidates']:
                 r=evaluate({**c['settings'],'energy_real_escalation':rate,'gas_real_escalation':rate,'deduction_rate':deduction})
@@ -4443,8 +4454,9 @@ def study(settings=None,progress=None):
         bounds={}
         for key in c['metrics']:
             bands=[x['metrics'][key] for x in cases]
-            lows=[b['min'] for b in bands if b['min'] is not None];highs=[b['max'] for b in bands if b['max'] is not None]
-            bounds[key]=dict(min=min(lows) if lows else None,max=None if any(b['max'] is None for b in bands) else max(highs) if highs else None,nonrecovery_present=any(b.get('nonrecovery_present',False) or b.get('unrecovered_weather_years',0)>0 or b['max'] is None for b in bands))
+            pairs=[(b['min'],b['max'],b.get('nonrecovery_present',False) or b.get('unrecovered_weather_years',0)>0 or b['max'] is None) if isinstance(b,dict) else (b,b,b is None) for b in bands]
+            lows=[lo for lo,_,_ in pairs if lo is not None];highs=[hi for _,hi,_ in pairs if hi is not None]
+            bounds[key]=dict(min=min(lows) if lows else None,max=None if any(hi is None for _,hi,_ in pairs) else max(highs) if highs else None,nonrecovery_present=any(nr for _,_,nr in pairs))
         joint.append(dict(id=c['id'],label=c['label'],load_scenario=c['load_scenario'],battery_kwh=c['battery_kwh'],theoretical=c['theoretical'],metrics=bounds,cases=len(cases)))
     counterfactuals=[]
     for c in base['candidates']:
@@ -4472,7 +4484,7 @@ def study(settings=None,progress=None):
     ]
     if hp_on:
         notes.append(legacy_text('hp_active_note','Heat pump planning active: separate AC SCOP scenarios are inactive and omitted.'))
-    return dict(status='SCENARIO_PENDING',scop_scenarios=scop_scenarios,battery_counterfactuals=counterfactuals,candidate_joint_envelopes=joint,counts=dict(candidates=len(base['candidates']),financial_candidate_cases=len(allrows),joint_stress_cases=len(stress),rankings=len(rankings)),baseline_settings=s,calibration=calibration(),base=base,scenario_candidates=allrows,rankings=rankings,joint_stress=stress,sensitivity=sensitivity(s),notes=notes)
+    return dict(status='SCENARIO_PENDING',scop_scenarios=scop_scenarios,battery_counterfactuals=counterfactuals,candidate_joint_envelopes=joint,counts=dict(candidates=len(base['candidates']),financial_candidate_cases=len(allrows),joint_stress_cases=len(stress),rankings=len(rankings)),baseline_settings=s,calibration=calibration(s),base=base,scenario_candidates=allrows,rankings=rankings,joint_stress=stress,sensitivity=sensitivity(s),notes=notes)
 
 def _candidate_battery_settings(s, cap_kwh, rep_comp=None):
     """Return a settings dict with coherent battery module composition for hypothetical capacity cap_kwh.
@@ -6652,7 +6664,7 @@ def _evaluate_solar_candidate(s, opt, counts, comp_or_kwh, precomputed=None, quo
 
     first = annual[0]
     produced_ac, self_consumed_pv = _pv_metric_basis(s, first)
-    autarky = envelope(1 - np.divide(first[:, 5], first[:, 0], out=np.zeros(len(first)), where=first[:, 0] > 0))
+    autarky = envelope(1 - np.divide(first[:, 5], first[:, 0], out=np.ones(len(first)), where=first[:, 0] > 0))
     self_cons = envelope(np.divide(self_consumed_pv, produced_ac, out=np.zeros(len(first)), where=produced_ac > 0))
     pv_env = envelope(produced_ac)
     pv_input_by_weather = np.sum(pv * (1.0 - s['pv_first_year_loss']), axis=1)
@@ -7572,7 +7584,8 @@ def _solar_sizing_cached(runtime_key, key_settings, key_options, quote_fingerpri
         except Exception:
             quoted_comp = None
 
-    forecast_key = _energy_key(s)
+    routing_basis = 'solar_equity' if financial_basis == 'after_financing' else 'pv_incremental'
+    forecast_key = _energy_key(_routing_settings(s, basis=routing_basis))
     forecast_res = _forecast_2027_runs(forecast_key, price_version)
     rep_idx = forecast_res['picks'][rep]
     rep_year = years[rep_idx]
@@ -9333,15 +9346,12 @@ def summary_sensitivity(settings=None, quote=None, scope='solar', cash_mode='cas
     low_apr_npv = get_npv(r_low_apr)
     high_apr_npv = get_npv(r_high_apr)
 
-    # 13. PV yield (+-10% via panel_watts) clamped to SPEC bounds with capex preserved
-    watts_bounds = SPEC['panel_watts'][2]
-    watts_min = watts_bounds[0] if watts_bounds[0] is not None else 1.0
-    watts_max = watts_bounds[1] if watts_bounds[1] is not None else float('inf')
-    watts_val = s.get('panel_watts', 400.0)
-    low_watts = round(max(watts_min, min(watts_val * 0.9, watts_max)), 1)
-    high_watts = round(max(watts_min, min(watts_val * 1.1, watts_max)), 1)
-    s_low_y = {**s, 'panel_watts': low_watts, 'quote_total': base_solar_capex, 'quote_vat_included': True}
-    s_high_y = {**s, 'panel_watts': high_watts, 'quote_total': base_solar_capex, 'quote_vat_included': True}
+    # 13. PV yield (+-10% production), preserving installed capacity and capex.
+    yield_factor = s.get(_PV_YIELD_SETTING, 1.0)
+    low_yield_factor = max(0.0, yield_factor * 0.9)
+    high_yield_factor = min(2.0, yield_factor * 1.1)
+    s_low_y = {**s, _PV_YIELD_SETTING: low_yield_factor, 'quote_total': base_solar_capex, 'quote_vat_included': True}
+    s_high_y = {**s, _PV_YIELD_SETTING: high_yield_factor, 'quote_total': base_solar_capex, 'quote_vat_included': True}
     r_low_yield = bounded_evaluation(s_low_y)
     r_high_yield = bounded_evaluation(s_high_y)
     low_yield_npv = get_npv(r_low_yield)
@@ -9394,7 +9404,7 @@ def summary_sensitivity(settings=None, quote=None, scope='solar', cash_mode='cas
     adverse_settings['energy_real_escalation'] = low_esc if low_esc_npv['mean'] <= high_esc_npv['mean'] else high_esc
     adverse_settings['export_market_price'] = low_exp if low_exp_npv['mean'] <= high_exp_npv['mean'] else high_exp
     adverse_settings['loan_apr'] = low_apr if low_apr_npv['mean'] <= high_apr_npv['mean'] else high_apr
-    adverse_settings['panel_watts'] = low_watts if low_yield_npv['mean'] <= high_yield_npv['mean'] else high_watts
+    adverse_settings[_PV_YIELD_SETTING] = low_yield_factor if low_yield_npv['mean'] <= high_yield_npv['mean'] else high_yield_factor
     adverse_settings['deduction_tax_capacity'] = low_tax_cap if low_tax_npv['mean'] <= high_tax_npv['mean'] else high_tax_cap
 
     # Joint evaluation with all adverse settings applied simultaneously (discount_rate excluded as valuation parameter)
@@ -9576,11 +9586,11 @@ def summary_sensitivity(settings=None, quote=None, scope='solar', cash_mode='cas
             delta_high=round(high_apr_npv['mean'] - base_npv['mean'], 2)
         ),
         pv_yield=dict(
-            parameter='panel_watts',
-            unit='W',
-            base=dict(watts=watts_val, npv_eur=base_npv['mean']),
-            minus_10_pct=dict(watts=low_watts, npv_eur=low_yield_npv['mean'], delta_npv=round(low_yield_npv['mean'] - base_npv['mean'], 2)),
-            plus_10_pct=dict(watts=high_watts, npv_eur=high_yield_npv['mean'], delta_npv=round(high_yield_npv['mean'] - base_npv['mean'], 2)),
+            parameter=_PV_YIELD_SETTING,
+            unit='multiplier',
+            base=dict(multiplier=yield_factor, npv_eur=base_npv['mean']),
+            minus_10_pct=dict(multiplier=low_yield_factor, npv_eur=low_yield_npv['mean'], delta_npv=round(low_yield_npv['mean'] - base_npv['mean'], 2)),
+            plus_10_pct=dict(multiplier=high_yield_factor, npv_eur=high_yield_npv['mean'], delta_npv=round(high_yield_npv['mean'] - base_npv['mean'], 2)),
             delta_low=round(low_yield_npv['mean'] - base_npv['mean'], 2),
             delta_high=round(high_yield_npv['mean'] - base_npv['mean'], 2)
         ),

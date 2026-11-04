@@ -5,9 +5,9 @@ pointer is the only mutable publication state. Existing profiles remain pinned t
 their revision; this module does not refresh them. Operator supplied archives only:
 market-data rights and redistribution must be reviewed separately.
 """
+import calendar
 from contextlib import contextmanager
 from datetime import timedelta
-import fcntl
 import hashlib
 import json
 import math
@@ -15,13 +15,19 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import tempfile
 import uuid
 
 import numpy as np
 
+from .file_lock import exclusive_lock
 from .prepare_market_prices import (SERIES, SOURCE_SCHEMAS, PARSER_VERSION,
                                     civil_date, coverage_dates, day_bounds, compute_empirical_window)
+
+if os.name == 'nt':
+    from .windows_storage import mkdir_private, move, native_path
+
 
 CATALOG_VERSION = 'gme-catalog-v1'
 
@@ -43,18 +49,44 @@ def _digest(value):
 
 def _plain_path(path):
     path = Path(path).absolute()
-    if any(p.is_symlink() for p in (path, *path.parents)):
-        raise ValueError('Symlinks are not permitted in catalog paths')
+    if os.name == 'nt':
+        path = Path(native_path(path))
+    for part in (path, *path.parents):
+        try:
+            info = part.lstat()
+        except FileNotFoundError:
+            continue
+        if stat.S_ISLNK(info.st_mode) or (
+                os.name == 'nt' and info.st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT):
+            raise ValueError('Symlinks and reparse points are not permitted in catalog paths')
     return path
 
 
 def _directory(path):
     path = _plain_path(path)
-    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if os.name == 'nt':
+        for parent in reversed((path, *path.parents)):
+            if not parent.exists():
+                try:
+                    mkdir_private(parent)
+                except FileExistsError:
+                    pass
+    else:
+        path.mkdir(mode=0o700, parents=True, exist_ok=True)
     return path
 
 
+def _replace(source, destination):
+    if os.name == 'nt':
+        move(source, _plain_path(destination), replace=True)
+    else:
+        os.replace(source, destination)
+
+
 def _sync_dir(path):
+    if os.name == 'nt':
+        # Windows publication uses write-through renames instead of directory fsync.
+        return
     fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
     try:
         os.fsync(fd)
@@ -64,7 +96,7 @@ def _sync_dir(path):
 
 def _write(path, value):
     path = _plain_path(path)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_BINARY', 0), 0o600)
     with os.fdopen(fd, 'wb') as stream:
         stream.write(canonical_bytes(value))
         stream.flush()
@@ -166,10 +198,10 @@ def read_revision(catalog_dir, revision=None):
 @contextmanager
 def _publication_lock(root):
     path = _plain_path(root / '.publish.lock')
-    fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    fd = os.open(path, os.O_CREAT | os.O_RDWR | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_BINARY', 0), 0o600)
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
-        yield
+        with exclusive_lock(fd):
+            yield
     finally:
         os.close(fd)
 
@@ -201,7 +233,23 @@ def _assemble(previous, ingest, replace, window_start, window_end):
     start, end = _validate_days(days)
     if (window_start is None) != (window_end is None):
         raise ValueError('Supply both window boundaries')
-    window = [civil_date(window_start).isoformat(), civil_date(window_end).isoformat()] if window_start is not None else [start, end]
+    if window_start is not None:
+        window = [civil_date(window_start).isoformat(), civil_date(window_end).isoformat()]
+    else:
+        years = sorted({int(d[:4]) for d in days})
+        complete_years = [
+            y for y in years
+            if all(
+                f"{y}-{m:02d}-{d:02d}" in days and days[f"{y}-{m:02d}-{d:02d}"].get('records')
+                for m in range(1, 13)
+                for d in range(1, calendar.monthrange(y, m)[1] + 1)
+            )
+        ]
+        if complete_years:
+            latest = max(complete_years)
+            window = [f"{latest}-01-01", f"{latest + 1}-01-01"]
+        else:
+            window = [start, end]
     blobs = {}
     for stamp, day in sorted(days.items()):
         month = stamp[:7]
@@ -217,7 +265,8 @@ def _assemble(previous, ingest, replace, window_start, window_end):
 def _publish(root, revision, manifest, blobs):
     """Complete/validate immutable files before the single mutable pointer swap."""
     months, revisions = _directory(root / 'months'), _directory(root / 'revisions')
-    stage = Path(tempfile.mkdtemp(prefix='.staging-', dir=revisions))
+    stage = (_directory(revisions / ('.staging-' + uuid.uuid4().hex)) if os.name == 'nt'
+             else Path(tempfile.mkdtemp(prefix='.staging-', dir=revisions)))
     pointer_tmp = root / ('.current-' + uuid.uuid4().hex)
     try:
         for month, blob in blobs.items():
@@ -231,7 +280,7 @@ def _publish(root, revision, manifest, blobs):
             _write(temporary, blob)
             if _read(temporary) != blob:
                 raise ValueError('Staged month validation failed')
-            os.replace(temporary, destination)
+            _replace(temporary, destination)
         _sync_dir(months)
         _write(stage / 'manifest.json', manifest)
         _sync_dir(stage)
@@ -240,12 +289,12 @@ def _publish(root, revision, manifest, blobs):
             if _read(destination / 'manifest.json') != manifest:
                 raise ValueError('Existing immutable revision differs')
         else:
-            os.replace(stage, destination)
+            _replace(stage, destination)
         _sync_dir(revisions)
         # Independently reopen and recompute products before publication.
         read_revision(root, revision)
         _write(pointer_tmp, {'schema_version': CATALOG_VERSION, 'revision': revision})
-        os.replace(pointer_tmp, root / 'current.json')
+        _replace(pointer_tmp, root / 'current.json')
         _sync_dir(root)
     finally:
         if stage.exists():

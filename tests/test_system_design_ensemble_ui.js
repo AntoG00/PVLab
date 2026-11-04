@@ -195,7 +195,7 @@ test("1. Current card and table autarky strictly use canonical ensemble flows (0
   assert.ok(!choicesHtml.includes("85.3%"), "Current choice card does NOT display 85.3% coverage");
 });
 
-test("2. Curtailed PV uses exact 21-year mean first-year dispatch and 1-decimal formatting (99.8 kWh/yr · 0.78%)", () => {
+test("2. Curtailed PV uses ensemble mean first-year dispatch and 1-decimal formatting (99.8 kWh/yr · 0.78%)", () => {
   const { ctx, $ } = createHarness();
   ctx.current.result = makeDefaultCurrentResult();
 
@@ -220,7 +220,8 @@ test("2. Curtailed PV uses exact 21-year mean first-year dispatch and 1-decimal 
   ctx.renderSolarRecommendationChoices(sizingData);
   const choicesHtml = $("solarChoiceCards").innerHTML;
   assert.ok(choicesHtml.includes("99.8 kWh/yr · 0.78%"), `Expected "99.8 kWh/yr · 0.78%" in choice card, got: ${choicesHtml}`);
-  assert.ok(choicesHtml.includes("21-year mean first-year dispatch"), `Expected "21-year mean first-year dispatch" sublabel, got: ${choicesHtml}`);
+  assert.ok(choicesHtml.includes("Historical-weather ensemble mean first-year dispatch"), `Expected ensemble dispatch sublabel, got: ${choicesHtml}`);
+  assert.ok(!choicesHtml.includes("21-year mean first-year dispatch"), "Must not claim a fixed weather sample size");
   assert.ok(!choicesHtml.includes("Median first-year dispatch"), "Old median sublabel must be replaced");
 });
 

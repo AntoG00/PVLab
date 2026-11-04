@@ -5,14 +5,20 @@
   "classification": "source-available",
   "original_code_license": "PolyForm-Noncommercial-1.0.0",
   "third_party_notices": "THIRD_PARTY_NOTICES.md",
-  "runtime": "Linux CPython 3.12",
+  "runtime": "CPython 3.12",
+  "platforms": [
+    "Linux",
+    "Windows x64",
+    "macOS Apple silicon"
+  ],
+  "platform_validation": "See README; native macOS validation pending. This manifest does not attest a native platform test run.",
   "tests_node": "24.22.1",
   "bundled_provider_data": false,
   "bundled_dependencies": false,
   "lock_sha256": {
     "requirements-build.lock": "916004f43717afb4bf256f4ede2ddf289c02655bf87ee1f4cd128aed5e889231",
-    "requirements-dev.lock": "e1f14e7abdb1db6a43da161de21a742bf056df934d87fbc6b110f6a241eede87",
-    "requirements-legacy.lock": "0564a9349d538492f5b2699729ca8b72997cc27a9dba0f6e5482948149406a98",
-    "requirements.lock": "5d355d1deb21a11628cd463667eea6020e420409347f555e6d054f67485219a6"
+    "requirements-dev.lock": "b07cebdd82d98075c3d12c86b318e3ce7dcaf56398d3796ed0ed4e288bc89f96",
+    "requirements-legacy.lock": "d8f8a6b1c505a15804ecf69cd0de8ff758ca3f305486ce868e16fa8c0e217373",
+    "requirements.lock": "ff652a62f2f66f0da9804e1985c6d5494bd66c14b1604a64b547a9a416df746b"
   }
 }

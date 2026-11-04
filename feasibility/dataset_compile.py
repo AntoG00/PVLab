@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import shutil
 import tempfile
+import uuid
 from types import MappingProxyType
 import zipfile
 import numpy as np
@@ -66,7 +67,12 @@ class DatasetManifest:
         destination = Path(destination)
         if destination.exists() or destination.is_symlink():
             raise ValueError('candidate destination already exists')
-        staging = Path(tempfile.mkdtemp(prefix='.compile-', dir=destination.parent))
+        if os.name == 'nt':
+            from .windows_storage import mkdir_private, native_path
+            staging = Path(native_path(destination.parent / ('.compile-' + uuid.uuid4().hex)))
+            mkdir_private(staging)
+        else:
+            staging = Path(tempfile.mkdtemp(prefix='.compile-', dir=destination.parent))
         try:
             for name, raw in (('hourly.npz', self.archive_bytes), ('audit.json', self.audit_bytes),
                               ('manifest.json', self.manifest_bytes),
@@ -78,22 +84,30 @@ class DatasetManifest:
                     os.fsync(f.fileno())
             verify_and_load_dataset(staging / 'hourly.npz', staging / 'audit.json',
                                     staging / 'manifest.json', self.digest)
-            # Reserve exclusively, then atomically replace our own empty
-            # reservation with the complete verified directory.
-            destination.mkdir(mode=0o700)
-            try:
-                os.rename(staging, destination)
-            except BaseException:
-                destination.rmdir()
-                raise
-            fd = os.open(destination.parent, os.O_RDONLY | os.O_DIRECTORY)
-            try:
-                os.fsync(fd)
-            finally:
-                os.close(fd)
+            _publish_candidate(staging, destination)
             return destination
         finally:
             shutil.rmtree(staging, ignore_errors=True)
+
+
+def _publish_candidate(staging, destination):
+    if os.name == 'nt':
+        from .windows_storage import move
+        # A Windows rename without replacement reserves and publishes in one operation.
+        move(staging, destination)
+        return
+    # Reserve exclusively, then atomically replace our own empty reservation.
+    destination.mkdir(mode=0o700)
+    try:
+        os.rename(staging, destination)
+    except BaseException:
+        destination.rmdir()
+        raise
+    fd = os.open(destination.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def validate_arrays(data, years, plane_ids):

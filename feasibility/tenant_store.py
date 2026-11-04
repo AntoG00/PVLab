@@ -5,7 +5,7 @@ the owner has separately exported data. Only explicit legacy migration retains
 a read-only copy of the imported bytes. A failed cleanup remains tombstoned and
 can be retried by the administrator's recovery janitor.
 """
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from copy import deepcopy
 import hashlib
 import json
@@ -20,6 +20,9 @@ import time
 import uuid
 
 from feasibility.profile_store import ProfileStore, new_id
+
+if os.name == 'nt':
+    from feasibility import windows_storage
 
 LOG = logging.getLogger(__name__)
 MAX_JSON_BYTES = 2 * 1024 * 1024
@@ -73,6 +76,9 @@ CREATE TABLE IF NOT EXISTS tenants (
 CREATE TABLE IF NOT EXISTS sessions (
  token_hash TEXT PRIMARY KEY, tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
  expires REAL);
+CREATE TABLE IF NOT EXISTS pairing_codes (
+ code_hash TEXT PRIMARY KEY, tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+ expires REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS profiles (
  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
  current_revision TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', UNIQUE(id,tenant_id),
@@ -133,20 +139,14 @@ class TenantStore:
         self.worker_shutdown = worker_shutdown or (lambda tenant_id: None)
         self.db_path = self.root / 'tenants.sqlite3'
         with self.files._directory(()) as fd:
-            try:
-                file_fd = os.open('tenants.sqlite3', os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600, dir_fd=fd)
-                os.close(file_fd)
-                os.fsync(fd)
-            except FileExistsError:
-                pass
-            for name in ('tenants.sqlite3', 'tenants.sqlite3-wal', 'tenants.sqlite3-shm'):
+            if os.name == 'nt':
                 try:
-                    info = os.stat(name, dir_fd=fd, follow_symlinks=False)
-                except FileNotFoundError:
-                    continue
-                if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
-                        or info.st_mode & 0o077 or info.st_nlink != 1):
-                    raise StoreError()
+                    with self.db_path.open('xb'):
+                        pass
+                except FileExistsError:
+                    pass
+            else:
+                self._initialize_posix_database(fd)
         with self._connection() as db:
             db.execute('PRAGMA journal_mode=WAL')
             version = db.execute('PRAGMA user_version').fetchone()[0]
@@ -160,18 +160,53 @@ class TenantStore:
                     db.execute("ALTER TABLE profiles ADD COLUMN name TEXT NOT NULL DEFAULT ''")
                 db.execute('PRAGMA user_version=2')
 
+    @staticmethod
+    def _initialize_posix_database(fd):
+        try:
+            file_fd = os.open('tenants.sqlite3', os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600, dir_fd=fd)
+            os.close(file_fd)
+            os.fsync(fd)
+        except FileExistsError:
+            pass
+        for name in ('tenants.sqlite3', 'tenants.sqlite3-wal', 'tenants.sqlite3-shm'):
+            try:
+                info = os.stat(name, dir_fd=fd, follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                    or info.st_mode & 0o077 or info.st_nlink != 1):
+                raise StoreError()
+
+    @staticmethod
+    def _check_windows_database(directory):
+        for suffix in ('', '-wal', '-shm', '-journal'):
+            try:
+                with windows_storage.file(directory / ('tenants.sqlite3' + suffix), mutable=True):
+                    pass
+            except FileNotFoundError:
+                if not suffix:
+                    raise StoreError() from None
+            except (OSError, ValueError) as exc:
+                raise StoreError() from exc
+
     @contextmanager
     def _connection(self):
         # Parent directories are validated without following symlinks each time.
-        with self.files._directory(()):
-            db = sqlite3.connect(self.db_path, timeout=10, isolation_level=None)
-        db.row_factory = sqlite3.Row
-        db.execute('PRAGMA foreign_keys=ON')
-        db.execute('PRAGMA synchronous=FULL')
-        try:
-            yield db
-        finally:
-            db.close()
+        with ExitStack() as pinned:
+            if os.name == 'nt':
+                directory = pinned.enter_context(windows_storage.directory(self.root, ()))
+                self._check_windows_database(directory)
+                db = sqlite3.connect(self.db_path, timeout=10, isolation_level=None)
+            else:
+                with self.files._directory(()):
+                    db = sqlite3.connect(self.db_path, timeout=10, isolation_level=None)
+            try:
+                db.row_factory = sqlite3.Row
+                db.execute('PRAGMA foreign_keys=ON')
+                db.execute('PRAGMA synchronous=FULL')
+                yield db
+            finally:
+                db.close()
 
     @contextmanager
     def _transaction(self, *, write=False):
@@ -342,6 +377,17 @@ class TenantStore:
             self._remove_directory(('tenants', tenant_id, ref))
         for job_id in job_ids:
             self._remove_directory(('tenants', tenant_id, 'jobs', job_id))
+        self._remove_directory(('tenants', tenant_id, 'catalogs', profile_id))
+
+    def profile_catalog_path(self, tenant_id, profile_id):
+        _id(tenant_id)
+        _id(profile_id)
+        with self._transaction() as db:
+            self._profile(db, tenant_id, profile_id)
+        with self.files._directory(('tenants', tenant_id, 'catalogs', profile_id), create=True):
+            pass
+        path = self.root / 'tenants' / tenant_id / 'catalogs' / profile_id
+        return Path(windows_storage.native_path(path)) if os.name == 'nt' else path
 
     def add_session(self, tenant_id, token_hash, *, expires=None):
         if not isinstance(token_hash, str) or not re.fullmatch(r'[0-9a-f]{64}', token_hash):
@@ -351,6 +397,28 @@ class TenantStore:
         with self._transaction(write=True) as db:
             self._tenant(db, tenant_id)
             db.execute('INSERT INTO sessions VALUES (?,?,?)', (token_hash, tenant_id, expires))
+
+    def create_pairing_code(self, tenant_id, code_hash):
+        if not isinstance(code_hash, str) or not re.fullmatch(r'[0-9a-f]{64}', code_hash):
+            raise StoreError()
+        with self._transaction(write=True) as db:
+            self._tenant(db, tenant_id)
+            db.execute('DELETE FROM pairing_codes WHERE expires<=?', (self.clock(),))
+            db.execute('INSERT INTO pairing_codes VALUES (?,?,?)', (code_hash, tenant_id, self.clock() + 300))
+
+    def consume_pairing_code(self, code_hash, session_hash):
+        if not all(isinstance(v, str) and re.fullmatch(r'[0-9a-f]{64}', v) for v in (code_hash, session_hash)):
+            raise Unauthorized()
+        with self._transaction(write=True) as db:
+            row = db.execute('SELECT tenant_id FROM pairing_codes WHERE code_hash=? AND expires>?',
+                             (code_hash, self.clock())).fetchone()
+            if row is None:
+                raise Unauthorized()
+            tenant_id = row['tenant_id']
+            self._tenant(db, tenant_id)
+            db.execute('DELETE FROM pairing_codes WHERE code_hash=?', (code_hash,))
+            db.execute('INSERT INTO sessions VALUES (?,?,NULL)', (session_hash, tenant_id))
+            return tenant_id
 
     def resolve_session(self, token_hash):
         with self._transaction() as db:
@@ -455,16 +523,37 @@ class TenantStore:
                 raise NotFound()
             return dict(row)
 
-    def fail_job(self, tenant_id, job_id, error=None):
+    def fail_job(self, tenant_id, job_id, error=None, failure_info=None):
         # Arbitrary exceptions, paths and payloads never become API error text.
         self.job(tenant_id, job_id)
         with self._transaction(write=True) as db:
             self._tenant(db, tenant_id)
             db.execute("UPDATE jobs SET state='failed',error='Computation failed' WHERE tenant_id=? AND id=? AND state IN ('queued','running')",
                        (tenant_id, job_id))
+        if isinstance(error, dict) and failure_info is None:
+            failure_info = error
+        if failure_info and isinstance(failure_info, dict):
+            try:
+                with self.files._directory(('tenants', tenant_id, 'jobs', job_id), create=True) as fd:
+                    safe_diag = {
+                        k: failure_info[k] for k in (
+                            'job_id', 'operation', 'failure_type', 'error_code',
+                            'error_name', 'model_build_id', 'version', 'traceback', 'timestamp'
+                        ) if k in failure_info
+                    }
+                    self.files._write_once(fd, 'diagnostic.json', _json(safe_diag).encode())
+            except Exception:
+                pass
         return self.job(tenant_id, job_id)
 
     def _remove_directory(self, parts):
+        if os.name == 'nt':
+            try:
+                with windows_storage.directory(self.root, parts[:-1]) as directory:
+                    windows_storage.remove_tree(windows_storage.child(directory, parts[-1]))
+            except FileNotFoundError:
+                pass
+            return
         # shutil.rmtree uses fd-based traversal and refuses top-level symlinks.
         try:
             if not (self.root.joinpath(*parts[:-1])).exists():
@@ -619,7 +708,10 @@ class TenantStore:
                     for index, raw in enumerate(blobs):
                         name = f'{index}.json'
                         self.files._write_once(fd, name, raw)
-                        os.chmod(name, 0o400, dir_fd=fd, follow_symlinks=False)
+                        if os.name == 'nt':
+                            windows_storage.child(fd, name).chmod(stat.S_IREAD)
+                        else:
+                            os.chmod(name, 0o400, dir_fd=fd, follow_symlinks=False)
                 result = self._publish(db, tenant_id, profile_id, expected_revision, scenario, defaults)
                 db.execute('INSERT INTO migrations VALUES (?,?,?,?,?)', (tenant_id, profile_id, digest, result['revision'], backup[-1]))
         except BaseException:

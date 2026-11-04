@@ -1,4 +1,5 @@
 """Synthetic complete-year provider/temperature/compiler tests; no live network."""
+import os
 import copy
 from dataclasses import replace
 from datetime import timedelta
@@ -155,23 +156,36 @@ def test_cache_is_tenant_request_and_equipment_scoped(tmp_path):
     assert fetch_pvgis(r,c).artifact.source_digest == first.artifact.source_digest and len(w.calls)==2
     fetch_pvgis(replace(r,loss_percent=12),c); assert len(w.calls)==3
     fetch_pvgis(replace(r,cache=TenantCache(tmp_path/'cache','2'*32)),c); assert len(w.calls)==5
-    for p in (tmp_path/'cache').rglob('*.json'): assert stat.S_IMODE(p.stat().st_mode)==0o600
+    for p in (tmp_path/'cache').rglob('*.json'):
+        if os.name == 'nt':
+            from feasibility.windows_storage import file
+            with file(p):
+                pass
+        else:
+            assert stat.S_IMODE(p.stat().st_mode)==0o600
 
 
 def test_existing_shared_parent_permissions_are_preserved(tmp_path):
     from feasibility.solar_provider import _private_dir
     shared=tmp_path/'shared'; shared.mkdir(mode=0o755); shared.chmod(0o755)
+    initial_mode = shared.stat().st_mode
     _private_dir(shared,allow_shared=True)
     with pytest.raises(ValueError,match='owner-only'): TenantCache(shared,'1'*32)
-    assert stat.S_IMODE(shared.stat().st_mode)==0o755
+    assert shared.stat().st_mode == initial_mode
 
 
-def test_cli_candidate_atomic_publication_and_failure_status(tmp_path):
+@pytest.mark.parametrize('tou', [False, True])
+def test_cli_candidate_atomic_publication_and_failure_status(tmp_path, tou):
     r,_=request(years=(2023,))
+    load_dict = (dict(monthly_f1=[20]*12,monthly_f2=[30]*12,monthly_f3=[50]*12,
+                      policy=dict(mode='synthetic',leap_policy='february_month_hour',
+                      reference_year=2023,acknowledged=True))
+                 if tou else
+                 dict(monthly_totals=[100]*12,policy=dict(mode='synthetic',leap_policy='february_month_hour',
+                      reference_year=2023,acknowledged=True)))
     spec=dict(profile=r.profile,years=[2023],solar=dict(loss_percent=14,mounting=r.mounting,
         technology=r.technology,source_policy=SOURCE_POLICY),cache_root=str(tmp_path/'cache'),tenant_id='1'*32,
-        load=dict(monthly_totals=[100]*12,policy=dict(mode='synthetic',leap_policy='february_month_hour',
-        reference_year=2023,acknowledged=True)))
+        load=load_dict)
     manifest=tmp_path/'profile.json'; manifest.write_text(json.dumps(spec))
     dest=tmp_path/'complete'; result=build_candidate(manifest,dest,transport=client(Weather()))
     assert json.loads((tmp_path/'complete.status.json').read_text())['state']=='complete'

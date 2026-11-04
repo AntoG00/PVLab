@@ -21,7 +21,6 @@
     })();
   </script>
   <link rel="stylesheet" href="/style.css">
-  <link rel="stylesheet" href="/evidence-datasets.css">
 </head>
 <body>
   <header>
@@ -74,7 +73,6 @@
     <button data-view="behavior" aria-current="false">How it behaves</button>
     <button data-view="prices" aria-current="false">Prices &amp; market</button>
     <button data-view="assumptions" aria-current="false">Assumptions &amp; evidence</button>
-    <button data-view="quote" aria-current="false">Contractor pitch</button>
   </nav>
 
   <dialog id="defaultConfirm" aria-labelledby="defaultConfirmTitle" aria-describedby="defaultConfirmDescription">
@@ -101,32 +99,20 @@
     </div>
   </dialog>
 
-    <section id="profileResultsPanel" class="notice" style="margin:16px;display:block" hidden aria-label="Selected household result provenance">
-  <div id="profileResultHeader" aria-live="polite"></div>
-  <div id="profileRoofControls" class="form-grid"></div>
-  <div id="profileMarketMetadata"></div>
-  <fieldset><legend>Explicit scenario confirmations</legend>
-    <label><input type="checkbox" id="pmg_eligible_confirmed">I confirm PMG eligibility if I elect PMG remuneration</label>
-    <label><input type="checkbox" id="deduction_eligible_confirmed">I confirm eligibility and usable tax capacity for the selected investment deduction</label>
-    <label><input type="checkbox" id="unsupported_fiscal_year_acknowledged">I acknowledge applying the pinned fiscal assumptions to project years outside their supported dates</label>
-  </fieldset>
-  <div class="form-grid">
-  <label>Wholesale zone<select id="profileMarketZone"></select></label>
-  <label>Catalogue series<select id="profileMarketSeries"></select></label>
-  <label>Catalogue covered window<select id="profileMarketWindow"></select></label>
-  <label>Export valuation<select id="profileMarketValuation"></select></label>
-  </div>
-  <p>Market changes require saving and compiling a new household revision in setup. Then rerun calculations.</p>
-  <div class="inline" style="flex-wrap:wrap">
-  <button type="button" id="saveProfileMarket">Save market selection and reopen setup</button>
-  <button type="button" id="refreshProfileCatalog">Refresh catalogue metadata</button>
-  <button type="button" id="cancelProfileJob">Cancel owned job</button>
-  <button type="button" id="retryProfileJob">Rerun selected revision</button>
-  <button type="button" id="ownedReportHtml" disabled>HTML report</button>
-  <button type="button" id="ownedReportMarkdown" disabled>Markdown report</button>
-  <button type="button" id="ownedReportCsv" disabled>CSV report</button>
-  </div>
-</section>
+  <section id="profileResultsPanel" class="notice actionable-warning-card" style="margin:16px 32px;" hidden aria-label="Actionable scenario issues">
+    <div id="profileActionableWarning" class="actionable-warning-msg" role="alert"></div>
+    <fieldset id="profileConfirmationsFieldset" class="profile-confirmations-fieldset" hidden>
+      <legend>Explicit scenario confirmations</legend>
+      <label id="lbl_pmg_eligible_confirmed"><input type="checkbox" id="pmg_eligible_confirmed">I confirm PMG eligibility if I elect PMG remuneration</label>
+      <label id="lbl_deduction_eligible_confirmed"><input type="checkbox" id="deduction_eligible_confirmed">I confirm eligibility and usable tax capacity for the selected investment deduction</label>
+      <label id="lbl_unsupported_fiscal_year_acknowledged"><input type="checkbox" id="unsupported_fiscal_year_acknowledged">I acknowledge applying the pinned fiscal assumptions to project years outside their supported dates</label>
+    </fieldset>
+    <div id="profileActionButtons" class="inline profile-action-buttons" hidden>
+      <button type="button" id="retryProfileJob" class="button">Rerun selected revision</button>
+      <button type="button" id="cancelProfileJob" class="quiet">Cancel owned job</button>
+    </div>
+    <div id="profileRoofControls" class="form-grid" hidden></div>
+  </section>
   <div class="layout">
     <aside>
       <div class="aside-head">
@@ -197,8 +183,18 @@
             <h1 id="systemTitle">Calculating…</h1>
             <p id="systemSubtitle" class="system-subtitle muted"></p>
           </div>
+          <div id="reportActions" class="report-actions inline" role="group" aria-label="Export reports">
+            <button type="button" id="ownedReportHtml" class="button" disabled>HTML report</button>
+            <button type="button" id="ownedReportMarkdown" class="button" disabled>Markdown report</button>
+            <button type="button" id="ownedReportCsv" class="button" disabled>CSV report</button>
+          </div>
         </div>
         <div class="pills" id="systemTags"></div>
+
+        <details id="dataAssumptionsFold" class="data-assumptions-details">
+          <summary>Data and assumptions</summary>
+          <div id="profileResultHeader" class="profile-provenance-content" aria-live="polite"></div>
+        </details>
 
         <div id="hpContextNoticeSummary" class="hp-notice-card" hidden></div>
         <div id="hpBaselineNoticeSummary" class="hp-baseline-notice-card" hidden></div>
@@ -996,81 +992,12 @@
       <section id="assumptions" class="view" hidden>
         <p class="eyebrow">TRACEABLE INPUTS &amp; AUDIT TRAIL</p>
         <h1>Assumptions, calibration &amp; evidence register</h1>
-        <p class="muted">Audit register of all model inputs, provenance status, contractor confirmation checklist, and calibration checks.</p>
+        <p class="muted">Audit register of all model inputs, provenance status, and calibration checks.</p>
 
-        <!-- User-supplied solar datasets -->
-        <article id="datasetEvidence">
-          <div class="section-head">
-            <div>
-              <p class="eyebrow">USER DATASETS</p>
-              <h2>User-supplied solar datasets</h2>
-        <p id="activeWeatherCoverage" class="muted" role="status"></p>
-            </div>
-          </div>
-          <p class="muted">Files stored in project folder and reused offline; active calculations stay unchanged until validated import.</p>
-
-          <details open>
-            <summary>PVGIS solar datasets (v6 &amp; v5.3)</summary>
-            <div class="dataset-tab-bar" role="tablist" aria-label="PVGIS version selection">
-              <button type="button" class="toggle-btn active" role="tab" id="datasetTabV6" data-dataset-tab="pvgis6" aria-selected="true" aria-controls="datasetPanelV6">PVGIS 6</button>
-              <button type="button" class="toggle-btn" role="tab" id="datasetTabV53" data-dataset-tab="pvgis53" aria-selected="false" aria-controls="datasetPanelV53">PVGIS 5.3</button>
-            </div>
-            <div id="datasetPanelV6" role="tabpanel" aria-labelledby="datasetTabV6">
-              <label>PVGIS 6 files (.csv, .json)<input type="file" id="datasetFilesV6" accept=".csv,.json" multiple></label>
-            </div>
-            <div id="datasetPanelV53" role="tabpanel" aria-labelledby="datasetTabV53" hidden>
-              <label>PVGIS 5.3 files (.csv, .json)<input type="file" id="datasetFilesV53" accept=".csv,.json" multiple></label>
-            </div>
-            <div class="form-grid">
-              <label for="datasetSeriesLabel">Roof plane / series label
-                <input type="text" id="datasetSeriesLabel" value="South" maxlength="80">
-                <small class="muted">Use the same label for the v6 and v5.3 files of one roof plane. Use a different label for a different orientation.</small>
-              </label>
-            </div>
-            <p class="muted">PVGIS 6 supplies covered hours; PVGIS 5.3 fills only uncovered hours. Matching configurations are required.</p>
-          </details>
-
-          <details>
-            <summary>Google Solar datasets</summary>
-            <div class="form-grid">
-              <label>Google Solar files (.json, .tif, .tiff)<input type="file" id="datasetFilesGoogle" accept=".json,.tif,.tiff" multiple></label>
-            </div>
-          </details>
-
-          <div class="form-grid">
-            <button type="button" id="datasetUpload">Stage datasets</button>
-            <span id="datasetUploadStatus" role="status" aria-live="polite" class="muted"></span>
-          </div>
-
-          <div id="datasetCoverage" role="status" class="muted"></div>
-
-          <div class="table-wrap">
-            <table class="flow-data-table" aria-label="User datasets register">
-              <thead>
-                <tr>
-                  <th>Source</th>
-                  <th>File</th>
-                  <th>Series</th>
-                  <th>Coverage</th>
-                  <th>Validation</th>
-                </tr>
-              </thead>
-              <tbody id="datasetRows"></tbody>
-            </table>
-          </div>
-        </article>
-
-        <!-- Installer confirmation checklist -->
-        <article id="installerChecklistArticle">
-          <div class="section-head">
-            <div>
-              <p class="eyebrow">ON-SITE VERIFICATION</p>
-              <h2>Installer site-survey confirmation checklist</h2>
-            </div>
-          </div>
-          <p class="muted">Items requiring physical verification during installer site inspection prior to procurement.</p>
-          <div id="installerChecklist" class="checklist-grid"></div>
-        </article>
+        <details id="dataAssumptionsFoldAssumptions" class="data-assumptions-details" open>
+          <summary>Profile provenance, quality &amp; limitations</summary>
+          <div id="profileResultHeaderAssumptions" class="profile-provenance-content" aria-live="polite"></div>
+        </details>
 
         <!-- Input register with status chips -->
         <article>
@@ -1159,113 +1086,6 @@
           <p><a href="/verification.json" target="_blank">Machine-readable verification json ↗</a></p>
         </details>
       </section>
-
-      <!-- TAB 7: CONTRACTOR PITCH -->
-      <section id="quote" class="view" hidden>
-        <p class="eyebrow">CONTRACTOR PITCH &amp; NEGOTIATION</p>
-        <h1>Contractor pitch, quote itemization &amp; questions</h1>
-        <p class="muted">Tooling to evaluate incoming contractor proposals, itemize quotes with VAT separation, verify promised performance claims against physical simulation, and solve maximum supportable prices.</p>
-
-        <!-- One-page quote comparison sheet -->
-        <article class="pitch-sheet-article" id="contractorComparisonSheet">
-          <div class="section-head">
-            <div>
-              <p class="eyebrow">PROPOSAL EVALUATION SHEET</p>
-              <h2>One-page quote evaluation &amp; negotiation sheet</h2>
-            </div>
-            <button id="printPitchBtn" type="button" class="action-btn-small">Print / Save PDF</button>
-          </div>
-          <div id="quoteComparisonSheetContent" class="quote-sheet-content"></div>
-          <div id="contractorQuestionsBox" class="questions-box">
-            <h3>Essential questions to ask your installer</h3>
-            <ol>
-              <li><strong>Module model &amp; degradation:</strong> What is the exact panel model, first-year loss guarantee, and annual degradation warranty?</li>
-              <li><strong>Inverter clipping &amp; hybrid rating:</strong> Is the inverter continuous AC rating matched to the kWp array, and does it support simultaneous full battery discharge?</li>
-              <li><strong>Usable vs Nameplate storage:</strong> What is the certified usable kWh, Depth-of-Discharge (DoD), roundtrip efficiency (RTE), and warranted cycle count/throughput?</li>
-              <li><strong>Roof layout &amp; setbacks:</strong> Has an installer verified physical dimensions on each selected roof plane including fire and eaves setbacks?</li>
-              <li><strong>Itemized turnkey breakdown:</strong> Are scaffolding, electrical panel modifications, GSE connection bureaucracy, and VAT explicitly listed?</li>
-              <li><strong>Tax deduction documentation:</strong> Is the invoice split into compliant deduction categories under current Italian fiscal guidelines?</li>
-            </ol>
-          </div>
-        </article>
-
-        <!-- Detailed offer inputs & evidence (Behind useful detail folds) -->
-        <details id="contractorItemizedFold">
-          <summary>Itemized offer lines &amp; contractor specs</summary>
-          <article>
-            <div class="section-head">
-              <div>
-                <p class="eyebrow">CONTRACTOR QUOTE</p>
-                <h2>Itemized offer lines</h2>
-              </div>
-            </div>
-            <p class="muted">Net line amount × quantity, with VAT entered separately. Populated lines override the turnkey quote control.</p>
-            <div id="quoteLines"></div>
-            <button id="addLine">Add line item</button>
-            <p id="quoteTotal"></p>
-            <div id="quoteFields" class="form-grid"></div>
-          </article>
-        </details>
-
-        <details id="contractorClaimsFold">
-          <summary>Contractor promised claims vs physical simulation</summary>
-          <article>
-            <div class="section-head">
-              <div>
-                <p class="eyebrow">CLAIM AUDIT</p>
-                <h2>Claims versus simulation</h2>
-              </div>
-            </div>
-            <div class="form-grid">
-              <label>Promised annual PV yield (kWh)<input type="number" data-quote="claimed_yield_kwh" min="0"></label>
-              <label>Promised self-consumption (%)<input type="number" data-quote="claimed_self_consumption_pct" min="0" max="100"></label>
-              <label>Promised simple payback (years)<input type="number" data-quote="claimed_payback_years" min="0" step=".1"></label>
-            </div>
-            <div id="claims"></div>
-          </article>
-        </details>
-
-        <details id="contractorSolverFold">
-          <summary>Maximum economically supportable price solver</summary>
-          <article>
-            <div class="section-head">
-              <div>
-                <p class="eyebrow">PRICE CEILING SOLVER</p>
-                <h2>Maximum economically supportable price</h2>
-              </div>
-            </div>
-            <p class="muted">Solves the maximum upfront turnkey cost (VAT included) that satisfies your target return or payback constraint.</p>
-            <div class="inline">
-              <label>Target metric
-                <select id="fairMetric">
-                  <option value="npv">NPV (€)</option>
-                  <option value="simple_payback">Maximum simple payback (years)</option>
-                  <option value="discounted_payback">Maximum discounted payback (years)</option>
-                  <option value="irr">Required return (fraction)</option>
-                  <option value="lcoe">Maximum LCOE (EUR/kWh)</option>
-                </select>
-              </label>
-              <label>Target<input type="number" id="fairTarget" value="0" step="any"></label>
-              <button id="solve">Solve price</button>
-            </div>
-            <div id="fairResult"></div>
-          </article>
-        </details>
-
-        <details id="contractorBenchmarkFold">
-          <summary>Price evidence &amp; market benchmark data</summary>
-          <article>
-            <div class="section-head">
-              <div>
-                <p class="eyebrow">BENCHMARK DATA</p>
-                <h2>Price evidence &amp; benchmark ranges</h2>
-              </div>
-            </div>
-            <p class="muted">Market benchmark inputs from regional research. Scenario ranges, not a commercial quotation.</p>
-            <div id="market" class="table-wrap"></div>
-          </article>
-        </details>
-      </section>
     </main>
   </div>
 
@@ -1273,11 +1093,12 @@
     PV Lab · Python simulation · local data · October 2026 <span id="latency"></span>
   </footer>
 
+  <script src="/diagnostics.js"></script>
   <script src="/sync.js"></script>
   <script src="/restart.js"></script>
+  <script src="/consumption-csv.js"></script>
   <script src="/onboarding.js"></script>
   <script src="/app.js"></script>
   <script src="/schedule.js"></script>
-  <script src="/evidence-datasets.js"></script>
 </body>
 </html>

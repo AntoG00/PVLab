@@ -112,7 +112,7 @@ class SummarySensitivityDriversTests(IsolatedDefaultsTestCase):
             ('real_energy_price_escalation', 'rate', ['base', 'minus_1_pct', 'plus_1_pct'], assumptions.SPEC['energy_real_escalation'][2], 'plus_1_pct'),
             ('export_price_level', 'price', ['base', 'minus_20_pct', 'plus_20_pct'], assumptions.SPEC['export_market_price'][2], 'plus_20_pct'),
             ('loan_apr', 'rate', ['base', 'minus_2_pct', 'plus_2_pct'], assumptions.SPEC['loan_apr'][2], 'plus_2_pct'),
-            ('pv_yield', 'watts', ['base', 'minus_10_pct', 'plus_10_pct'], assumptions.SPEC['panel_watts'][2], None),
+            ('pv_yield', 'multiplier', ['base', 'minus_10_pct', 'plus_10_pct'], [0, 2], None),
             ('tax_deduction', 'capacity', ['base', 'low_capacity', 'high_capacity'], assumptions.SPEC['deduction_tax_capacity'][2], 'high_capacity'),
         ]
         for driver_name, field_name, endpoint_keys, bounds, upper_key in driver_specs:
@@ -141,12 +141,8 @@ class SummarySensitivityDriversTests(IsolatedDefaultsTestCase):
 
         # Independent recomputation of yield minus/plus with fixed normalized quote capex
         s_norm, _, _, _ = engine.normalize_quote(self.base_settings, quote)
-        watts_val = s_norm.get('panel_watts', 400.0)
-        low_watts = round(watts_val * 0.9, 1)
-        high_watts = round(watts_val * 1.1, 1)
-
-        r_low_y = engine.evaluate({**s_norm, 'panel_watts': low_watts, 'quote_total': base_capex, 'quote_vat_included': True})
-        r_high_y = engine.evaluate({**s_norm, 'panel_watts': high_watts, 'quote_total': base_capex, 'quote_vat_included': True})
+        r_low_y = engine.evaluate({**s_norm, '_pv_yield_multiplier': 0.9, 'quote_total': base_capex, 'quote_vat_included': True})
+        r_high_y = engine.evaluate({**s_norm, '_pv_yield_multiplier': 1.1, 'quote_total': base_capex, 'quote_vat_included': True})
 
         self.assertEqual(r_low_y['finance']['capex_eur'], base_capex)
         self.assertEqual(r_high_y['finance']['capex_eur'], base_capex)

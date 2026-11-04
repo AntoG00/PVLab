@@ -217,10 +217,16 @@ class Scanner:
         elif depth >= 2 and binary:
             reasons.add('archive-inspection-limit')
         # Only reviewed synthetic assets may bypass size/binary review rules.
-        if any(a.get('path') == path and a.get('sha256') == digest and
+        reviewed_assets = [a for a in self.allowlist if a.get('path') == path and a.get('sha256') == digest and
                a.get('synthetic') is True and isinstance(a.get('reason'), str) and a['reason'].strip()
-               for a in self.allowlist):
+               ]
+        if reviewed_assets:
             reasons -= {'manual-review-required', 'large-artifact'}
+            # Owner-approved README captures only; content findings still apply.
+            if (Path(path).parent == Path('screenshots') and
+                    Path(path).suffix.lower() in {'.png', '.jpg'} and
+                    any(a.get('public_screenshot') is True for a in reviewed_assets)):
+                reasons.discard('private-path')
         for reason in sorted(reasons):
             item = {'object_id': oid, 'type': kind, 'path': path,
                     'reason': reason, 'sha256': digest}

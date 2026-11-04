@@ -74,7 +74,8 @@ def build_candidate(profile_manifest, output, *, transport=None):
         profile = parse_profile(obj['profile'])
         cache = TenantCache((manifest_path.parent / obj['cache_root']).resolve(), obj['tenant_id'])
         load_spec = obj['load']
-        if set(load_spec) - {'monthly_totals', 'policy', 'interval_csv', 'ingest_options'}:
+        if set(load_spec) - {'monthly_totals', 'policy', 'interval_csv', 'ingest_options',
+                             'monthly_f1', 'monthly_f2', 'monthly_f3'}:
             raise ValueError('invalid load fields')
         intervals = None
         if 'interval_csv' in load_spec:
@@ -84,7 +85,17 @@ def build_candidate(profile_manifest, output, *, transport=None):
                     opts[k] = datetime.fromisoformat(opts[k].replace('Z', '+00:00'))
             with (manifest_path.parent / load_spec['interval_csv']).open('rb') as f:
                 intervals = parse_consumption(f, IngestOptions(**opts))
-        load = project_load(intervals, load_spec.get('monthly_totals'), obj['years'], ProjectionPolicy(**load_spec['policy']))
+        policy_kwargs = dict(load_spec['policy'])
+        for k in ('monthly_f1', 'monthly_f2', 'monthly_f3'):
+            if k in load_spec:
+                if k in policy_kwargs:
+                    val_policy = tuple(policy_kwargs[k]) if isinstance(policy_kwargs[k], (list, tuple)) else policy_kwargs[k]
+                    val_load = tuple(load_spec[k]) if isinstance(load_spec[k], (list, tuple)) else load_spec[k]
+                    if val_policy != val_load:
+                        raise ValueError(f'Conflicting {k} in load and policy')
+                else:
+                    policy_kwargs[k] = load_spec[k]
+        load = project_load(intervals, load_spec.get('monthly_totals'), obj['years'], ProjectionPolicy(**policy_kwargs))
         solar = obj['solar']
         if set(solar) != {'loss_percent', 'mounting', 'technology', 'source_policy'}:
             raise ValueError('invalid solar fields')

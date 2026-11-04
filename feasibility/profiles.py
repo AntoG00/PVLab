@@ -105,7 +105,7 @@ def _plain(value):
             if not result['electric_loads']:
                 del result['electric_loads']
         elif isinstance(value, Consumption):
-            for key in ('annual_kwh', 'monthly_totals'):
+            for key in ('annual_kwh', 'monthly_totals', 'monthly_f1', 'monthly_f2', 'monthly_f3'):
                 if result[key] is None:
                     del result[key]
         return result
@@ -167,6 +167,9 @@ class Consumption:
     acknowledged: bool
     annual_kwh: float | None = None
     monthly_totals: tuple[float, ...] | None = None
+    monthly_f1: tuple[float, ...] | None = None
+    monthly_f2: tuple[float, ...] | None = None
+    monthly_f3: tuple[float, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -353,7 +356,8 @@ def parse_profile(payload: dict) -> HouseholdProfileV1:
     loc = object_fields(v['location'], ('latitude', 'longitude'))
     v['location'] = Location(number(loc['latitude'], 'latitude', -90, 90),
                              number(loc['longitude'], 'longitude', -180, 180))
-    optional = ('annual_kwh', 'monthly_totals')
+    band_keys = ('monthly_f1', 'monthly_f2', 'monthly_f3')
+    optional = ('annual_kwh', 'monthly_totals', *band_keys)
     required = [f.name for f in fields(Consumption) if f.name not in optional]
     c = dict(object_fields(v['consumption'], required, optional))
     identifier(c['artifact_id'], 'consumption.artifact_id', opaque=True, nullable=True)
@@ -378,6 +382,19 @@ def parse_profile(payload: dict) -> HouseholdProfileV1:
         c['monthly_totals'] = tuple(number(x, 'consumption.monthly_totals') for x in months)
     else:
         c['monthly_totals'] = None
+    if any(k in c for k in band_keys):
+        if not all(k in c for k in band_keys):
+            raise ValueError('All TOU bands (monthly_f1, monthly_f2, monthly_f3) must be provided together')
+        for k in band_keys:
+            months = sequence(c[k], 'consumption.' + k, 12, 12)
+            c[k] = tuple(number(x, 'consumption.' + k) for x in months)
+        band_totals = tuple(number(f1 + f2 + f3, 'consumption.monthly_totals')
+                            for f1, f2, f3 in zip(*(c[k] for k in band_keys)))
+        if c['monthly_totals'] is None:
+            c['monthly_totals'] = band_totals
+        elif any(not math.isclose(band, total, rel_tol=1e-9, abs_tol=1e-6)
+                 for band, total in zip(band_totals, c['monthly_totals'])):
+            raise ValueError('F1/F2/F3 monthly sum must match monthly_totals')
     v['consumption'] = Consumption(**c)
     roofs = []
     for r in sequence(v['roofs'], 'roofs', 12):

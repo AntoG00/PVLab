@@ -63,6 +63,9 @@ def test_dispatch_disk_cache_invalidation(tmp_path):
 
     env = os.environ.copy()
     env["NUMBA_CACHE_DIR"] = str(cache_dir)
+    if os.name == "nt":
+        from feasibility.windows_storage import native_path
+        env["NUMBA_CACHE_DIR"] = native_path(cache_dir)
     env["NUMBA_NUM_THREADS"] = "2"
     existing_pythonpath = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = str(tmp_path) + (os.pathsep + existing_pythonpath if existing_pythonpath else "")

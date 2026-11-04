@@ -3870,6 +3870,72 @@ class SolarSizingBasisAndRolesTests(IsolatedDefaultsTestCase):
                 self.assertAlmostEqual(repriced['capex_eur'], cand['capex_eur'], places=5)
                 self.assertAlmostEqual(repriced['npv_median'], cand['npv_median'], places=5)
 
+    def test_solar_sizing_auto_routing_forecast_preserves_fiscal_settings_and_basis(self):
+        """solar_sizing auto routing forecast resolves with user fiscal settings and financial basis matching fixed mode."""
+        custom_fiscal = {
+            'installation_year': 2026,
+            'pmg_election': False,
+            'pmg_eligible_confirmed': False,
+            'deduction_eligible_confirmed': True,
+            'unsupported_fiscal_year_acknowledged': True,
+            'routing_priority': 'auto',
+            'deduction_rate': 0.36,
+            'deduction_tax_capacity': 4500.0,
+            'loan_apr': 0.075,
+            'loan_fraction': 0.8,
+            'loan_years': 10,
+        }
+        s_auto = {**self.base_settings, **custom_fiscal}
+
+        for basis, expected_routing_basis in [('project', 'pv_incremental'), ('after_financing', 'solar_equity')]:
+            opts = {
+                'financial_basis': basis,
+                'panel_maxima': {'south': 2, 'west': 0, 'east': 0, 'dormer': 0, 'flat': 0, 'secondary_south': 0},
+                'battery_min_kwh': 0,
+                'battery_max_kwh': 5,
+                'battery_step_kwh': 5,
+                'evaluation_budget': 50,
+            }
+            e._solar_sizing_cached.cache_clear()
+            e._forecast_runs.cache_clear()
+
+            with patch('feasibility.engine._routing_settings', wraps=e._routing_settings) as spy_routing, \
+                 patch('feasibility.engine._forecast_2027_runs', wraps=e._forecast_2027_runs) as spy_forecast:
+                res_auto = e.solar_sizing(s_auto, opts)
+
+                self.assertTrue(spy_routing.called)
+                passed_s = spy_routing.call_args[0][0]
+                self.assertFalse(passed_s['pmg_election'])
+                self.assertFalse(passed_s['pmg_eligible_confirmed'])
+                self.assertTrue(passed_s['deduction_eligible_confirmed'])
+                self.assertTrue(passed_s['unsupported_fiscal_year_acknowledged'])
+                self.assertEqual(passed_s['deduction_rate'], 0.36)
+                self.assertEqual(passed_s['deduction_tax_capacity'], 4500.0)
+                self.assertEqual(passed_s['loan_apr'], 0.075)
+                self.assertEqual(spy_routing.call_args.kwargs.get('basis'), expected_routing_basis)
+
+                self.assertTrue(spy_forecast.called)
+                forecast_key_dict = dict(spy_forecast.call_args[0][0])
+                resolved_route = e.resolve_routing_priority(s_auto, basis=expected_routing_basis)
+                self.assertNotEqual(forecast_key_dict['routing_priority'], 'auto')
+                self.assertEqual(forecast_key_dict['routing_priority'], resolved_route)
+
+            s_fixed = {**s_auto, 'routing_priority': resolved_route}
+            res_fixed = e.solar_sizing(s_fixed, opts)
+            self.assertEqual(
+                res_auto['search_summary']['representative_weather_year'],
+                res_fixed['search_summary']['representative_weather_year'],
+            )
+            self.assertEqual(
+                res_auto['recommended_candidate']['representative_weather_year'],
+                res_fixed['recommended_candidate']['representative_weather_year'],
+            )
+            self.assertAlmostEqual(
+                res_auto['recommended_candidate']['npv_representative'],
+                res_fixed['recommended_candidate']['npv_representative'],
+                places=4,
+            )
+
 
 if __name__ == '__main__':
     unittest.main()

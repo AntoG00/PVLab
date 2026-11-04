@@ -2,6 +2,7 @@
 import copy
 from datetime import date, datetime, timedelta, timezone
 import json
+import multiprocessing as mp
 import os
 from pathlib import Path
 import subprocess
@@ -13,6 +14,11 @@ import pytest
 
 from feasibility import market_catalog as catalog
 from feasibility import prepare_market_prices as prep
+from feasibility.runtime_context import available_price_catalog, resolve_profile_prices
+try:
+    from tests.test_profiles import valid_draft_payload
+except ImportError:
+    from test_profiles import valid_draft_payload
 
 
 def synthetic_ingest(start, end, price=100):
@@ -145,6 +151,41 @@ def test_explicit_correction_new_digest_and_old_revision(tmp_path):
     assert catalog.update_catalog(tmp_path, corrected, publish=True, replace=True)['unchanged']
 
 
+def _publish_contender(root, started, assembled):
+    original = catalog._assemble
+
+    def observe_assemble(*args):
+        assembled.set()
+        return original(*args)
+
+    catalog._assemble = observe_assemble
+    started.set()
+    catalog.update_catalog(root, synthetic_ingest('2025-01-02', '2025-01-04'), publish=True)
+
+
+def test_concurrent_publication_merges_both_imports(tmp_path):
+    ctx = mp.get_context('spawn')
+    started, assembled = ctx.Event(), ctx.Event()
+    contender = ctx.Process(target=_publish_contender, args=(tmp_path, started, assembled))
+    try:
+        with catalog._publication_lock(tmp_path):
+            contender.start()
+            assert started.wait(15)
+            assert not assembled.wait(0.5)
+            manifest, blobs = catalog._assemble(
+                None, synthetic_ingest('2025-01-01', '2025-01-03'), False, None, None)
+            catalog._publish(tmp_path, catalog.content_hash(manifest), manifest, blobs)
+        contender.join(15)
+        assert contender.exitcode == 0
+        assert assembled.is_set()
+        assert catalog.read_revision(tmp_path)['manifest']['coverage'] == ['2025-01-01', '2025-01-04']
+    finally:
+        if contender.pid is not None and contender.is_alive():
+            contender.kill()
+            contender.join()
+        contender.close()
+
+
 def test_source_hash_changes_recorded_without_silent_loss(tmp_path):
     data = synthetic_ingest('2025-01-01', '2025-01-02')
     old = catalog.update_catalog(tmp_path, data, publish=True)
@@ -190,7 +231,11 @@ def test_gap_tampering_and_symlink_rejected(tmp_path):
     with pytest.raises(ValueError, match='hash/schema'):
         catalog.read_revision(tmp_path)
     path.unlink()
-    path.symlink_to(tmp_path / 'current.json')
+    if os.name == 'nt':
+        subprocess.run(['cmd.exe', '/d', '/c', 'mklink', '/J', str(path), str(tmp_path)],
+                       check=True, capture_output=True, timeout=10)
+    else:
+        path.symlink_to(tmp_path / 'current.json')
     with pytest.raises(ValueError, match='Symlinks'):
         catalog.read_revision(tmp_path)
 
@@ -226,8 +271,9 @@ def test_cli_publish_and_inspect(tmp_path):
     result = json.loads(published.stdout)
     assert result['published']
     assert catalog.read_revision(root)['revision'] == result['revision']
-    assert stat_mode(root) == 0o700
-    assert stat_mode(root / 'current.json') == 0o600
+    if os.name != 'nt':
+        assert stat_mode(root) == 0o700
+        assert stat_mode(root / 'current.json') == 0o600
     bad = subprocess.run(cmd + ['--source-schema', 'unknown'], capture_output=True, text=True)
     assert bad.returncode == 2
     assert 'invalid choice' in bad.stderr
@@ -239,7 +285,7 @@ def stat_mode(path):
 
 def test_failed_pointer_swap_preserves_current(tmp_path, monkeypatch):
     old = catalog.update_catalog(tmp_path, synthetic_ingest('2025-01-01', '2025-02-01'), publish=True)
-    original = os.replace
+    original = catalog._replace
 
     def fail_pointer(source, destination):
         if Path(destination).name == 'current.json':
@@ -247,7 +293,7 @@ def test_failed_pointer_swap_preserves_current(tmp_path, monkeypatch):
         return original(source, destination)
 
     with monkeypatch.context() as patch:
-        patch.setattr(os, 'replace', fail_pointer)
+        patch.setattr(catalog, '_replace', fail_pointer)
         with pytest.raises(OSError, match='pointer interruption'):
             catalog.update_catalog(tmp_path, synthetic_ingest('2025-02-01', '2025-03-01'), publish=True)
     assert catalog.read_revision(tmp_path)['revision'] == old['revision']
@@ -283,3 +329,134 @@ def test_invalid_day_outside_selected_window_rejected(tmp_path):
     data['days']['2025-02-01']['records'][0][1] = '2025-02-01T12:00:00+00:00'
     with pytest.raises(ValueError, match='canonical price timeline'):
         catalog.update_catalog(tmp_path, data, window_start='2025-01-01', window_end='2025-02-01')
+
+
+
+def test_market_catalog_multi_year_and_completeness_matrix(tmp_path, valid_draft_payload):
+    # 1. Complete 2025
+    root_2025 = tmp_path / 'cat_2025'
+    ingest_2025 = synthetic_ingest('2025-01-01', '2026-01-01')
+    res_2025 = catalog.update_catalog(root_2025, ingest_2025, publish=True)
+    cat_2025 = available_price_catalog(root_2025)
+    assert cat_2025['coverage'] == ['2025-01-01', '2026-01-01']
+    assert cat_2025['window'] == ['2025-01-01', '2026-01-01']
+    assert all(cat_2025['shape_available'].values())
+    assert cat_2025['missing_months'] == []
+    assert cat_2025['years']['2025']['complete'] is True
+    assert cat_2025['years']['2025']['missing_months'] == []
+    assert cat_2025['years']['2025']['shape_eligible'] is True
+
+    # 2. Complete 2025 plus Jan-Sep 2026 (2025-01-01 to 2026-10-01)
+    ingest_sep = synthetic_ingest('2026-01-01', '2026-10-01')
+    res_multi = catalog.update_catalog(root_2025, ingest_sep, publish=True)
+    cat_multi = available_price_catalog(root_2025)
+    assert cat_multi['coverage'] == ['2025-01-01', '2026-10-01']
+    assert cat_multi['window'] == ['2025-01-01', '2026-01-01']
+    assert all(cat_multi['shape_available'].values())
+    assert ['2025-01-01', '2026-01-01'] in cat_multi['windows']
+    assert ['2025-01-01', '2026-10-01'] in cat_multi['windows']
+    assert ['2026-01-01', '2026-10-01'] in cat_multi['windows']
+    assert cat_multi['years']['2025']['complete'] is True
+    assert cat_multi['years']['2026']['complete'] is False
+    assert cat_multi['years']['2026']['missing_months'] == ['2026-10', '2026-11', '2026-12']
+    assert cat_multi['missing_months'] == ['2026-10', '2026-11', '2026-12']
+    assert cat_multi['years']['2026']['shape_eligible'] is False
+    assert cat_multi['years']['2026']['proxy_eligible'] is True
+
+    # 3. Jan-Sep 2026 only
+    root_partial = tmp_path / 'cat_partial'
+    res_part = catalog.update_catalog(root_partial, ingest_sep, publish=True)
+    cat_part = available_price_catalog(root_partial)
+    assert cat_part['coverage'] == ['2026-01-01', '2026-10-01']
+    assert cat_part['window'] == ['2026-01-01', '2026-10-01']
+    assert not any(cat_part['shape_available'].values())
+    assert cat_part['years']['2026']['complete'] is False
+    assert cat_part['years']['2026']['missing_months'] == ['2026-10', '2026-11', '2026-12']
+    assert cat_part['years']['2026']['shape_eligible'] is False
+    assert cat_part['years']['2026']['proxy_eligible'] is True
+
+    # 4. Pinning revision and window after selection
+    p_shape = copy.deepcopy(valid_draft_payload)
+    p_shape['market'].update(
+        valuation_mode='shape_scaled',
+        price_revision=res_multi['revision'],
+        window_start='2025-01-01',
+        window_end='2026-01-01',
+        series='NORD'
+    )
+    resolved_shape = resolve_profile_prices(p_shape, root_2025)
+    assert resolved_shape['profile_market']['product']['normalized_shape'] is not None
+
+    p_proxy = copy.deepcopy(valid_draft_payload)
+    p_proxy['market'].update(
+        valuation_mode='absolute_proxy',
+        price_revision=res_multi['revision'],
+        window_start='2026-01-01',
+        window_end='2026-10-01',
+        series='NORD'
+    )
+    resolved_proxy = resolve_profile_prices(p_proxy, root_2025)
+    assert resolved_proxy['profile_market']['product']['normalized_shape'] is None
+    assert resolved_proxy['profile_market']['product']['total_hours'] == 6551.0
+    assert resolved_proxy['profile_market']['product']['dates_count'] == 273
+
+    p_invalid = copy.deepcopy(valid_draft_payload)
+    p_invalid['market'].update(
+        valuation_mode='shape_scaled',
+        price_revision=res_multi['revision'],
+        window_start='2026-01-01',
+        window_end='2026-10-01',
+        series='NORD'
+    )
+    with pytest.raises(ValueError, match='twelve complete calendar months'):
+        resolve_profile_prices(p_invalid, root_2025)
+
+
+def test_market_catalog_legacy_multi_year_revision_compatibility(tmp_path):
+    root_legacy = tmp_path / 'cat_legacy'
+    data = synthetic_ingest('2025-01-01', '2026-10-01')
+    res = catalog.update_catalog(root_legacy, data, publish=True, window_start='2025-01-01', window_end='2026-10-01')
+    rev_on_disk = catalog.read_revision(root_legacy)
+    assert rev_on_disk['manifest']['window'] == ['2025-01-01', '2026-10-01']
+
+    # available_price_catalog dynamically selects 2025 default window without altering on-disk revision
+    meta = available_price_catalog(root_legacy)
+    assert meta['window'] == ['2025-01-01', '2026-01-01']
+    assert all(meta['shape_available'].values())
+    assert meta['years']['2025']['complete'] is True
+    assert meta['years']['2026']['complete'] is False
+    assert catalog.read_revision(root_legacy)['manifest']['window'] == ['2025-01-01', '2026-10-01']
+    assert catalog.read_revision(root_legacy)['revision'] == res['revision']
+
+
+def test_market_catalog_nonpositive_mean_shape_ineligibility(tmp_path, valid_draft_payload):
+    root_neg = tmp_path / 'cat_neg'
+    def price_fn(dt, s):
+        return -100 if s == 'PUN' else 50
+    neg_data = synthetic_ingest('2025-01-01', '2026-01-01', price=price_fn)
+    res = catalog.update_catalog(root_neg, neg_data, publish=True)
+    meta = available_price_catalog(root_neg)
+    assert meta['shape_available']['PUN'] is False
+    assert meta['shape_available']['NORD'] is True
+    assert meta['years']['2025']['shape_available']['PUN'] is False
+    assert meta['years']['2025']['shape_available']['NORD'] is True
+
+    p_neg = copy.deepcopy(valid_draft_payload)
+    p_neg['market'].update(
+        valuation_mode='shape_scaled',
+        price_revision=res['revision'],
+        window_start='2025-01-01',
+        window_end='2026-01-01',
+        series='PUN'
+    )
+    with pytest.raises(ValueError, match='positive annual mean'):
+        resolve_profile_prices(p_neg, root_neg)
+
+
+def test_catalog_publish_and_read_with_long_storage_path(tmp_path):
+    root = tmp_path / ('long-root-' + 'a' * 70) / ('nested-' + 'b' * 70) / ('catalog-' + 'c' * 70)
+    result = catalog.update_catalog(root, synthetic_ingest('2025-01-01', '2025-01-03'), publish=True)
+    reopened = catalog.read_revision(root)
+    assert reopened['revision'] == result['revision']
+    assert reopened['manifest']['coverage'] == ['2025-01-01', '2025-01-03']
+    assert catalog.update_catalog(root, synthetic_ingest('2025-01-01', '2025-01-03'), publish=True)['unchanged']

@@ -263,26 +263,161 @@ function renderProfileMarketMetadata(profile,catalog){
 function renderProfileDisclosures(presentation){
  if(!presentation)return '<p>Result quality metadata pending calculation.</p>';
  const q=presentation.quality||{},fraction=v=>Number.isFinite(v)?nf(100*v,1)+'%':'unavailable';
- return `<p>Profile ${esc(presentation.profile_id)} · input revision ${esc(presentation.input_revision)}</p><p>Measured training shape ${fraction(q.measured_training_fraction)}; synthetic training shape ${fraction(q.synthetic_training_fraction)}; projected target output ${fraction(q.projected_output_fraction)}.</p><details><summary>Weather, thermal, fiscal and data limitations</summary><p>Weather years: ${esc((presentation.weather_years||[]).join(', '))}. ${esc(presentation.solar_loss)} Additional shading fractions: ${esc(JSON.stringify(presentation.shading_fractions||{}))}. Provider system efficiency (fraction) by plane/year: ${esc(presentation.solar_parameters?JSON.stringify(presentation.solar_parameters):'unavailable in source metadata')}.</p><p>Thermal baseline/replacement: ${esc((presentation.thermal||[]).map(u=>u.id+': '+u.carrier+' / '+u.action).join('; ')||'none')}. Fiscal rule ${esc(presentation.fiscal?.rule_revision??'unavailable')}, as of ${esc(presentation.fiscal?.as_of??'unavailable')}, region ${esc(presentation.fiscal?.region??'not applicable')}, ${esc(presentation.fiscal?.mode??'unavailable')}.</p>`+(presentation.limitations||[]).map(x=>`<p>${esc(x)}</p>`).join('')+'</details>';
+ const touHtml=presentation.load_provenance?.tou_mode==='arera_f1_f2_f3'?'<p>Hourly shape: ARERA F1/F2/F3 bands</p>':'';
+ return `<p>Profile ${esc(presentation.profile_id)} · input revision ${esc(presentation.input_revision)}</p><p>Measured training shape ${fraction(q.measured_training_fraction)}; synthetic training shape ${fraction(q.synthetic_training_fraction)}; projected target output ${fraction(q.projected_output_fraction)}.</p>${touHtml}<details><summary>Weather, thermal, fiscal and data limitations</summary><p>Weather years: ${esc((presentation.weather_years||[]).join(', '))}. ${esc(presentation.solar_loss)} Additional shading fractions: ${esc(JSON.stringify(presentation.shading_fractions||{}))}. Provider system efficiency (fraction) by plane/year: ${esc(presentation.solar_parameters?JSON.stringify(presentation.solar_parameters):'unavailable in source metadata')}.</p><p>Thermal baseline/replacement: ${esc((presentation.thermal||[]).map(u=>u.id+': '+u.carrier+' / '+u.action).join('; ')||'none')}. Fiscal rule ${esc(presentation.fiscal?.rule_revision??'unavailable')}, as of ${esc(presentation.fiscal?.as_of??'unavailable')}, region ${esc(presentation.fiscal?.region??'not applicable')}, ${esc(presentation.fiscal?.mode??'unavailable')}.</p>`+(presentation.limitations||[]).map(x=>`<p>${esc(x)}</p>`).join('')+'</details>';
 }
+function updateActionableWarnings(customMessage=null){
+ if(!activeResultProfile){
+  if($('profileResultsPanel'))$('profileResultsPanel').hidden=true;
+  return;
+ }
+ const fiscal=activeResultProfile.fiscal?.parameters;
+ const year=Number(settings.installation_year);
+ const horizon=Number(settings.horizon_years);
+ const needsDeduction=Boolean(fiscal?.deduction_rate>0&&!settings.deduction_eligible_confirmed);
+ const needsPmg=Boolean(settings.pmg_election&&!settings.pmg_eligible_confirmed);
+ const horizonOutsidePinnedDates=Boolean(fiscal&&(String(year+1)+'-01-01'<fiscal.effective_from||String(year+horizon)+'-12-31'>=fiscal.effective_to));
+ const needsProjection=Boolean(horizonOutsidePinnedDates&&!settings.unsupported_fiscal_year_acknowledged);
+ const isInvalidated=Boolean(customMessage||current===null||!activeResultJob);
+
+ const panel=$('profileResultsPanel');
+ const warnEl=$('profileActionableWarning');
+ const fieldset=$('profileConfirmationsFieldset');
+ const actions=$('profileActionButtons');
+
+ if($('lbl_pmg_eligible_confirmed'))$('lbl_pmg_eligible_confirmed').hidden=!settings.pmg_election;
+ if($('lbl_deduction_eligible_confirmed'))$('lbl_deduction_eligible_confirmed').hidden=!(fiscal?.deduction_rate>0);
+ if($('lbl_unsupported_fiscal_year_acknowledged'))$('lbl_unsupported_fiscal_year_acknowledged').hidden=!horizonOutsidePinnedDates;
+
+ const hasConfirmations=needsDeduction||needsPmg||needsProjection;
+ if(fieldset)fieldset.hidden=!hasConfirmations;
+ if(actions)actions.hidden=!isInvalidated;
+
+ const messages=[];
+ if(customMessage)messages.push(customMessage);
+ else if(isInvalidated)messages.push('Inputs modified or calculation pending. Rerun the selected revision to update results.');
+ if(needsEligibilityWarning(needsDeduction,needsPmg))messages.push('Explicit scenario confirmation required for elected fiscal parameters.');
+ if(needsProjection)messages.push('Selected project horizon exceeds pinned fiscal dates. Confirm assumption projection to proceed.');
+
+ if(warnEl){
+  warnEl.textContent=messages.join(' ');
+  warnEl.hidden=messages.length===0;
+ }
+
+ const shouldShow=Boolean(messages.length>0||hasConfirmations||isInvalidated);
+ if(panel)panel.hidden=!shouldShow;
+}
+function needsEligibilityWarning(deduction,pmg){return deduction||pmg;}
 function invalidateProfileResults(message='Inputs changed. Re-run calculations.'){
  requestId++;householdClient.invalidate();
  const main=document.querySelector('main');if(main)main.hidden=true;
  current=null;activeResultJob=null;acceptedInputFingerprint=null;candidateEvalCache.clear();empiricalCache={};
  markSolarSizingStale();markBatterySizingStale();clearOptimizerResults();
  const header=$('profileResultHeader');if(header)header.textContent=message;
+ const headerAssumptions=$('profileResultHeaderAssumptions');if(headerAssumptions)headerAssumptions.textContent=message;
  for(const id of ['ownedReportHtml','ownedReportMarkdown','ownedReportCsv'])if($(id))$(id).disabled=true;
+ updateActionableWarnings(message);
+}
+function getRoofValidationError(s=settings,profile=(typeof activeResultProfile!=='undefined'?activeResultProfile:null)){
+ if(!profile||!Array.isArray(profile.roofs))return null;
+ const pw=Number(s?.panel_watts);
+ if(!Number.isFinite(pw)||pw<=0)return 'Invalid panel rating.';
+ const counts=s?.roof_panels||{};
+ for(const r of profile.roofs){
+  const n=Number(counts[r.id]??0);
+  const max=Math.floor((r.max_kwp*1000+1e-7)/pw);
+  if(!Number.isInteger(n)||n<0){
+   return `Roof plane '${r.label}' panel count must be a non-negative whole number.`;
+  }
+  if(n>max){
+   return `Roof plane '${r.label}' (${n} panels at ${pw} W = ${(n*pw/1000).toFixed(2)} kWp) exceeds ${r.max_kwp} kWp maximum capacity (${max} panels).`;
+  }
+ }
+ return null;
+}
+function shouldBlockRoofRecompute(s=settings,profile=(typeof activeResultProfile!=='undefined'?activeResultProfile:null)){
+ return Boolean(getRoofValidationError(s,profile));
+}
+function showRoofValidationError(err){
+ const errEl=$('roofValidationMessage');
+ if(errEl){
+  errEl.textContent=err||'';
+  errEl.hidden=!err;
+ }
+ const errContainer=$('error');
+ if(errContainer&&err){
+  errContainer.textContent=err;
+  errContainer.hidden=false;
+ }
 }
 function renderProfileRoofControls(){
  if(!activeResultProfile)return;
  const root=$('profileRoofControls');if(!root)return;root.textContent='';
  const pw=Number(settings.panel_watts);
  for(const r of activeResultProfile.roofs){
-  const label=document.createElement('label');label.textContent=r.label+' ('+r.id+') · '+r.max_kwp+' kWp maximum';
-  const input=document.createElement('input');input.type='number';input.min='0';input.step='1';input.max=String(Math.floor((r.max_kwp*1000+1e-7)/pw));input.value=String(settings.roof_panels?.[r.id]??0);
-  input.onchange=()=>{const n=Number(input.value);if(input.value.trim()===''||!Number.isInteger(n)||n<0||n>Number(input.max)){input.setCustomValidity('Enter a whole panel count within this plane capacity.');input.reportValidity();return;}input.setCustomValidity('');settings.roof_panels={...settings.roof_panels,[r.id]:n};editSetting('roof_panels',settings.roof_panels);};
+  const maxCount=Math.floor((r.max_kwp*1000+1e-7)/pw);
+  const currentVal=Number(settings.roof_panels?.[r.id]??0);
+  const isOver=currentVal>maxCount||!Number.isInteger(currentVal)||currentVal<0;
+
+  const label=document.createElement('label');
+  label.className=isOver?'roof-control-label is-invalid':'roof-control-label';
+  label.textContent=r.label+' ('+r.id+') · '+r.max_kwp+' kWp maximum';
+
+  const input=document.createElement('input');
+  input.type='number';input.min='0';input.step='1';input.max=String(maxCount);
+  input.value=String(settings.roof_panels?.[r.id]??0);
+  input.dataset.roofId=r.id;
+
+  if(isOver){
+   input.setCustomValidity(`Plane capacity exceeded (${currentVal} panels > ${maxCount} max at ${pw} W). Reduce panel count.`);
+   input.setAttribute('aria-invalid','true');
+   input.classList.add('is-invalid');
+  }
+
+  input.oninput=()=>{
+   const n=Number(input.value);
+   if(input.value.trim()===''||!Number.isInteger(n)||n<0||n>maxCount){
+    input.setCustomValidity(`Enter a whole panel count up to ${maxCount}.`);
+    input.setAttribute('aria-invalid','true');
+    input.classList.add('is-invalid');
+   }else{
+    input.setCustomValidity('');
+    input.removeAttribute('aria-invalid');
+    input.classList.remove('is-invalid');
+   }
+  };
+
+  input.onchange=()=>{
+   const n=Number(input.value);
+   if(input.value.trim()===''||!Number.isInteger(n)||n<0||n>Number(input.max)){
+    input.setCustomValidity(`Plane capacity exceeded (${input.value} panels > ${input.max} max at ${pw} W). Enter a whole count up to ${input.max}.`);
+    input.setAttribute('aria-invalid','true');
+    input.classList.add('is-invalid');
+    input.reportValidity();
+    showRoofValidationError(getRoofValidationError({...settings,roof_panels:{...settings.roof_panels,[r.id]:n}}));
+    return;
+   }
+   input.setCustomValidity('');
+   input.removeAttribute('aria-invalid');
+   input.classList.remove('is-invalid');
+   settings.roof_panels={...settings.roof_panels,[r.id]:n};
+   editSetting('roof_panels',settings.roof_panels);
+  };
   label.appendChild(input);root.appendChild(label);
  }
+
+ const errContainer=document.createElement('div');
+ errContainer.id='roofValidationMessage';
+ errContainer.className='hp-error-message roof-error-message';
+ const errText=getRoofValidationError(settings);
+ if(errText){
+  errContainer.textContent=errText;
+  errContainer.hidden=false;
+ }else{
+  errContainer.textContent='';
+  errContainer.hidden=true;
+ }
+ root.appendChild(errContainer);
 }
 async function downloadOwnedReport(format){
  if(!activeResultJob||getExportBlockReason('download report'))throw Error('Re-run the selected revision before downloading a report.');
@@ -299,7 +434,6 @@ async function downloadOwnedReport(format){
 }
 function setupProfileResults(){
  if(!activeResultProfile)return;
- if($('profileResultsPanel'))$('profileResultsPanel').hidden=false;
  settings.roof_panels=settings.roof_panels||Object.fromEntries(activeResultProfile.roofs.map(r=>[r.id,0]));
  const limits=Object.fromEntries(activeResultProfile.roofs.map(r=>[r.id,Math.floor((r.max_kwp*1000+1e-7)/Number(settings.panel_watts))]));
  optimizerPrefs.panel_maxima=limits;
@@ -307,26 +441,27 @@ function setupProfileResults(){
  for(const id of ['resetRoofLimits','solarIncludeTheoretical'])if($(id))$(id).closest('label')?$(id).closest('label').hidden=true:$(id).hidden=true;
  renderProfileRoofControls();
  if($('roofLimitsArticle')?.appendChild&&$('profileRoofControls'))$('roofLimitsArticle').appendChild($('profileRoofControls'));
- for(const key of ['pmg_eligible_confirmed','deduction_eligible_confirmed','unsupported_fiscal_year_acknowledged'])if($(key)){$(key).checked=Boolean(settings[key]);$(key).onchange=e=>editSetting(key,e.target.checked);}
+ for(const key of ['pmg_eligible_confirmed','deduction_eligible_confirmed','unsupported_fiscal_year_acknowledged'])if($(key)){$(key).checked=Boolean(settings[key]);$(key).onchange=e=>{editSetting(key,e.target.checked);updateActionableWarnings();};}
  if($('solarDeduction')){$('solarDeduction').value=String(activeResultProfile.fiscal.parameters.deduction_rate);$('solarDeduction').disabled=true;$('solarDeduction').title='Pinned fiscal rule; edit and compile the profile to change this rate.';}
- const metadata=$('profileMarketMetadata');if(metadata)metadata.innerHTML=renderProfileMarketMetadata(activeResultProfile,schema.catalog);
+ const metadata=$('profileMarketMetadata');if(metadata)metadata.innerHTML=renderProfileMarketMetadata(activeResultProfile,schema?.catalog);
  const makeOptions=(id,values)=>{const select=$(id);if(!select)return;select.textContent='';for(const value of values){const option=document.createElement('option');option.value=value;option.textContent=value;select.appendChild(option);}select.onchange=()=>invalidateProfileResults('Market selection changed. Edit household setup, save and compile the new market revision before rerunning.');};
- makeOptions('profileMarketZone',(schema.catalog?.series||[]).filter(s=>s!=='PUN'));
- makeOptions('profileMarketSeries',schema.catalog?.series||[]);makeOptions('profileMarketWindow',(schema.catalog?.windows||[]).map(w=>w.join(' / ')));makeOptions('profileMarketValuation',['shape_scaled','absolute_proxy','flat']);
+ makeOptions('profileMarketZone',(schema?.catalog?.series||[]).filter(s=>s!=='PUN'));
+ makeOptions('profileMarketSeries',schema?.catalog?.series||[]);makeOptions('profileMarketWindow',(schema?.catalog?.windows||[]).map(w=>w.join(' / ')));makeOptions('profileMarketValuation',['shape_scaled','absolute_proxy','flat']);
  if($('profileMarketZone'))$('profileMarketZone').value=activeResultProfile.market.zone;
  if($('profileMarketSeries'))$('profileMarketSeries').value=activeResultProfile.market.series;
  if($('profileMarketValuation'))$('profileMarketValuation').value=activeResultProfile.market.valuation_mode;
- if($('refreshProfileCatalog'))$('refreshProfileCatalog').onclick=async()=>{invalidateProfileResults('Catalogue refreshed. Save and compile a new pinned market revision in household setup, then rerun.');schema=await api('/api/schema');metadata.innerHTML=renderProfileMarketMetadata(activeResultProfile,schema.catalog);};
+ if($('refreshProfileCatalog'))$('refreshProfileCatalog').onclick=async()=>{invalidateProfileResults('Catalogue refreshed. Save and compile a new pinned market revision in household setup, then rerun.');schema=await api('/api/schema');if(metadata)metadata.innerHTML=renderProfileMarketMetadata(activeResultProfile,schema.catalog);};
  for(const [id,format] of [['ownedReportHtml','html'],['ownedReportMarkdown','md'],['ownedReportCsv','csv']])if($(id)){$(id).disabled=true;$(id).onclick=()=>downloadOwnedReport(format).catch(showError);}
  if($('saveProfileMarket'))$('saveProfileMarket').onclick=async()=>{try{
-  const profile=deepClone(activeResultProfile),window=$('profileMarketWindow').value.split(' / ');
-  profile.market={...profile.market,zone:$('profileMarketZone').value||profile.market.zone,series:$('profileMarketSeries').value||profile.market.series,valuation_mode:$('profileMarketValuation').value,window_start:window[0]||profile.market.window_start,window_end:window[1]||profile.market.window_end,price_revision:$('profileMarketValuation').value==='flat'?null:schema.catalog?.revision};
+  const profile=deepClone(activeResultProfile),window=($('profileMarketWindow')?.value||'').split(' / ');
+  profile.market={...profile.market,zone:$('profileMarketZone')?.value||profile.market.zone,series:$('profileMarketSeries')?.value||profile.market.series,valuation_mode:$('profileMarketValuation')?.value||profile.market.valuation_mode,window_start:window[0]||profile.market.window_start,window_end:window[1]||profile.market.window_end,price_revision:$('profileMarketValuation')?.value==='flat'?null:schema?.catalog?.revision};
   await householdClient.profileRequest('',{profile},{method:'PATCH'});householdClient.invalidate();clearHouseholdView();
  }catch(error){showError(error);}};
  if($('cancelProfileJob'))$('cancelProfileJob').onclick=()=>householdClient.cancelJob().catch(showError);
  if($('retryProfileJob'))$('retryProfileJob').onclick=()=>recompute();
  // Standalone legacy battery searches do not support v2 planes; joint solar search does.
  if($('runBatterySizing')){$('runBatterySizing').disabled=true;$('runBatterySizing').title='Use joint solar and storage sizing for profile planes.';}
+ updateActionableWarnings();
 }
 function acceptProfilePresentation(response,job){
  if(!activeResultProfile)return response;
@@ -361,7 +496,239 @@ const api=async(path,body)=>{
  }
  const r=await fetch(path,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const obj=await r.json();if(!r.ok){const error=Error(obj.error||r.statusText);error.status=r.status;throw error;}return obj;
 };
-const showError=e=>{if(typeof activeResultProfile!=='undefined'&&activeResultProfile&&e.status===429){$('syncStatus').textContent='Additional results pending · server quota reached. Retry after '+(e.retryAfter||60)+' seconds.';return;}$('error').textContent=e.message||e;$('error').hidden=false;};
+const ALLOWLISTED_ERROR_CODES = new Set([
+  'COMPUTE_EXCEPTION', 'COMPUTE_TIMEOUT', 'COMPUTE_MEMORY', 'PROCESS_EXIT',
+  'INTERRUPTED', 'QUEUE_TIMEOUT', 'SOLAR_TIMEOUT', 'SOLAR_NETWORK_ERROR',
+  'SOLAR_DATA_GAPS', 'SOLAR_PROVIDER_ERROR', 'JOB_FAILED'
+]);
+const ALLOWLISTED_OPERATIONS = new Set([
+  'compute', 'evaluate', 'quote', 'loan', 'dayhour', 'summary-sensitivity', 'matrix', 'study', 'solar'
+]);
+const ALLOWLISTED_ERROR_NAMES = new Set([
+  'ComputationError', 'WorkerProcessDied', 'WorkerMemoryExceeded',
+  'WorkerDeadlineExceeded', 'QueueTimeout', 'ServerInterrupted',
+  'TimeoutError', 'ConnectionError', 'SolarDataGapError',
+  'ZeroDivisionError', 'ValueError', 'TypeError', 'KeyError',
+  'IndexError', 'OverflowError', 'FloatingPointError', 'RuntimeError'
+]);
+function generateBugReport(info){
+ const diag=info?.diagnostic||{};
+ const rawCode=info?.code||diag.error_code||'';
+ const code=ALLOWLISTED_ERROR_CODES.has(rawCode)?rawCode:'JOB_FAILED';
+ const rawOp=diag.operation||'';
+ const operation=ALLOWLISTED_OPERATIONS.has(rawOp)?rawOp:'evaluate';
+ const rawName=diag.error_name||'';
+ const errorType=ALLOWLISTED_ERROR_NAMES.has(rawName)?rawName:'ComputationError';
+
+ const rawVersion=String(info?.version||diag.version||'').trim();
+ const version=/^[0-9]+(\.[0-9]+)*([a-zA-Z0-9_.-]+)?$/.test(rawVersion)?rawVersion:'unknown';
+
+ const rawBuildId=String(info?.modelBuildId||diag.model_build_id||'').trim();
+ const modelBuildId=/^[0-9a-fA-F]{8,64}$/.test(rawBuildId)?rawBuildId:'unknown';
+
+ const rawJobId=String(info?.jobId||diag.job_id||'').trim();
+ const jobId=/^[0-9a-zA-Z_-]{8,64}$/.test(rawJobId)?rawJobId:'unknown';
+
+ const actionableMessage='Calculation failed. Review the error code and stack summary below.';
+
+ const lines=[
+  '### PV Lab Bug Report',
+  '',
+  '- **Version:** '+version,
+  '- **Model Build ID:** '+modelBuildId,
+  '- **Job Correlation ID:** '+jobId,
+  '- **Operation:** '+operation,
+  '- **Error Code:** '+code,
+  '- **Error Type:** '+errorType,
+  '- **Actionable Message:** '+actionableMessage,
+  ''
+ ];
+
+ const rawRepo=String(info?.repoUrl||diag.repo_url||'').trim();
+ if(/^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(rawRepo)){
+  lines.push('- **Repository:** '+rawRepo);
+  lines.push('');
+ }
+
+ if(Array.isArray(diag.traceback)&&diag.traceback.length>0){
+  const safeFrames=[];
+  for(const frame of diag.traceback.slice(0,12)){
+   if(typeof frame==='string'&&/^feasibility\/(?:[A-Za-z_][A-Za-z0-9_]*\/)*[A-Za-z_][A-Za-z0-9_]*\.py:\d+ in [A-Za-z_<>][A-Za-z0-9_<>]*$/.test(frame)){
+    safeFrames.push(frame.slice(0,120));
+   }
+  }
+  if(safeFrames.length>0){
+   lines.push('#### Stack Summary (repo-relative)');
+   lines.push('```text');
+   for(const frame of safeFrames){
+    lines.push(frame);
+   }
+   lines.push('```');
+   lines.push('');
+  }
+ }
+
+ lines.push('#### What happened?');
+ lines.push('[Please describe what you were doing when the error occurred]');
+ return lines.join('\n');
+}
+const showError=e=>{
+ if(typeof activeResultProfile!=='undefined'&&activeResultProfile&&e.status===429){
+  $('syncStatus').textContent='Additional results pending · server quota reached. Retry after '+(e.retryAfter||60)+' seconds.';
+  return;
+ }
+ const errContainer=$('error');
+ if(!errContainer)return;
+ errContainer.textContent='';
+ errContainer.hidden=false;
+
+ const msg=e?.message||String(e);
+ const isJobFailure=Boolean(e?.jobId||e?.diagnostic||(e?.code&&typeof e.code==='string'&&(e.code.startsWith('COMPUTE_')||['PROCESS_EXIT','INTERRUPTED','QUEUE_TIMEOUT','SOLAR_TIMEOUT','SOLAR_NETWORK_ERROR','SOLAR_DATA_GAPS','SOLAR_PROVIDER_ERROR'].includes(e.code)))||msg.startsWith('JOB_FAILED:'));
+
+ if(isJobFailure){
+  const sysTitle=$('systemTitle');
+  if(sysTitle){
+   sysTitle.removeAttribute?.('aria-busy');
+   if(sysTitle.textContent?.includes('Calculating')){
+    sysTitle.textContent='Calculation failed';
+   }
+  }
+  const hpCards=$('hpCardsEl');
+  if(hpCards&&hpCards.textContent?.includes('Calculating')){
+   hpCards.textContent='';
+   const doc=errContainer.ownerDocument||document;
+   const failedCard=doc.createElement('div');
+   failedCard.className='card';
+   const lbl=doc.createElement('div');
+   lbl.className='label';
+   lbl.textContent='Hourly dispatch';
+   failedCard.appendChild(lbl);
+   const val=doc.createElement('div');
+   val.className='value bad';
+   val.textContent='Failed';
+   failedCard.appendChild(val);
+   const sm=doc.createElement('small');
+   sm.textContent='Review calculation error and inputs';
+   failedCard.appendChild(sm);
+   hpCards.appendChild(failedCard);
+  }
+  const statusEl=$('status');
+  if(statusEl&&(statusEl.textContent?.includes('Calculating')||statusEl.textContent?.includes('Computing'))){
+   statusEl.textContent='Calculation failed';
+  }
+ }
+
+ if(msg.includes('PROFILE_NOT_READY')||msg.toLowerCase().includes('profile not ready')){
+  errContainer.textContent='Profile not ready: complete the setup sequence (Step 1: Save draft → Step 2: Check solar coverage → Step 3: Generate data) before evaluation.';
+  return;
+ }
+
+ if(!isJobFailure){
+  errContainer.textContent=msg;
+  return;
+ }
+
+ const doc=errContainer.ownerDocument||document;
+ const headerDiv=doc.createElement('div');
+ headerDiv.className='error-header';
+ const strong=doc.createElement('strong');
+ strong.textContent='Calculation failed: ';
+ headerDiv.appendChild(strong);
+ const msgSpan=doc.createElement('span');
+ msgSpan.textContent=e?.diagnostic?.actionable_message||msg;
+ headerDiv.appendChild(msgSpan);
+ errContainer.appendChild(headerDiv);
+
+ const diagDiv=doc.createElement('div');
+ diagDiv.className='job-failure-diagnostic';
+
+ const summaryP=doc.createElement('p');
+ summaryP.className='diagnostic-summary';
+ summaryP.textContent='Sanitized diagnostic details (safe to share; no personal data, coordinates, or inputs):';
+ diagDiv.appendChild(summaryP);
+
+ const bugReportText=generateBugReport(e);
+
+ const pre=doc.createElement('pre');
+ pre.className='diagnostic-pre';
+ pre.setAttribute('tabindex','0');
+ pre.setAttribute('aria-label','Sanitized diagnostic bug report');
+ pre.textContent=bugReportText;
+ diagDiv.appendChild(pre);
+
+ const actionsDiv=doc.createElement('div');
+ actionsDiv.className='diagnostic-actions';
+
+ const copyBtn=doc.createElement('button');
+ copyBtn.type='button';
+ copyBtn.className='button btn-sm copy-btn';
+ copyBtn.textContent='Copy bug report';
+
+ const downloadBtn=doc.createElement('button');
+ downloadBtn.type='button';
+ downloadBtn.className='button btn-sm download-btn';
+ downloadBtn.textContent='Download bug report';
+
+ actionsDiv.appendChild(copyBtn);
+ actionsDiv.appendChild(downloadBtn);
+
+ const repoUrl=e?.repoUrl||e?.diagnostic?.repo_url;
+ if(typeof repoUrl==='string'&&/^https:\/\/github\.com\/[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+$/.test(repoUrl)){
+  const issueLink=doc.createElement('a');
+  issueLink.href=repoUrl+'/issues/new?template=bug_report.md';
+  issueLink.target='_blank';
+  issueLink.rel='noopener noreferrer';
+  if(typeof issueLink.setAttribute==='function'){
+   issueLink.setAttribute('href',repoUrl+'/issues/new?template=bug_report.md');
+   issueLink.setAttribute('target','_blank');
+   issueLink.setAttribute('rel','noopener noreferrer');
+  }
+  issueLink.className='button btn-sm issue-link';
+  issueLink.textContent='Open GitHub issue →';
+  actionsDiv.appendChild(issueLink);
+ }
+
+ const statusSpan=doc.createElement('span');
+ statusSpan.className='copy-status muted';
+ statusSpan.setAttribute('role','status');
+ statusSpan.setAttribute('aria-live','polite');
+ actionsDiv.appendChild(statusSpan);
+
+ copyBtn.onclick=async()=>{
+  try{
+   if(typeof navigator!=='undefined'&&navigator.clipboard?.writeText){
+    await navigator.clipboard.writeText(bugReportText);
+    statusSpan.textContent='Copied to clipboard';
+   }else if(typeof document!=='undefined'&&document.execCommand){
+    const ta=doc.createElement('textarea');
+    ta.value=bugReportText;
+    doc.body.appendChild(ta);
+    ta.select();
+    const successful=document.execCommand('copy');
+    doc.body.removeChild(ta);
+    if(successful===true){
+     statusSpan.textContent='Copied to clipboard';
+    }else{
+     statusSpan.textContent='Copy failed; select text above';
+    }
+   }else{
+    statusSpan.textContent='Copy unavailable; select text above';
+   }
+  }catch(_){
+   statusSpan.textContent='Copy failed; select text above';
+  }
+ };
+
+ downloadBtn.onclick=()=>{
+  if(typeof download==='function'){
+   download(bugReportText,'pv-lab-bug-report.txt','text/plain; charset=utf-8');
+   statusSpan.textContent='Downloaded bug report';
+  }
+ };
+
+ diagDiv.appendChild(actionsDiv);
+ errContainer.appendChild(diagDiv);
+};
 const EXCLUDED_PERCENT_KEYS = new Set([
   'gas_vat_reduced',
   'gas_vat_standard',
@@ -2816,7 +3183,14 @@ function editSetting(key,value,source=null){
  }
  syncOptimizerEquipmentInputs(key);
  clearEditedQuoteOverrides(key);refreshConditionalControls();schedule();
- if(panelKeys.includes(key)&&typeof renderRoofLimitsComparison==='function')renderRoofLimitsComparison();
+ if(key==='panel_watts'||key==='roof_panels'){
+  if(typeof activeResultProfile!=='undefined'&&activeResultProfile){
+   const limits=Object.fromEntries(activeResultProfile.roofs.map(r=>[r.id,Math.floor((r.max_kwp*1000+1e-7)/Number(settings.panel_watts))]));
+   if(typeof optimizerPrefs!=='undefined')optimizerPrefs.panel_maxima=limits;
+   if(typeof renderProfileRoofControls==='function')renderProfileRoofControls();
+  }
+ }
+ if((panelKeys.includes(key)||key==='roof_panels'||key==='panel_watts')&&typeof renderRoofLimitsComparison==='function')renderRoofLimitsComparison();
  if(optimizerResult)renderCandidates();
  if(typeof updateModifiedBadge==='function')updateModifiedBadge();
  if(typeof updateCurrentSystemSummary==='function')updateCurrentSystemSummary();
@@ -3065,8 +3439,7 @@ const TAB_VIEW_NAMES={
  financing:'Financing',
  behavior:'How It Behaves',
  prices:'Prices & market',
- assumptions:'Assumptions & evidence',
- quote:'Contractor pitch'
+ assumptions:'Assumptions & evidence'
 };
 
 const CATEGORY_MAP={
@@ -5353,15 +5726,13 @@ Cumulative discounted impact · historical-weather ensemble mean ${fmt(discVal,'
    return `<line x1="${left}" x2="${right}" y1="${yy.toFixed(1)}" y2="${yy.toFixed(1)}" stroke="${isZero?'#6c7972':'#e6ebe4'}" stroke-width="${isZero?1.6:1}" ${isZero?'stroke-dasharray="6 5"':''}/><text x="${left-10}" y="${(yy+4).toFixed(1)}" text-anchor="end" font-size="11" fill="${isZero?'#6c7972':'#62756e'}" ${isZero?'font-weight="600"':''}>${label}</text>`;
   }).join('');
 
-  const repMarkers=[];
+  const repMarkers=[],repEvents=[];
   for(let yr=1;yr<=horizon;yr++){
    const repDetail=getReplacementDetail(yr);
    if(repDetail){
     const cx=x(yr),cy=y(plotMid[yr]);
-    const textY=cy>bottom-26?cy-12:cy+18;
-    const clampedX=Math.max(left+60,Math.min(right-60,cx));
     const repCostSigned=fmtEur(-repDetail.totalCost);
-    let labelText=`Year ${yr}: ${esc(repDetail.cause)} ${repCostSigned}${isDiscounted?' (PV)':''}`;
+    let labelText=`Year ${yr}: ${repDetail.cause} ${repCostSigned}${isDiscounted?' (PV)':''}`;
     let aria=`Year ${yr}: ${repDetail.cause} ${repCostSigned}`;
     if(repDetail.invCost>0&&repDetail.batCost>0){
      const invCostSigned=fmtEur(-repDetail.invCost);
@@ -5369,9 +5740,11 @@ Cumulative discounted impact · historical-weather ensemble mean ${fmt(discVal,'
      labelText=`Year ${yr}: Inverter ${invCostSigned} · Battery ${batCostSigned}`;
      aria=`Year ${yr}: Inverter replacement ${invCostSigned}, battery replacement/augmentation ${batCostSigned} (total ${repCostSigned})`;
     }
-    repMarkers.push(`<g class="cash-replacement-callout" pointer-events="none" role="img" aria-label="${esc(aria)}"><circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4.5" fill="#bd704f" stroke="white" stroke-width="1.5"/><text x="${clampedX.toFixed(1)}" y="${textY.toFixed(1)}" text-anchor="middle" font-size="10" font-weight="600" fill="#8c3a27">${labelText}</text></g>`);
+    repEvents.push({yr,cx,cy,labelText,aria});
+    repMarkers.push(`<g class="cash-replacement-callout" role="img" tabindex="0" aria-label="${esc(aria)}"><title>${esc(aria)}</title><circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4.5" fill="#bd704f" stroke="white" stroke-width="1.5"/></g>`);
    }
   }
+  const repListHtml=repEvents.length?`<div class="cash-replacement-list" role="region" aria-label="Scheduled equipment replacements" style="display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 14px;margin:6px 0 10px;font-size:11.5px;line-height:1.45;"><span style="font-weight:600;color:var(--muted,#62756e);">Equipment replacements:</span><ul style="display:inline-flex;flex-wrap:wrap;gap:6px 16px;margin:0;padding:0;list-style:none;">${repEvents.map(it=>`<li style="display:inline-flex;align-items:center;gap:6px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#bd704f;border:1px solid white;" aria-hidden="true"></span><strong style="color:#8c3a27;font-weight:600;">${esc(it.labelText)}</strong></li>`).join('')}</ul></div>`:'';
 
   const initialAmountStr=plotMid[0]<-1e-6?`−€${fmt(Math.abs(plotMid[0]),'eur').replace('€','').trim()}`:(plotMid[0]>1e-6?`+${fmt(plotMid[0],'eur')}`:'€0');
   const initialOutlayLabel=`Initial outlay: ${initialAmountStr}`;
@@ -5390,7 +5763,7 @@ Cumulative discounted impact · historical-weather ensemble mean ${fmt(discVal,'
       ? `The historical-weather ensemble mean cash balance stays non-negative from year 0 through year ${horizon}. Discounted recovery above also accounts for the time value of money. Band: historical scenario min–max; each weather profile repeats throughout the project horizon.`
       : `The historical-weather ensemble mean cash balance reaches €0 and stays non-negative through year ${horizon}. Discounted recovery above also accounts for the time value of money. Band: historical scenario min–max; each weather profile repeats throughout the project horizon.`);
   const cashTakeaway=`<p class="cash-chart-explanation">${esc(breakEvenExplanation)}</p>`;
-  node('cashChart').innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}; cumulative ${isDiscounted?'discounted cash (NPV)':(real?'real':'nominal')+' cash impact'} over ${horizon} years"><defs><linearGradient id="${targetId}-cashBand" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#217a61" stop-opacity=".18"/><stop offset="1" stop-color="#217a61" stop-opacity=".04"/></linearGradient></defs>${yAxisSvg}<text x="${left}" y="18" font-size="11" fill="#62756e">${isDiscounted?`Cumulative discounted cash impact (NPV) · discounted at ${fmt(discountRate,'pct')} ${real?'real':'nominal'}`:`Cumulative ${real?'real':'nominal'} cash impact · ${real?'inflation-adjusted euros':'year-of-payment euros'}`}</text><path d="${band}" fill="url(#${targetId}-cashBand)" stroke="none"/>${scenarioLines}${initialLabelSvg}<path d="${line(plotMid)}" fill="none" stroke="#183b33" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>${cashComparisonLine}<line x1="${left}" x2="${right}" y1="${barY(0)}" y2="${barY(0)}" stroke="#cbd5cc"/><text x="${left}" y="${barTop-13}" font-size="11" fill="#62756e">${isDiscounted?`Historical-weather ensemble mean discounted annual net cash · years 1–${horizon}`:`Historical-weather ensemble mean annual net cash · years 1–${horizon}`}</text><text x="${left-8}" y="${barY(maxAnnual)+4}" text-anchor="end" font-size="9" fill="#62756e">+${fmt(maxAnnual,'eur')}</text><text x="${left-8}" y="${barY(0)+4}" text-anchor="end" font-size="9" fill="#62756e">€0</text><text x="${left-8}" y="${barY(-maxAnnual)+4}" text-anchor="end" font-size="9" fill="#62756e">−${fmt(maxAnnual,'eur')}</text>${marks}${repMarkers.join('')}${crossing}</svg>${cashTakeaway}`;
+  node('cashChart').innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}; cumulative ${isDiscounted?'discounted cash (NPV)':(real?'real':'nominal')+' cash impact'} over ${horizon} years"><defs><linearGradient id="${targetId}-cashBand" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#217a61" stop-opacity=".18"/><stop offset="1" stop-color="#217a61" stop-opacity=".04"/></linearGradient></defs>${yAxisSvg}<text x="${left}" y="18" font-size="11" fill="#62756e">${isDiscounted?`Cumulative discounted cash impact (NPV) · discounted at ${fmt(discountRate,'pct')} ${real?'real':'nominal'}`:`Cumulative ${real?'real':'nominal'} cash impact · ${real?'inflation-adjusted euros':'year-of-payment euros'}`}</text><path d="${band}" fill="url(#${targetId}-cashBand)" stroke="none"/>${scenarioLines}${initialLabelSvg}<path d="${line(plotMid)}" fill="none" stroke="#183b33" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>${cashComparisonLine}<line x1="${left}" x2="${right}" y1="${barY(0)}" y2="${barY(0)}" stroke="#cbd5cc"/><text x="${left}" y="${barTop-13}" font-size="11" fill="#62756e">${isDiscounted?`Historical-weather ensemble mean discounted annual net cash · years 1–${horizon}`:`Historical-weather ensemble mean annual net cash · years 1–${horizon}`}</text><text x="${left-8}" y="${barY(maxAnnual)+4}" text-anchor="end" font-size="9" fill="#62756e">+${fmt(maxAnnual,'eur')}</text><text x="${left-8}" y="${barY(0)+4}" text-anchor="end" font-size="9" fill="#62756e">€0</text><text x="${left-8}" y="${barY(-maxAnnual)+4}" text-anchor="end" font-size="9" fill="#62756e">−${fmt(maxAnnual,'eur')}</text>${marks}${repMarkers.join('')}${crossing}</svg>${repListHtml}${cashTakeaway}`;
 }
 function applySharedState(state){
  const oldQuote=quote;
@@ -5471,7 +5844,7 @@ function getWeatherEnsembleMeta(source){
 	const analoguesDesc = count ? `${count} weather analogues` : 'historical weather analogues';
 	return { count, years: yrs, rangeLabel, countLabel, runsLabel, yearsDesc, analoguesDesc };
 }
-function schedule(options={}){if(typeof invalidateBehaviorAndSensitivity==='function')invalidateBehaviorAndSensitivity();if(typeof invalidateQuoteComparison==='function')invalidateQuoteComparison();if(typeof invalidateAcHeatingComparison==='function')invalidateAcHeatingComparison();if(typeof invalidateGasCostsAudit==='function')invalidateGasCostsAudit();if(typeof invalidateDayhour==='function')invalidateDayhour();normalizeBatterySettings(settings);if(optimizerResult&&(optimizerFingerprint!==optimizerStateFingerprint()||(typeof shouldBlockOptimizerForAcDraft==='function'&&shouldBlockOptimizerForAcDraft())))markOptimizerStale();if(typeof studyRequestId!=='undefined'){studyRequestId++;studyFingerprint=null;}loanPending=true;acceptedInputFingerprint=null;invalidateLoanSolve();if($('saveLoanSimulation'))$('saveLoanSimulation').disabled=true;stageSharedChanges(options.replace);clearTimeout(timer);if(shouldBlockAcRecompute(settings)){flushSharedChangesWithoutEvaluation();return;}$('status').textContent='Inputs changed…';timer=setTimeout(()=>recompute(options),450);if(candidates)renderCandidates();markBatterySizingStale();markSolarSizingStale();}
+function schedule(options={}){if(typeof invalidateBehaviorAndSensitivity==='function')invalidateBehaviorAndSensitivity();if(typeof invalidateQuoteComparison==='function')invalidateQuoteComparison();if(typeof invalidateAcHeatingComparison==='function')invalidateAcHeatingComparison();if(typeof invalidateGasCostsAudit==='function')invalidateGasCostsAudit();if(typeof invalidateDayhour==='function')invalidateDayhour();normalizeBatterySettings(settings);if(optimizerResult&&(optimizerFingerprint!==optimizerStateFingerprint()||(typeof shouldBlockOptimizerForAcDraft==='function'&&shouldBlockOptimizerForAcDraft())))markOptimizerStale();if(typeof studyRequestId!=='undefined'){studyRequestId++;studyFingerprint=null;}loanPending=true;acceptedInputFingerprint=null;invalidateLoanSolve();if($('saveLoanSimulation'))$('saveLoanSimulation').disabled=true;stageSharedChanges(options.replace);clearTimeout(timer);if(shouldBlockAcRecompute(settings)||shouldBlockRoofRecompute(settings)){const roofErr=getRoofValidationError(settings);if(roofErr){if($('status'))$('status').textContent='Check inputs: roof capacity exceeded';showRoofValidationError(roofErr);}flushSharedChangesWithoutEvaluation();return;}$('status').textContent='Inputs changed…';timer=setTimeout(()=>recompute(options),450);if(candidates)renderCandidates();markBatterySizingStale();markSolarSizingStale();}
 async function recompute({sync=true,replace=false}={}){
  loanPending=true;acceptedInputFingerprint=null;invalidateLoanSolve();if($('saveLoanSimulation'))$('saveLoanSimulation').disabled=true;
  markBatterySizingStale();
@@ -5485,16 +5858,29 @@ async function recompute({sync=true,replace=false}={}){
  if(typeof invalidateDayhour==='function')invalidateDayhour();
  if(sync)stageSharedChanges(replace);
  const id=++requestId;
- if(shouldBlockAcRecompute(settings)){if(sync&&sharedSync?.pending())try{await sharedSync.flush();}catch(_){}return;}
+ if(shouldBlockAcRecompute(settings)||shouldBlockRoofRecompute(settings)){
+  const roofErr=getRoofValidationError(settings);
+  if(roofErr){
+   if($('status'))$('status').textContent='Check inputs: roof capacity exceeded';
+   showRoofValidationError(roofErr);
+  }
+  if(sync&&sharedSync?.pending())try{await sharedSync.flush();}catch(_){}
+  return;
+ }
  try{
   $('status').textContent='Computing…';
+  const sysTitle=$('systemTitle');
+  if(sysTitle){
+   sysTitle.setAttribute?.('aria-busy','true');
+   sysTitle.innerHTML='<span class="progress-spinner" aria-hidden="true"></span> Calculating…';
+  }
   if(sync&&sharedSync)await sharedSync.flush();
-  if(id!==requestId||shouldBlockAcRecompute(settings))return;
+  if(id!==requestId||shouldBlockAcRecompute(settings)||shouldBlockRoofRecompute(settings))return;
   normalizeBatterySettings(settings);const inputSnapshot=deepClone(settings);delete inputSnapshot.hasItemized;cleanSettingsForBackend(inputSnapshot);const quoteSnapshot=deepClone(quote),fingerprint=inputFingerprint(settings,quoteSnapshot);
-  const q=await api('/api/evaluate',{settings:inputSnapshot,quote:quoteSnapshot});if(id!==requestId||shouldBlockAcRecompute(settings))return;
+  const q=await api('/api/evaluate',{settings:inputSnapshot,quote:quoteSnapshot});if(id!==requestId||shouldBlockAcRecompute(settings)||shouldBlockRoofRecompute(settings))return;
   current=q;loanPending=false;acceptedInputFingerprint=fingerprint;if(typeof acceptAcHeatingComparison==='function')acceptAcHeatingComparison(q?.result||q);if(typeof acceptGasCostsAudit==='function')acceptGasCostsAudit(q?.result||q);if(typeof acceptDayhour==='function')acceptDayhour(q?.result||q);if(typeof acceptSummarySensitivity==='function')acceptSummarySensitivity(q?.result||q);render();if(!$('weatherYear').options.length)setupDayhour();else refreshDayhour();
   $('error').hidden=true;$('status').textContent='Scenario updated';$('latency').textContent=`Python computation ${nf(q.compute_seconds,2)} s`;if(typeof solarAppliedMessage!=='undefined'&&solarAppliedMessage&&$('solarApplyStatus'))$('solarApplyStatus').textContent=solarAppliedMessage.replace('Recalculating scenario…','Scenario updated.');
- }catch(e){if(id===requestId&&!shouldBlockAcRecompute(settings)){loanPending=true;if($('saveLoanSimulation'))$('saveLoanSimulation').disabled=true;showError(e);$('status').textContent='Check inputs';}}
+ }catch(e){if(id===requestId&&!shouldBlockAcRecompute(settings)&&!shouldBlockRoofRecompute(settings)){loanPending=true;if($('saveLoanSimulation'))$('saveLoanSimulation').disabled=true;const sysTitle=$('systemTitle');if(sysTitle){sysTitle.removeAttribute?.('aria-busy');if(sysTitle.textContent.includes('Calculating'))sysTitle.textContent='Calculation failed';}if($('hpCardsEl')&&$('hpCardsEl').textContent.includes('Calculating')){$('hpCardsEl').textContent='';const failedCard=document.createElement('div');failedCard.className='card';const lbl=document.createElement('div');lbl.className='label';lbl.textContent='Hourly dispatch';failedCard.appendChild(lbl);const val=document.createElement('div');val.className='value bad';val.textContent='Failed';failedCard.appendChild(val);const sm=document.createElement('small');sm.textContent='Review calculation error and inputs';failedCard.appendChild(sm);$('hpCardsEl').appendChild(failedCard);}$('status').textContent='Calculation failed';showError(e);}}
 }
 function metricCard(label,r,type,extra='',featured=false,cardId=null){
  let valStr='—',rangeStr='';
@@ -5543,7 +5929,7 @@ function packagePaybackCards(result){
  const f=result.finance,packageLabel='Whole-house package',simple=f.whole_package.simple_payback,discounted=f.whole_package.discounted_payback;
  return metricCard(`${packageLabel.toUpperCase()} PAYBACK`,simple,'years',`${nf(simple?.recovered_weather_years??0)} weather cases recover · includes conversion cost and avoided historic gas/electric bills`)+metricCard(`DISCOUNTED ${packageLabel.toUpperCase()} PAYBACK`,discounted,'years',`${nf(discounted?.recovered_weather_years??0)} weather cases recover · ${fmt(f.nominal_discount_rate,'pct')} nominal discount rate`);
 }
-function render(){if(typeof activeResultProfile!=='undefined'&&activeResultProfile){const h=$('profileResultHeader');if(h)h.innerHTML=renderProfileDisclosures(current._presentation);activeResultJob=current._ownedJob||null;for(const id of ['ownedReportHtml','ownedReportMarkdown','ownedReportCsv'])if($(id))$(id).disabled=!activeResultJob;const main=document.querySelector('main');if(main)main.hidden=false;}const r=current.result,m=r.metrics,f=r.finance,en=r.energy;
+function render(){if(typeof activeResultProfile!=='undefined'&&activeResultProfile){const h=$('profileResultHeader');if(h)h.innerHTML=renderProfileDisclosures(current._presentation);const ha=$('profileResultHeaderAssumptions');if(ha)ha.innerHTML=renderProfileDisclosures(current._presentation);activeResultJob=current._ownedJob||null;for(const id of ['ownedReportHtml','ownedReportMarkdown','ownedReportCsv'])if($(id))$(id).disabled=!activeResultJob;const main=document.querySelector('main');if(main)main.hidden=false;updateActionableWarnings();}const r=current.result,m=r.metrics,f=r.finance,en=r.energy;
  const meanWeatherOption=$('weatherRepresentative')?.querySelector?.('option[value="mean"]');
  if(meanWeatherOption)meanWeatherOption.textContent=`${getWeatherEnsembleMeta(r).count || 'Historical'}-year arithmetic mean · P10–P90 spread`;
  const subEl=$('systemSubtitle');
@@ -5824,6 +6210,7 @@ function renderVerdictStrip(r){
  const verdictSentenceText=`${verdictLabel}: ${npvFmt} NPV, ${weatherSummary}, ${activePbStr} discounted cash recovery ${activeBasisName} (${otherPbStr} ${otherBasisName}).`;
  const sysTitle = $('systemTitle');
  if(sysTitle){
+  sysTitle.removeAttribute?.('aria-busy');
   sysTitle.textContent = verdictSentenceText;
  }
 
@@ -5874,7 +6261,7 @@ let ledgerStatusFilter=null;
 function filterLedgerUnconfirmed(){
  ledgerStatusFilter='unconfirmed';
  if(current?.result)renderLedger(current.result);
- const target=$('ledger')||$('installerChecklistArticle');
+ const target=$('ledger');
  if(target&&typeof target.scrollIntoView==='function')target.scrollIntoView({behavior:'smooth'});
 }
 function resetLedgerFilter(){
@@ -6266,12 +6653,15 @@ function updateSummarySensitivityButtonState(){
 
  if(summarySensitivityInFlight){
   btn.disabled=true;
+  btn.setAttribute?.('aria-busy','true');
   btn.textContent='Calculating…';
+  btn.innerHTML='<span class="progress-spinner" aria-hidden="true"></span> Calculating…';
   btn.classList.remove('highlight');
   btn.classList.remove('muted-btn');
   if(badge)badge.style.display='none';
   return;
  }
+ btn.removeAttribute?.('aria-busy');
 
  const isMatching=Boolean(!summarySensitivityFailed&&summarySensitivityCache&&isSummarySensitivityMatching(summarySensitivityCache,summarySensitivityKey));
  if(isMatching){
@@ -6403,7 +6793,7 @@ function displaySummarySensitivitySkeleton(el, statusText='Evaluating…'){
     </div>
     <div class="tornado-val neg">—</div>
     <div class="tornado-chart-cell">
-      <div class="tornado-not-eval">${esc(statusText)}</div>
+      <div class="tornado-not-eval" role="status" aria-live="polite"><span class="progress-spinner" aria-hidden="true"></span> <span>${esc(statusText)}</span></div>
     </div>
     <div class="tornado-val pos">—</div>
     <div class="tornado-impact">
@@ -6414,7 +6804,7 @@ function displaySummarySensitivitySkeleton(el, statusText='Evaluating…'){
 
  el.innerHTML=`
   <div class="summary-tornado-card skeleton-card">
-    <div class="stale-badge-strip skeleton-strip"><span>Sensitivity analysis pending · Evaluating ΔNPV across key drivers…</span></div>
+    <div class="stale-badge-strip skeleton-strip" role="status" aria-live="polite" aria-busy="true"><span class="progress-spinner" aria-hidden="true"></span><span>Sensitivity analysis pending · Evaluating ΔNPV across key drivers…</span></div>
     <div class="tornado-header">
       <span class="tornado-col-driver">DRIVER</span>
       <span class="tornado-col-evidence">EVIDENCE</span>
@@ -6729,7 +7119,7 @@ function displaySummarySensitivity(data,isStale=undefined){
  const escParsed=parseDriverEndpoints(escRate,`${fmt(escRate?.minus_1_pct?.rate,'pct')}/yr real escalation`,`${fmt(escRate?.plus_1_pct?.rate,'pct')}/yr real escalation`,escRate?.base?.rate!=null?`Active escalation (${fmt(escRate.base.rate,'pct')}/yr)`:'Active price trajectory');
  const expLvlParsed=parseDriverEndpoints(expLvl,`${fmt(expLvl?.minus_20_pct?.price,'lcoe')}/kWh market price`,`${fmt(expLvl?.plus_20_pct?.price,'lcoe')}/kWh market price`,expLvl?.base?.price!=null?`Active export (${fmt(expLvl.base.price,'lcoe')}/kWh)`:'Active export commodity rate');
  const loanParsed=parseDriverEndpoints(lApr,`${lApr?.minus_2_pct?.rate!=null?(Number(lApr.minus_2_pct.rate)*100).toFixed(2)+'%':'—'} TAN`,`${lApr?.plus_2_pct?.rate!=null?(Number(lApr.plus_2_pct.rate)*100).toFixed(2)+'%':'—'} TAN`,lApr?.base?.rate!=null?`Active TAN (${(Number(lApr.base.rate)*100).toFixed(2)}%)`:'Active financing terms');
- const pvYldParsed=parseDriverEndpoints(pvYld,`Effective module output ${pvYld?.minus_10_pct?.watts??'—'} W`, `Effective module output ${pvYld?.plus_10_pct?.watts??'—'} W`, 'PV output perturbation · installed cost held fixed');
+ const pvYldParsed=parseDriverEndpoints(pvYld,'PV production −10%', 'PV production +10%', 'PV production perturbation · installed capacity and cost held fixed');
  const taxDedParsed=parseDriverEndpoints(taxDed,'No usable IRPEF capacity','Full IRPEF capacity',`Annual IRPEF capacity ${fmt(taxDed?.base?.capacity,'eur')}`);
 
  const uncertainDrivers=[
@@ -8141,7 +8531,12 @@ function renderPvClippingBreakdown(data){
   ?'Hourly averages by month in fixed UTC+1 standard time (civil DST labels shift during summer). PV clipping shows residual curtailment after modeled battery charging and inverter-limited AC output. DC-coupled recovery uses an AC-equivalent PV profile; manufacturer-specific simultaneous-output behavior is not represented.'
   :'Hourly averages by month in fixed UTC+1 standard time (civil DST labels shift during summer). PV clipping shows modeled PV curtailed at the inverter AC limit before battery charging.';
  if(!annual||!Array.isArray(months)||months.length!==12){
-  target.innerHTML='<p class="muted">Monthly inverter clipping detail is pending with the dispatch simulation.</p>';
+  const isRunning = typeof pendingBehaviorRequests !== 'undefined' && pendingBehaviorRequests.size > 0;
+  if(isRunning){
+   target.innerHTML='<p class="muted" role="status" aria-live="polite" aria-busy="true" style="display:inline-flex;align-items:center;gap:8px;"><span class="progress-spinner" aria-hidden="true"></span> Monthly inverter clipping detail is pending with the dispatch simulation.</p>';
+  } else {
+   target.innerHTML='<p class="muted">Monthly inverter clipping detail is pending with the dispatch simulation.</p>';
+  }
   return;
  }
  const fmtKwh=v=>Number(v??0).toLocaleString('en-IE',{minimumFractionDigits:1,maximumFractionDigits:1});
@@ -8306,18 +8701,23 @@ let activeHeatmapMetric='import';
 let behaviorToken=0;
 const pendingBehaviorRequests=new Map();
 
-function renderBehaviorPending(){
- if(typeof resetSwitchHourOptimizer==='function')resetSwitchHourOptimizer('Waiting for dispatch simulation.');
+function renderBehaviorPending(isQueued = false){
+ const isRunning = isQueued || (Boolean(pendingBehaviorRequests && pendingBehaviorRequests.size > 0));
+ if(typeof resetSwitchHourOptimizer==='function')resetSwitchHourOptimizer(isRunning ? 'Waiting for dispatch simulation…' : 'Waiting for dispatch simulation.');
  if(typeof document!=='undefined')document.querySelectorAll?.('#pvClippingTable [data-schedule-month]')?.forEach?.(b=>b.disabled=true);
  const titleMetaEl=$('annualFlowMeta');
  if(titleMetaEl) titleMetaEl.innerHTML='';
  const dayChart=$('typicalDayChart');
  if(dayChart){
-  dayChart.innerHTML='<div class="chart-pending" role="status" style="display:flex;align-items:center;justify-content:center;height:240px;color:#62756e;"><p>Simulation pending · Dispatch chart will update when calculation completes.</p></div>';
+  dayChart.innerHTML=isRunning
+   ? '<div class="chart-pending" role="status" aria-busy="true" style="display:flex;align-items:center;justify-content:center;gap:8px;height:240px;color:#62756e;"><span class="progress-spinner" aria-hidden="true"></span><p style="margin:0;">Simulation pending · Dispatch chart will update when calculation completes.</p></div>'
+   : '<div class="chart-pending" role="status" style="display:flex;align-items:center;justify-content:center;height:240px;color:#62756e;"><p style="margin:0;">Simulation pending · Dispatch chart will update when calculation completes.</p></div>';
  }
  const heatmap=$('monthHourHeatmap');
  if(heatmap){
-  heatmap.innerHTML='<div class="chart-pending" role="status" style="display:flex;align-items:center;justify-content:center;height:240px;color:#62756e;"><p>Simulation pending · Heatmap will update when calculation completes.</p></div>';
+  heatmap.innerHTML=isRunning
+   ? '<div class="chart-pending" role="status" aria-busy="true" style="display:flex;align-items:center;justify-content:center;gap:8px;height:240px;color:#62756e;"><span class="progress-spinner" aria-hidden="true"></span><p style="margin:0;">Simulation pending · Heatmap will update when calculation completes.</p></div>'
+   : '<div class="chart-pending" role="status" style="display:flex;align-items:center;justify-content:center;height:240px;color:#62756e;"><p style="margin:0;">Simulation pending · Heatmap will update when calculation completes.</p></div>';
  }
 }
 
@@ -8326,6 +8726,10 @@ function renderBehaviorError(message){
  if(monthly)monthly.innerHTML=`<p class="bad" role="alert">Could not load monthly balance: ${esc(message)}</p>`;
  if(typeof resetSwitchHourOptimizer==='function')resetSwitchHourOptimizer('Schedule comparison unavailable: '+message);
  if(typeof document!=='undefined')document.querySelectorAll?.('#pvClippingTable [data-schedule-month]')?.forEach?.(b=>b.disabled=true);
+ const clippingTable=$('pvClippingTable');
+ if(clippingTable){
+  clippingTable.innerHTML=`<p class="bad" role="alert">Could not load monthly clipping: ${esc(message)}</p>`;
+ }
  const titleMetaEl=$('annualFlowMeta');
  if(titleMetaEl) titleMetaEl.innerHTML='';
  const flowEl=$('annualEnergyFlowVisual');
@@ -9004,22 +9408,27 @@ async function refreshBehaviorViews(){
  const token=++behaviorToken;
  const dispatchedFp=currentFp;
  const dispatchedScen=scen;
- renderAnnualEnergyFlow();
- renderHeatPumpReport(current?.result);
- renderAcHeatingComparison(current?.result);
- renderBehaviorPending();
- let reqPromise;
  const pendingKey=key+'_'+JSON.stringify(normSettings);
+ let reqPromise;
  try{
   reqPromise=pendingBehaviorRequests.get(pendingKey);
   if(!reqPromise){
-   reqPromise=api('/api/behavior-matrix',{
-    settings:normSettings,
-    scenario:scen,
-    representative:'median'
-   });
-   pendingBehaviorRequests.set(pendingKey,reqPromise);
+   try{
+    reqPromise=api('/api/behavior-matrix',{
+     settings:normSettings,
+     scenario:scen,
+     representative:'median'
+    });
+    pendingBehaviorRequests.set(pendingKey,reqPromise);
+   }catch(syncErr){
+    pendingBehaviorRequests.delete(pendingKey);
+    throw syncErr;
+   }
   }
+  renderAnnualEnergyFlow();
+  renderHeatPumpReport(current?.result);
+  renderAcHeatingComparison(current?.result);
+  renderBehaviorPending();
   const data=await reqPromise;
   if(token!==behaviorToken)return;
   if(dispatchedFp!==inputFingerprint(settings,quote))return;
@@ -11412,6 +11821,7 @@ function renderSaved(){
 const textFields=['installer','module_model','inverter_model','battery_model','datasheet_urls','payment_schedule','layout_setbacks','warranties','guaranteed_yield_terms','monitoring_fees','inverter_replacement_terms','financing_terms','degradation_curves','power_curves'];
 function syncQuotePricingDescription(){
  const help=$('quotePriceBasisHelp'),qTotal=$('quoteTotal');
+ if(!help&&!qTotal)return;
  const itemizedActive=isItemizedPricingActive();
  const hasItemizedLines=hasPopulatedItemizedOffer(quote, current?.itemized_total_eur);
  const hasManualQuote=settings.quote_total!=null;
@@ -11435,9 +11845,9 @@ function syncQuotePricingDescription(){
   }
  }
 }
-function buildQuoteFields(){$('quoteFields').innerHTML=`<label>Price basis<select data-quote="price_basis" id="quotePriceBasis"><option value="itemized">Itemized contractor quote (lines determine total cost)</option><option value="modeled">Modeled sizing / manual quote (lines kept as reference only)</option></select><small id="quotePriceBasisHelp" class="muted"></small></label>`+textFields.map(k=>`<label>${title(k)}<textarea data-quote="${k}" placeholder="Not provided"></textarea></label>`).join('')+`<label>Battery nameplate (kWh)<input type="number" data-quote="battery_nameplate_kwh" step="any" placeholder="Not provided"></label><label>Usable DoD (fraction, 0–1)<input type="number" data-quote="battery_dod" step="any" min="0" max="1" placeholder="Not provided"></label>`;$('quoteFields').insertAdjacentHTML('beforeend',['roundtrip_efficiency','continuous_charge_kw','continuous_discharge_kw'].map(k=>`<label>${title(k)}<input type="number" data-quote="${k}" step="any" placeholder="Not provided"></label>`).join(''));document.querySelectorAll('[data-quote]').forEach(el=>{const onMod=()=>{quote[el.dataset.quote]=el.value;schedule();};el.oninput=onMod;el.onchange=onMod;});syncQuotePricingDescription();}
+function buildQuoteFields(){const qf=$('quoteFields');if(!qf)return;qf.innerHTML=`<label>Price basis<select data-quote="price_basis" id="quotePriceBasis"><option value="itemized">Itemized contractor quote (lines determine total cost)</option><option value="modeled">Modeled sizing / manual quote (lines kept as reference only)</option></select><small id="quotePriceBasisHelp" class="muted"></small></label>`+textFields.map(k=>`<label>${title(k)}<textarea data-quote="${k}" placeholder="Not provided"></textarea></label>`).join('')+`<label>Battery nameplate (kWh)<input type="number" data-quote="battery_nameplate_kwh" step="any" placeholder="Not provided"></label><label>Usable DoD (fraction, 0–1)<input type="number" data-quote="battery_dod" step="any" min="0" max="1" placeholder="Not provided"></label>`;qf.insertAdjacentHTML('beforeend',['roundtrip_efficiency','continuous_charge_kw','continuous_discharge_kw'].map(k=>`<label>${title(k)}<input type="number" data-quote="${k}" step="any" placeholder="Not provided"></label>`).join(''));document.querySelectorAll('[data-quote]').forEach(el=>{const onMod=()=>{quote[el.dataset.quote]=el.value;schedule();};el.oninput=onMod;el.onchange=onMod;});syncQuotePricingDescription();}
 function syncQuoteFields(){document.querySelectorAll('[data-quote]').forEach(el=>{const value=String(quote[el.dataset.quote]??(el.tagName==='SELECT'?(el.options[0]?.value??''):''));if(el.value!==value)el.value=value;});syncQuotePricingDescription();}
-function renderLines(){$('quoteLines').innerHTML=(quote?.line_items||[]).map((row,i)=>`<div class="quote-line"><input data-line="${i}" data-field="description" value="${esc(row.description||'')}" placeholder="Description" aria-label="Line description"><input data-line="${i}" data-field="quantity" type="number" min="0" value="${row.quantity??1}" aria-label="Quantity"><input data-line="${i}" data-field="net_eur" type="number" min="0" step="any" value="${row.net_eur??''}" placeholder="Net €" aria-label="Net euros"><input data-line="${i}" data-field="vat" type="number" min="0" max="1" step=".01" value="${row.vat??.1}" aria-label="VAT fraction"><button data-remove="${i}" aria-label="Remove line">×</button></div>`).join('');$('quoteLines').oninput=e=>{if(e.target.dataset.line===undefined)return;quote.line_items[Number(e.target.dataset.line)][e.target.dataset.field]=e.target.value;schedule();};$('quoteLines').onclick=e=>{if(e.target.dataset.remove===undefined)return;quote.line_items.splice(Number(e.target.dataset.remove),1);renderLines();schedule();};}
+function renderLines(){const ql=$('quoteLines');if(!ql)return;ql.innerHTML=(quote?.line_items||[]).map((row,i)=>`<div class="quote-line"><input data-line="${i}" data-field="description" value="${esc(row.description||'')}" placeholder="Description" aria-label="Line description"><input data-line="${i}" data-field="quantity" type="number" min="0" value="${row.quantity??1}" aria-label="Quantity"><input data-line="${i}" data-field="net_eur" type="number" min="0" step="any" value="${row.net_eur??''}" placeholder="Net €" aria-label="Net euros"><input data-line="${i}" data-field="vat" type="number" min="0" max="1" step=".01" value="${row.vat??.1}" aria-label="VAT fraction"><button data-remove="${i}" aria-label="Remove line">×</button></div>`).join('');ql.oninput=e=>{if(e.target.dataset.line===undefined)return;quote.line_items[Number(e.target.dataset.line)][e.target.dataset.field]=e.target.value;schedule();};ql.onclick=e=>{if(e.target.dataset.remove===undefined)return;quote.line_items.splice(Number(e.target.dataset.remove),1);renderLines();schedule();};}
 function csvSafeCell(value){const text=String(value??'');return /^[\s]*[=+@-]|^[\t\r\n]/.test(text)?"'"+text:text;}
 function download(data,name,type='application/json'){if(typeof activeResultProfile!=='undefined'&&activeResultProfile&&type==='text/csv')data='"Profile revision","'+csvSafeCell(householdClient.revision)+'"\n"Limitations","'+csvSafeCell((current?._presentation?.limitations||[]).join(' ')).replaceAll('"','""')+'"\n'+data;const url=URL.createObjectURL(new Blob([typeof data==='string'?data:JSON.stringify(data,null,2)],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 let comparisonToken=0;
@@ -11803,7 +12213,7 @@ function renderQuoteComparisonSheet(){
     :'<span class="muted">Usable: uncertified (DoD not specified)</span>')
   :'<span class="muted">No installer battery entered</span>';
 
- const benchCapexHtml=benchCapex!=null?fmt(benchCapex,'eur'):(comparisonError?'<span class="bad">Benchmark failed <button type="button" class="btn btn-sm" onclick="fetchQuoteComparison(null,null,null,null,true)">Retry</button></span>':'<span class="muted">Calculating benchmark…</span>');
+ const benchCapexHtml=benchCapex!=null?fmt(benchCapex,'eur'):(comparisonError?'<span class="bad">Benchmark failed <button type="button" class="btn btn-sm" onclick="fetchQuoteComparison(null,null,null,null,true)">Retry</button></span>':'<span class="muted" role="status"><span class="progress-spinner" aria-hidden="true"></span> Calculating benchmark…</span>');
  
  let offerCapexBreakdown='';
  if(hasManualOffer && !rawVat && manualOfferVal!=null && !itemizedActive){
@@ -11821,7 +12231,7 @@ function renderQuoteComparisonSheet(){
     :'<span class="muted">Pending comparison…</span>')
   :'<span class="muted">No economic offer comparison</span>';
 
- const benchUnitCostHtml=benchCostPerKwp!=null?`${fmt(benchCostPerKwp,'eur')} / kWp`:'<span class="muted">Calculating…</span>';
+ const benchUnitCostHtml=benchCostPerKwp!=null?`${fmt(benchCostPerKwp,'eur')} / kWp`:'<span class="muted" role="status"><span class="progress-spinner" aria-hidden="true"></span> Calculating…</span>';
  const offerUnitCostHtml=hasOffer&&offerCostPerKwp!=null?`${fmt(offerCostPerKwp,'eur')} / kWp`:'—';
  const unitCostEvalHtml=hasOffer
   ?(benchCostPerKwp!=null&&offerCostPerKwp!=null
@@ -11837,13 +12247,13 @@ function renderQuoteComparisonSheet(){
    ?`<strong>${fmt(benchNpvMean,'eur')}</strong><br><small class="muted">Weather range ${range(benchNpv,'eur')}</small>`
    :(comparisonError
      ?`<span class="bad">Benchmark failed <button type="button" class="btn btn-sm" onclick="fetchQuoteComparison(null,null,null,null,true)">Retry</button></span>`
-     :'<span class="muted">Calculating benchmark…</span>');
+     :'<span class="muted" role="status"><span class="progress-spinner" aria-hidden="true"></span> Calculating benchmark…</span>');
   const offerNpvHtml=hasOffer
    ?(offerNpv
      ?`<strong>${fmt(offerNpvMean,'eur')}</strong><br><small class="muted">Weather range ${range(offerNpv,'eur')}</small>`
      :(comparisonError
        ?`<span class="bad">Offer eval failed <button type="button" class="btn btn-sm" onclick="fetchQuoteComparison(null,null,null,null,true)">Retry</button></span>`
-       :'<span class="muted">Evaluating offer economics…</span>'))
+       :'<span class="muted" role="status"><span class="progress-spinner" aria-hidden="true"></span> Evaluating offer economics…</span>'))
    :'—';
   const npvEvalHtml=hasOffer
    ?(benchNpv&&offerNpv
@@ -11861,13 +12271,13 @@ function renderQuoteComparisonSheet(){
    ?(benchPbVal!=null&&Number.isFinite(Number(benchPbVal))
      ?`<strong>${fmt(benchPbVal,'years')}</strong><br><small class="muted">Weather range ${range(benchPb,'years')}</small>`
      :`<strong>Not reached</strong><br><small class="muted">Weather range ${range(benchPb,'years')}</small>`)
-   :(comparisonError?'<span class="bad">Failed</span>':'<span class="muted">Calculating…</span>');
+   :(comparisonError?'<span class="bad">Failed</span>':'<span class="muted" role="status"><span class="progress-spinner" aria-hidden="true"></span> Calculating…</span>');
   const offerPbHtml=hasOffer
    ?(offerPb
      ?(offerPbVal!=null&&Number.isFinite(Number(offerPbVal))
        ?`<strong>${fmt(offerPbVal,'years')}</strong><br><small class="muted">Weather range ${range(offerPb,'years')}</small>`
        :`<strong>Not reached</strong><br><small class="muted">Weather range ${range(offerPb,'years')}</small>`)
-     :(comparisonError?'<span class="bad">Failed</span>':'<span class="muted">Evaluating…</span>'))
+     :(comparisonError?'<span class="bad">Failed</span>':'<span class="muted" role="status"><span class="progress-spinner" aria-hidden="true"></span> Evaluating…</span>'))
    :'—';
   const pbEvalHtml=hasOffer
    ?(benchPb&&offerPb
@@ -11952,6 +12362,7 @@ function renderQuoteComparisonSheet(){
 }
 
 function switchView(name){
+ if((name==='quote'||name==='contractor')&&!$('quote'))name='summary';
  document.querySelectorAll('.view').forEach(el=>el.hidden=el.id!==name);
  document.querySelectorAll('nav button').forEach(el=>{
   const isActive=el.dataset.view===name;
@@ -11982,7 +12393,7 @@ function switchView(name){
  }else if(name==='assumptions'&&r){
   renderLedger(r);
   updateAssumptionsBadge(r);
- }else if(name==='quote'){
+ }else if(name==='quote'&&$('quote')){
   renderLines();
   syncQuoteFields();
   syncQuotePricingDescription();
@@ -12251,14 +12662,14 @@ details.audit-detail summary{cursor:pointer;font-weight:600;font-size:11px;color
 function evidence(){const c=schema.calibration,a=schema.audit;const activeWeather=$('activeWeatherCoverage');if(activeWeather)activeWeather.textContent=`Active calculations: ${c.weather_count} weather years${getWeatherEnsembleMeta(a).rangeLabel?' ('+getWeatherEnsembleMeta(a).rangeLabel+')':''} · ${nf(c.hour_count,0)} UTC hourly slots.`;const inv=c.invoice;const invHeadline=inv?`Reconciled total ${fmt(inv.total_eur,'eur')} across ${nf(inv.kwh)} kWh billed sample (commodity ${fmt(inv.commodity_eur,'eur')}, regulated ${fmt(inv.regulated_eur,'eur')}, excise ${fmt(inv.excise_eur,'eur')}, fixed fees ${fmt(inv.fixed_eur,'eur')}, VAT ${fmt(inv.vat_eur,'eur')}). Verifies electric billing against audited utility invoice lines.<details class="technical-details-fold"><summary>Audit payload (raw JSON)</summary><pre><code>${esc(JSON.stringify(inv,null,2))}</code></pre></details>`:'Invoice calibration unavailable';$('calibration').innerHTML=table(['Check','Executed result'],[['Annual measured demand',nf(c.annual_kwh,3)+' kWh'],['Annual measured gas',nf(c.annual_gas_smc)+' Smc'],['Invoice regression',invHeadline],['Annual electricity run rate',fmt(c.annual_electric_bill_eur,'eur')],['Annual gas run rate (approx.)',fmt(c.annual_gas_runrate_eur,'eur')],['Calibrated 6 kWp benchmark',fmt(c.calibrated_6kwp_eur,'eur')],['Original supplied cost formula',fmt(c.original_cost_formula_6kwp_eur,'eur')],['Supplied capture price / factor route',fmt(c.provided_capture_eur_kwh,'lcoe')+' / '+fmt(c.base_times_capture_eur_kwh,'lcoe')]]);
  $('roofCheck').innerHTML=table(['Orientation','PVGIS beam-shaded kWh/kWp','All-light shaded','Google DC','Google AC bridge'],c.roofs.map(r=>[r.orientation,range(r.pvgis_beam_shaded),range(r.pvgis_all_light_shaded),r.google_dc_kwh_kwp==null?'Unavailable':nf(r.google_dc_kwh_kwp),r.google_ac_kwh_kwp==null?'Unavailable':nf(r.google_ac_kwh_kwp)]));
  $('dataNotes').innerHTML=[a.timezone,a.leap_policy,a.resolution,a.shade_method].map(x=>`<p>${esc(x)}</p>`).join('');
- const market=c.research.research_results.turnkey_market_benchmarks;$('market').innerHTML=table(['Supplied benchmark','Value'],[['6 kWp turnkey',fmt(market.pv_installed_benchmark_6kwp_total_eur,'eur')],['PV range',market.pv_installed_eur_kwp_range.map(v=>fmt(v,'eur')).join(' – ')+' / kWp'],['Battery range',market.lfp_battery_storage_eur_kwh_usable_range.map(v=>fmt(v,'eur')).join(' – ')+' / usable kWh']]);
+ const market=c.research.research_results.turnkey_market_benchmarks;if($('market'))$('market').innerHTML=table(['Supplied benchmark','Value'],[['6 kWp turnkey',fmt(market.pv_installed_benchmark_6kwp_total_eur,'eur')],['PV range',market.pv_installed_eur_kwp_range.map(v=>fmt(v,'eur')).join(' – ')+' / kWp'],['Battery range',market.lfp_battery_storage_eur_kwh_usable_range.map(v=>fmt(v,'eur')).join(' – ')+' / usable kWh']]);
  initMarketCurve();
 }
 function clearHouseholdView(){
  activeResultProfile=null;activeResultJob=null;
  if($('profileResultsPanel'))$('profileResultsPanel').hidden=true;
  if($('profileResultHeader'))$('profileResultHeader').textContent='';
- if(householdViewsOpened){householdViewsOpened=false;document.querySelectorAll('main, aside, nav, header .header-actions, header .header-center').forEach(node=>{node.hidden=true;});window.location.reload();return;}
+ if(householdViewsOpened){householdViewsOpened=false;}
  clearTimeout(timer);clearInterval(householdSyncInterval);householdSyncInterval=null;requestId++;candidateLoadId++;dayhourRequest++;
  if(sharedSync?.setScope)sharedSync.setScope(null);
  sharedSync=null;sharedUiReady=false;current=null;candidates=null;study=null;dayhourData=null;settings={};quote={line_items:[]};schema=null;
@@ -12286,16 +12697,52 @@ async function openHouseholdViews(){
  const fiscal=activeResultProfile?.fiscal.parameters,year=Number(settings.installation_year),horizon=Number(settings.horizon_years);
  const needsEligibility=(fiscal?.deduction_rate>0&&!settings.deduction_eligible_confirmed)||(settings.pmg_election&&!settings.pmg_eligible_confirmed);
  const needsProjection=fiscal&&!settings.unsupported_fiscal_year_acknowledged&&(String(year+1)+'-01-01'<fiscal.effective_from||String(year+horizon)+'-12-31'>=fiscal.effective_to);
+ updateActionableWarnings();
  if(needsEligibility||needsProjection){$('status').textContent='Confirm fiscal eligibility/projection before calculating.';return;}
  await recompute({replace:true});
 }
 async function init(){try{
  initTheme();
+ const sysTitle=$('systemTitle');
+ if(sysTitle&&sysTitle.textContent.includes('Calculating')){
+  sysTitle.setAttribute?.('aria-busy','true');
+  sysTitle.innerHTML='<span class="progress-spinner" aria-hidden="true"></span> Calculating…';
+ }
  if(typeof Onboarding!=='undefined'&&$('householdOnboarding')){
-  householdClient=new HouseholdClient({onClear:clearHouseholdView,onStatus:message=>$('syncStatus').textContent=message});
+  householdClient=new HouseholdClient({storage:localStorage,onClear:clearHouseholdView,onStatus:message=>$('syncStatus').textContent=message});
   clearHouseholdView();
   householdSetup=Onboarding.mount({root:$('householdOnboarding'),client:householdClient,onReady:openHouseholdViews,onClear:clearHouseholdView});
-  const setupButton=document.createElement('button');setupButton.type='button';setupButton.textContent='Household profiles';setupButton.onclick=()=>{householdClient.invalidate();clearHouseholdView();};document.querySelector('header')?.appendChild(setupButton);
+  const setupButton=document.createElement('button');
+  setupButton.type='button';
+  setupButton.id='householdProfilesBtn';
+  setupButton.className='button household-profiles-btn';
+  setupButton.textContent='Household profiles';
+  setupButton.title='Household profile setup (scroll to profile selector)';
+  setupButton.setAttribute('aria-label','Household profiles: navigate to profile selector');
+  setupButton.onclick=async()=>{
+   const onboardingEl=$('householdOnboarding');
+   const inOnboarding=onboardingEl&&!onboardingEl.hidden;
+   if(!inOnboarding){
+    householdClient.invalidate();
+    clearHouseholdView();
+    if(householdSetup?.refresh)await householdSetup.refresh({hydrate:true});
+   }
+   const target=document.getElementById('householdProfileSelector')||onboardingEl?.querySelector('select[name="profile"]')||document.getElementById('profileSetupGroup');
+   const group=document.getElementById('profileSetupGroup');
+   if(target){
+    target.scrollIntoView({behavior:'smooth',block:'center'});
+    try{target.focus({preventScroll:true});}catch(_){target.focus();}
+    target.classList.remove('profile-selector-highlight');
+    void target.offsetWidth;
+    target.classList.add('profile-selector-highlight');
+   }
+   if(group&&group!==target){
+    group.classList.remove('profile-selector-highlight');
+    void group.offsetWidth;
+    group.classList.add('profile-selector-highlight');
+   }
+  };
+  document.querySelector('header')?.appendChild(setupButton);
   await householdSetup.refresh();return;
  }
  restoreSummaryPrefs();
@@ -12335,7 +12782,7 @@ $('save').onclick=saveCurrentScenario;
 $('clearSaved').onclick=()=>{saved=[];localStorage.removeItem('pv-lab-scenarios-v1');renderSaved();};
 $('download').onclick=()=>{const reason=getExportBlockReason('export scenario');if(reason){showError(new Error(reason));return;}const exportSettings=deepClone(current.result.settings||settings);delete exportSettings.hasItemized;if(typeof cleanSettingsForBackend==='function'){cleanSettingsForBackend(exportSettings);}else{for(const k of LEGACY_HEATING_KEYS)delete exportSettings[k];}const payload={...((typeof activeResultProfile!=='undefined'&&activeResultProfile)?{presentation:current._presentation}:{}),format:'pv-lab-pv-v1',settings:exportSettings,quote:deepClone(quote),result:deepClone(current.result)};download(payload,'pv-lab-scenario.json');};
 $('loadFile').onchange=async e=>{try{const file=e.target?.files?.[0];if(!file)return;const text=await file.text();const obj=JSON.parse(text);if(!obj||typeof obj!=='object'||Array.isArray(obj))throw new Error('Import file must contain a scenario object.');if(obj.settings!==undefined){if(!obj.settings||typeof obj.settings!=='object'||Array.isArray(obj.settings))throw new Error('Import file settings must be an object.');if(obj.settings.heating_schedule_mode!==undefined&&!['scheduled','continuous'].includes(obj.settings.heating_schedule_mode))throw new Error(`Invalid heating_schedule_mode: ${obj.settings.heating_schedule_mode}. Must be 'scheduled' or 'continuous'.`);if(obj.settings.ac_heating_additional_demand_pct!==undefined){const rawPct=obj.settings.ac_heating_additional_demand_pct;if(typeof rawPct!=='number'||!Number.isFinite(rawPct)||rawPct<0){throw new Error('Invalid ac_heating_additional_demand_pct: must be a non-negative finite number.');}}}if(typeof activeResultProfile!=='undefined'&&activeResultProfile){if(obj.presentation?.profile_id!==householdClient.profileId||obj.presentation?.input_revision!==householdClient.revision)throw Error('Imported configuration belongs to a different profile revision.');profileCounts({settings:obj.settings});}const nextSettings=prepareScenarioSettings(obj.settings,false);if(!Object.hasOwn(obj.settings||{},'battery_mixed_sizes')){nextSettings.battery_mixed_sizes=false;nextSettings.battery_secondary_modules=0;}const batteryDirection=Object.hasOwn(obj.settings||{},'battery_kwh')?'battery_kwh':(['battery_modules','battery_module_kwh'].some(k=>Object.hasOwn(obj.settings||{},k))?'battery_modules':'battery_kwh');normalizeBatterySettings(nextSettings,batteryDirection);const nextQuote=deepClone(obj.quote||{line_items:[]});nextQuote.line_items ||= [];clearTimeout(timer);discardAcDrafts();settings=nextSettings;quote=nextQuote;renderControls();renderLines();syncQuoteFields();if(typeof syncSolarBatteryStep==='function')syncSolarBatteryStep();await recompute({replace:true});}catch(ex){showError(ex);}};
-$('cashFlowBasis').onchange=()=>renderCashChart();$('onepage').onclick=onePage;$('addLine').onclick=()=>{quote.line_items.push({description:'',quantity:1,net_eur:null,vat:.1});renderLines();schedule();};
+$('cashFlowBasis').onchange=()=>renderCashChart();$('onepage').onclick=onePage;if($('addLine'))$('addLine').onclick=()=>{quote.line_items.push({description:'',quantity:1,net_eur:null,vat:.1});renderLines();schedule();};
 $('loanModeControl').onchange=e=>{settings.loan_mode=e.target.value;syncLoanControls();schedule();};
 const loanInputMap={loanAmountControl:['loan_amount',1,'amount'],loanFractionControl:['loan_fraction',.01,'fraction'],loanAprControl:['loan_apr',.01],loanYearsControl:['loan_years',1],loanFeesControl:['loan_upfront_fees_or_tax',1],loanMaxMonthlyPaymentControl:['loan_max_monthly_payment',1,null,true],loanInflationControl:['inflation',.01],loanDiscountControl:['real_discount_rate',.01]};
 Object.entries(loanInputMap).forEach(([id,[key,scale,mode,nullable]])=>{const el=$(id);if(!el)return;el.oninput=e=>{if(!e.target.validity.valid||e.target.value===''&&!nullable){loanPending=true;acceptedInputFingerprint=null;invalidateLoanSolve();if($('saveLoanSimulation'))$('saveLoanSimulation').disabled=true;if($('loanSaveStatus'))$('loanSaveStatus').textContent='Enter a valid value to calculate and save this simulation.';return;}if(mode)settings.loan_mode=mode;settings[key]=e.target.value===''?null:Number(e.target.value)*scale;if(mode==='amount')settings.loan_amount=settings[key];syncLoanControls();if($('loanSaveStatus'))$('loanSaveStatus').textContent='';schedule();};});
@@ -12345,8 +12792,8 @@ $('loanScopeControl').onchange=e=>{editSetting('loan_include_electrification',e.
 $('loanScopeControl').oninput=$('loanScopeControl').onchange;
 $('solveLoanAmount').onclick=async()=>{if(loanPending||!loanControlsValid()||acceptedInputFingerprint!==inputFingerprint()||!current)return;const token=++loanSolveToken,fingerprint=inputFingerprint(),button=$('solveLoanAmount');button.disabled=true;$('loanSolveStatus').textContent='Searching feasible loan amounts…';$('loanSolveResult').textContent='';try{const result=await api('/api/loan-solve',{settings,quote});if(token!==loanSolveToken||fingerprint!==inputFingerprint())return;loanSolveResult=result;if(result.status==='OPTIMAL'){const year20=result.median_year20_discounted_impact_eur==null?'Not simulated (horizon '+nf(result.horizon_years)+' y)':(result.median_year20_discounted_impact_eur>=0?'+':'')+fmt(result.median_year20_discounted_impact_eur,'eur');const recoveryNote=result.median_discounted_recovery_years===0?'0 y means median paths start with no personal outlay and stay at or above break-even through the horizon; repayments still occur.':'';$('loanSolveStatus').textContent='Best recovery found across '+nf(result.weather_count)+' weather paths.';$('loanSolveResult').innerHTML='<p><strong>Optimal loan amount: '+fmt(result.optimal_amount_eur,'eur2')+'</strong><br>Scheduled monthly payment: '+fmt(result.optimal_monthly_payment_eur,'eur2')+'<br>Monthly payment limit: '+(result.max_monthly_payment_eur==null?'No limit':fmt(result.max_monthly_payment_eur,'eur2'))+'<br>Median discounted recovery: '+fmt(result.median_discounted_recovery_years,'years')+'<br>Median initial cash: '+fmt(result.median_initial_cash_eur,'eur')+'<br>At year 20 · discounted impact: '+year20+'<br>Eligible cap: '+fmt(result.eligible_cap_eur,'eur2')+'<br>Maximum loan within payment limit: '+fmt(result.affordable_search_cap_eur,'eur2')+'</p>'+(recoveryNote?'<p class="muted">'+recoveryNote+'</p>':'')+'<p class="muted">'+esc(result.definition)+' Resolution: €1.</p><button id="applyOptimalLoan" type="button">Apply optimal loan amount</button>';$('applyOptimalLoan').onclick=()=>{settings.loan_mode='amount';settings.loan_amount=result.optimal_amount_eur;settings.loan_fraction=0;syncLoanControls();schedule();$('loanSolveStatus').textContent='Optimal amount applied. Recalculating current scenario…';};}else{const constrained=result.affordable_search_cap_eur+1e-8<result.eligible_cap_eur;$('loanSolveStatus').textContent='No feasible amount reaches persistent discounted recovery in the simulation horizon.';$('loanSolveResult').innerHTML='<p class="muted">'+(constrained?'No recovery was found through the maximum loan within the payment limit of '+fmt(result.affordable_search_cap_eur,'eur2')+' (eligible cap '+fmt(result.eligible_cap_eur,'eur2')+').':'No recovery was found through the full eligible cap of '+fmt(result.eligible_cap_eur,'eur2')+'.')+' No amount was applied.</p><p class="muted">'+esc(result.definition)+'</p>';}}catch(error){if(token===loanSolveToken){$('loanSolveStatus').textContent='Loan search failed: '+(error.message||error);}}finally{if(token===loanSolveToken)button.disabled=loanPending||!loanControlsValid()||acceptedInputFingerprint!==inputFingerprint();}};
 $('saveLoanSimulation').onclick=()=>{const name=$('loanSaveName').value.trim();if(!name){$('loanSaveName').focus();$('loanSaveStatus').textContent='Enter a name for this simulation.';return;}if(!loanControlsValid()||!acceptedLoanInputsCurrent()){$('loanSaveStatus').textContent='Wait for valid current inputs to finish calculating before saving.';return;}const entry={id:Date.now()+'-'+Math.random().toString(36).slice(2),name,settings:deepClone(settings),quote:deepClone(quote),result:deepClone(current.result),metrics:currentLoanMetrics(current.result),savedAt:new Date().toISOString()};loanSaved.push(entry);if(persistLoanSimulations()){$('loanSaveName').value='';$('loanSaveStatus').textContent='Saved as an unchanged snapshot in this browser.';renderLoanPivot();}};
-$('fairMetric').onchange=()=>{$('fairTarget').value=$('fairMetric').value==='npv'?0:$('fairMetric').value==='irr'?.05:$('fairMetric').value==='lcoe'?.10:10;};
-$('solve').onclick=async()=>{try{$('solve').disabled=true;$('fairResult').textContent='Solving across weather years…';const r=await api('/api/fair-price',{settings:current?.result.settings||settings,metric:$('fairMetric').value,target:Number($('fairTarget').value)});$('fairResult').innerHTML=r.price_eur==null?`<p>${esc(r.status)}: target not bracketed or no PV.</p>`:`<h2>${range(r.price_range_eur,'eur')}</h2><p class="muted">Pending weather range for this target. ${esc(r.definition)}. ${esc(r.residual_definition)}</p>`;}catch(e){$('fairResult').textContent='Price solve failed: '+(e.message||e);showError(e);}finally{$('solve').disabled=false;}};
+if($('fairMetric'))$('fairMetric').onchange=()=>{$('fairTarget').value=$('fairMetric').value==='npv'?0:$('fairMetric').value==='irr'?.05:$('fairMetric').value==='lcoe'?.10:10;};
+if($('solve'))$('solve').onclick=async()=>{try{$('solve').disabled=true;if($('fairResult'))$('fairResult').textContent='Solving across weather years…';const r=await api('/api/fair-price',{settings:current?.result.settings||settings,metric:$('fairMetric')?.value,target:Number($('fairTarget')?.value)});if($('fairResult'))$('fairResult').innerHTML=r.price_eur==null?`<p>${esc(r.status)}: target not bracketed or no PV.</p>`:`<h2>${range(r.price_range_eur,'eur')}</h2><p class="muted">Pending weather range for this target. ${esc(r.definition)}. ${esc(r.residual_definition)}</p>`;}catch(e){if($('fairResult'))$('fairResult').textContent='Price solve failed: '+(e.message||e);showError(e);}finally{if($('solve'))$('solve').disabled=false;}};
 Object.entries(roofLimitInputMap).forEach(([id,roofKey])=>{const el=$(id);if(el){el.addEventListener('input',e=>handleRoofLimitInput(e,roofKey));el.addEventListener('change',e=>handleRoofLimitInput(e,roofKey));}});
 if($('resetRoofLimits'))$('resetRoofLimits').addEventListener('click',resetRoofCapacityLimits);
 ['optPanelWatts','optModuleKwh','optBatteryMin','optBatteryMax','optInverter','optCharge','optDischarge','filterLoad','optObjective','includeTheoretical'].forEach(id=>{const el=$(id);if(el){el.addEventListener('input',optimizerChanged);el.addEventListener('change',optimizerChanged);}});
@@ -14487,7 +14934,7 @@ function renderSolarRecommendationChoices(data) {
           <div>
             <div class="solar-choice-metric-label">Modeled PV curtailed</div>
             <div class="solar-choice-metric-val">${mainClippedKwh != null ? `${nf(mainClippedKwh, 1)} kWh/yr · ${nf(mainClippedPct, 2)}%` : '—'}${deltaClippedStr}</div>
-            <small>21-year mean first-year dispatch</small>
+            <small>Historical-weather ensemble mean first-year dispatch</small>
           </div>
           <div>
             <div class="solar-choice-metric-label">Routing priority</div>
@@ -14563,7 +15010,7 @@ function renderSolarRecommendationChoices(data) {
           <div>
             <div class="solar-choice-metric-label">Modeled PV curtailed</div>
             <div class="solar-choice-metric-val">${curClippedKwh != null ? `${nf(curClippedKwh, 1)} kWh/yr · ${nf(curClippedPct, 2)}%` : '—'}</div>
-            <small>21-year mean first-year dispatch</small>
+            <small>Historical-weather ensemble mean first-year dispatch</small>
           </div>
           <div>
             <div class="solar-choice-metric-label">Routing priority</div>
@@ -14658,7 +15105,7 @@ function renderSolarRecommendationChoices(data) {
           <div>
             <div class="solar-choice-metric-label">Modeled PV curtailed</div>
             <div class="solar-choice-metric-val">${cClippedKwh != null ? `${nf(cClippedKwh, 1)} kWh/yr · ${nf(cClippedPct, 2)}%` : '—'}</div>
-            <small>21-year mean first-year dispatch</small>
+            <small>Historical-weather ensemble mean first-year dispatch</small>
           </div>
         </div>
         <div class="solar-metric-sub solar-alternative-routing"><strong>Routing:</strong> ${esc(cRoute)}</div>
@@ -16062,7 +16509,7 @@ init();
 $('toggleInputs').onclick=()=>{const open=document.querySelector('aside').classList.toggle('inputs-open');$('toggleInputs').setAttribute('aria-expanded',String(open));$('toggleInputs').textContent=open?'Hide inputs':'Inputs';};
 
 function initRedesignEventListeners(){
- const tabNames=['summary','design','financing','behavior','prices','assumptions','quote'];
+ const tabNames=['summary','design','financing','behavior','prices','assumptions'];
  document.querySelectorAll('button[data-view]').forEach(b=>{
   b.onclick=()=>switchView(b.dataset.view);
  });

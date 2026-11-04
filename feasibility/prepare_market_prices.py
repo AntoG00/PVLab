@@ -8,6 +8,7 @@ import argparse
 import calendar
 from datetime import date, datetime, timezone, timedelta
 import hashlib
+import io
 import json
 import math
 from pathlib import Path, PurePosixPath
@@ -162,7 +163,8 @@ def _archive_members(archive):
         raise ValueError('ZIP member count limit exceeded')
     seen, total = set(), 0
     for item in members:
-        name, parts = item.filename, PurePosixPath(item.filename).parts
+        name = item.orig_filename
+        parts = PurePosixPath(name).parts
         mode = item.external_attr >> 16
         if (not name or '\\' in name or '\x00' in name or ':' in name
                 or name.startswith('/') or any(p in {'.', '..'} for p in name.split('/'))
@@ -243,6 +245,90 @@ def ingest_mgp_data(input_dir, start, end, *, source_schema=SOURCE_SCHEMA):
                                    'selected_resolution_seconds': duration}}
     return {'days': days, 'archive_hashes': sorted(hashes), 'source_schema': source_schema,
             'parser_version': PARSER_VERSION, 'coverage': [requested[0].isoformat(), civil_date(end).isoformat()]}
+
+
+def ingest_mgp_archive(archive_source, *, source_schema=SOURCE_SCHEMA, start=None, end=None):
+    """Parse a single GME ZIP archive (bytes, stream, or path); auto-infer dates from valid members.
+
+    No filesystem extraction is performed. Enforces defensive limits on members,
+    ratios, and uncompressed bytes.
+    """
+    if source_schema not in SOURCE_SCHEMAS:
+        raise _supported('Unknown source schema/version')
+    if isinstance(archive_source, (bytes, bytearray)):
+        archive_hash = hashlib.sha256(archive_source).hexdigest()
+        zf = zipfile.ZipFile(io.BytesIO(archive_source))
+    elif isinstance(archive_source, (str, Path)):
+        path = Path(archive_source)
+        if path.is_symlink() or not path.is_file():
+            raise ValueError('Archive must be a regular file')
+        archive_hash = sha256_file(path)
+        zf = zipfile.ZipFile(path)
+    elif hasattr(archive_source, 'read'):
+        raw = archive_source.read()
+        archive_hash = hashlib.sha256(raw).hexdigest()
+        zf = zipfile.ZipFile(io.BytesIO(raw))
+    else:
+        raise ValueError('Invalid archive source')
+
+    parsed = {}
+    with zf as archive:
+        members = _archive_members(archive)
+        if not members:
+            raise ValueError('No valid XML price members in ZIP archive')
+        budget = [0]
+        for member in members:
+            with archive.open(member) as stream:
+                day, duration, values = _read_day(stream, member.filename,
+                                                  SOURCE_SCHEMAS[source_schema], budget)
+            key = (day, duration)
+            if key in parsed and parsed[key]['values'] != values:
+                raise ValueError(f'Conflicting day {day} within supplied archives')
+            prior = parsed.setdefault(key, {'values': values, 'sources': set()})
+            prior['sources'].add(archive_hash)
+
+    days_found = sorted({day for (day, _) in parsed})
+    if not days_found:
+        raise ValueError('No delivery days found in archive')
+
+    if start is not None and end is not None:
+        requested = coverage_dates(start, end)
+    else:
+        start_date = civil_date(days_found[0])
+        end_date = civil_date(days_found[-1]) + timedelta(days=1)
+        requested = coverage_dates(start_date, end_date)
+        if [d.isoformat() for d in requested] != days_found:
+            raise ValueError('Archive delivery dates must be contiguous')
+
+    days = {}
+    for day in requested:
+        stamp = day.isoformat()
+        hourly, quarters = parsed.get((stamp, 3600)), parsed.get((stamp, 900))
+        if hourly is None and quarters is None:
+            raise ValueError(f'Missing delivery date {stamp}')
+        max_diff, checked = 0.0, 0
+        if hourly and quarters:
+            for i, values in enumerate(hourly['values']):
+                for series in SERIES:
+                    mean = math.fsum(v[series] / 4 for v in quarters['values'][i * 4:i * 4 + 4])
+                    max_diff = max(max_diff, abs(mean - values[series]))
+                    checked += 1
+            if max_diff > 1e-4:
+                raise ValueError(f'Quarter/hour overlap mismatch on {stamp}')
+        chosen, duration = (quarters, 900) if quarters else (hourly, 3600)
+        begin, _ = day_bounds(day)
+        records = [[series, (begin + timedelta(seconds=i * duration)).isoformat(),
+                    duration, row[series] / 1000.0]
+                   for i, row in enumerate(chosen['values']) for series in SERIES]
+        sources = sorted(set().union(*(v['sources'] for v in (hourly, quarters) if v)))
+        days[stamp] = {'date': stamp, 'records': records, 'source_hashes': sources,
+                       'source_schema': source_schema, 'parser_version': PARSER_VERSION,
+                       'overlap': {'compared_series_hours': checked,
+                                   'max_abs_diff_eur_mwh': max_diff,
+                                   'selected_resolution_seconds': duration}}
+    cov_end = civil_date(end) if end is not None else civil_date(days_found[-1]) + timedelta(days=1)
+    return {'days': days, 'archive_hashes': [archive_hash], 'source_schema': source_schema,
+            'parser_version': PARSER_VERSION, 'coverage': [requested[0].isoformat(), cov_end.isoformat()]}
 
 
 def compute_empirical_window(days, start, end, *, series, require_climatology=False):

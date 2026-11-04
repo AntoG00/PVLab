@@ -150,8 +150,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             report.write_reports(study, dest=tmpdir)
-            md = (Path(tmpdir) / 'executive.md').read_text()
-            summary = (Path(tmpdir) / 'executive_summary.md').read_text()
+            md = (Path(tmpdir) / 'executive.md').read_text(encoding='utf-8')
+            summary = (Path(tmpdir) / 'executive_summary.md').read_text(encoding='utf-8')
 
             # 1. Demand percentage 0% present
             self.assertIn('0%', md)
@@ -218,8 +218,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             report.write_reports(study, dest=tmpdir)
-            md = (Path(tmpdir) / 'executive.md').read_text()
-            summary = (Path(tmpdir) / 'executive_summary.md').read_text()
+            md = (Path(tmpdir) / 'executive.md').read_text(encoding='utf-8')
+            summary = (Path(tmpdir) / 'executive_summary.md').read_text(encoding='utf-8')
 
             # 1. 25% demand indicated
             self.assertIn('25%', md)
@@ -269,8 +269,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             report.write_reports(study, dest=tmpdir)
-            md = (Path(tmpdir) / 'executive.md').read_text()
-            summary = (Path(tmpdir) / 'executive_summary.md').read_text()
+            md = (Path(tmpdir) / 'executive.md').read_text(encoding='utf-8')
+            summary = (Path(tmpdir) / 'executive_summary.md').read_text(encoding='utf-8')
 
             # Exact precision preserved in both reports (no rounding to 6 digits or 12.3457%)
             self.assertIn('12.3456789%', md)
@@ -289,8 +289,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
         study_min = self._make_base_study(settings_override=s_minute)
         with tempfile.TemporaryDirectory() as tmpdir:
             report.write_reports(study_min, dest=tmpdir)
-            md = (Path(tmpdir) / 'executive.md').read_text()
-            summary = (Path(tmpdir) / 'executive_summary.md').read_text()
+            md = (Path(tmpdir) / 'executive.md').read_text(encoding='utf-8')
+            summary = (Path(tmpdir) / 'executive_summary.md').read_text(encoding='utf-8')
 
             self.assertIn('morning_split: 08:30–09:15', md)
             self.assertIn('evening_block: 17:00–20:00', md)
@@ -309,8 +309,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
         study_night = self._make_base_study(settings_override=s_overnight)
         with tempfile.TemporaryDirectory() as tmpdir:
             report.write_reports(study_night, dest=tmpdir)
-            md = (Path(tmpdir) / 'executive.md').read_text()
-            summary = (Path(tmpdir) / 'executive_summary.md').read_text()
+            md = (Path(tmpdir) / 'executive.md').read_text(encoding='utf-8')
+            summary = (Path(tmpdir) / 'executive_summary.md').read_text(encoding='utf-8')
 
             self.assertIn('night_wrap: notturna (22:00–06:00, scavalco mezzanotte)', md)
             self.assertIn('night_wrap: notturna (22:00–06:00, scavalco mezzanotte)', summary)
@@ -327,8 +327,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
         study_inact = self._make_base_study(settings_override=s_inactive)
         with tempfile.TemporaryDirectory() as tmpdir:
             report.write_reports(study_inact, dest=tmpdir)
-            md = (Path(tmpdir) / 'executive.md').read_text()
-            summary = (Path(tmpdir) / 'executive_summary.md').read_text()
+            md = (Path(tmpdir) / 'executive.md').read_text(encoding='utf-8')
+            summary = (Path(tmpdir) / 'executive_summary.md').read_text(encoding='utf-8')
 
             self.assertIn('dormant: inattiva (08:00–08:00, 0 min)', md)
             self.assertIn('dormant: inattiva (08:00–08:00, 0 min)', summary)
@@ -343,8 +343,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
         study_allday = self._make_base_study(settings_override=s_allday)
         with tempfile.TemporaryDirectory() as tmpdir:
             report.write_reports(study_allday, dest=tmpdir)
-            md = (Path(tmpdir) / 'executive.md').read_text()
-            summary = (Path(tmpdir) / 'executive_summary.md').read_text()
+            md = (Path(tmpdir) / 'executive.md').read_text(encoding='utf-8')
+            summary = (Path(tmpdir) / 'executive_summary.md').read_text(encoding='utf-8')
 
             self.assertIn('whole_day: all-day 24h (00:00–24:00)', md)
             self.assertIn('whole_day: all-day 24h (00:00–24:00)', summary)
@@ -354,8 +354,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
         study_empty = self._make_base_study(settings_override=s_empty)
         with tempfile.TemporaryDirectory() as tmpdir:
             report.write_reports(study_empty, dest=tmpdir)
-            md = (Path(tmpdir) / 'executive.md').read_text()
-            summary = (Path(tmpdir) / 'executive_summary.md').read_text()
+            md = (Path(tmpdir) / 'executive.md').read_text(encoding='utf-8')
+            summary = (Path(tmpdir) / 'executive_summary.md').read_text(encoding='utf-8')
 
             self.assertIn('nessuna finestra operativa definita (programmazione vuota / bozza)', md)
             self.assertIn('nessuna finestra operativa definita (programmazione vuota / bozza)', summary)
@@ -375,8 +375,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
         study_a = self._make_base_study(settings_override=s_cont_retained)
         with tempfile.TemporaryDirectory() as tmpdir:
             report.write_reports(study_a, dest=tmpdir)
-            md = (Path(tmpdir) / 'executive.md').read_text()
-            summary = (Path(tmpdir) / 'executive_summary.md').read_text()
+            md = (Path(tmpdir) / 'executive.md').read_text(encoding='utf-8')
+            summary = (Path(tmpdir) / 'executive_summary.md').read_text(encoding='utf-8')
 
             self.assertIn('disponibilità continua 24h (modello storico continuo senza finestre di spegnimento; finestre canoniche conservate: morning: 06:00–08:00; evening: 16:00–20:00)', md)
             self.assertIn('disponibilità continua 24h (modello storico continuo senza finestre di spegnimento; finestre canoniche conservate: morning: 06:00–08:00; evening: 16:00–20:00)', summary)
@@ -389,8 +389,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
         study_b = self._make_base_study(settings_override=s_cont_pure)
         with tempfile.TemporaryDirectory() as tmpdir:
             report.write_reports(study_b, dest=tmpdir)
-            md = (Path(tmpdir) / 'executive.md').read_text()
-            summary = (Path(tmpdir) / 'executive_summary.md').read_text()
+            md = (Path(tmpdir) / 'executive.md').read_text(encoding='utf-8')
+            summary = (Path(tmpdir) / 'executive_summary.md').read_text(encoding='utf-8')
 
             self.assertIn('disponibilità continua 24h (modello storico continuo senza finestre di spegnimento)', md)
             self.assertIn('disponibilità continua 24h (modello storico continuo senza finestre di spegnimento)', summary)
@@ -409,8 +409,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             report.write_reports(study, dest=tmpdir)
-            md = (Path(tmpdir) / 'executive.md').read_text()
-            summary = (Path(tmpdir) / 'executive_summary.md').read_text()
+            md = (Path(tmpdir) / 'executive.md').read_text(encoding='utf-8')
+            summary = (Path(tmpdir) / 'executive_summary.md').read_text(encoding='utf-8')
 
             # Explicit baseline notice in full report
             self.assertIn('Scenario base storico selezionato (`baseline`)', md)
@@ -433,8 +433,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             report.write_reports(study, dest=tmpdir)
-            md = (Path(tmpdir) / 'executive.md').read_text()
-            summary = (Path(tmpdir) / 'executive_summary.md').read_text()
+            md = (Path(tmpdir) / 'executive.md').read_text(encoding='utf-8')
+            summary = (Path(tmpdir) / 'executive_summary.md').read_text(encoding='utf-8')
 
             # Values that were missing are shown as 'non disponibile'
             self.assertIn('non disponibile', md)
@@ -461,8 +461,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             report.write_reports(study, dest=tmpdir)
-            md = (Path(tmpdir) / 'executive.md').read_text()
-            summary = (Path(tmpdir) / 'executive_summary.md').read_text()
+            md = (Path(tmpdir) / 'executive.md').read_text(encoding='utf-8')
+            summary = (Path(tmpdir) / 'executive_summary.md').read_text(encoding='utf-8')
 
             # Schedule is reported as undefined / unavailable, NOT falling back to factory 06:00-08:00
             self.assertIn('programmazione non definita / non disponibile', md)
@@ -490,8 +490,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
             study_bad = self._make_base_study(settings_override={'ac_heating_additional_demand_pct': bad_str})
             with tempfile.TemporaryDirectory() as tmpdir:
                 report.write_reports(study_bad, dest=tmpdir)
-                md = (Path(tmpdir) / 'executive.md').read_text()
-                summary = (Path(tmpdir) / 'executive_summary.md').read_text()
+                md = (Path(tmpdir) / 'executive.md').read_text(encoding='utf-8')
+                summary = (Path(tmpdir) / 'executive_summary.md').read_text(encoding='utf-8')
                 self.assertIn('non valida (valore non finito)', md)
                 self.assertIn('non valida (valore non finito)', summary)
 
@@ -500,8 +500,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
             study_large = self._make_base_study(settings_override={'ac_heating_additional_demand_pct': large_val})
             with tempfile.TemporaryDirectory() as tmpdir:
                 report.write_reports(study_large, dest=tmpdir)
-                md = (Path(tmpdir) / 'executive.md').read_text()
-                summary = (Path(tmpdir) / 'executive_summary.md').read_text()
+                md = (Path(tmpdir) / 'executive.md').read_text(encoding='utf-8')
+                summary = (Path(tmpdir) / 'executive_summary.md').read_text(encoding='utf-8')
                 self.assertIn(expected_str, md)
                 self.assertIn(expected_str, summary)
 
@@ -532,8 +532,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             report.write_reports(study, dest=tmpdir)
-            md = (Path(tmpdir) / 'executive.md').read_text()
-            summary = (Path(tmpdir) / 'executive_summary.md').read_text()
+            md = (Path(tmpdir) / 'executive.md').read_text(encoding='utf-8')
+            summary = (Path(tmpdir) / 'executive_summary.md').read_text(encoding='utf-8')
 
             # Duration and power figures
             self.assertIn('4.50 ore/giorno', md)
@@ -558,8 +558,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir_on:
             report.write_reports(study_hp_on, dest=tmpdir_on)
-            md_on = (Path(tmpdir_on) / 'executive.md').read_text()
-            summary_on = (Path(tmpdir_on) / 'executive_summary.md').read_text()
+            md_on = (Path(tmpdir_on) / 'executive.md').read_text(encoding='utf-8')
+            summary_on = (Path(tmpdir_on) / 'executive_summary.md').read_text(encoding='utf-8')
 
             # HP ON: Has HP section, lacks AC heating specific windows description
             self.assertIn('## Pompa di calore aria-acqua (pianificazione)', md_on)
@@ -568,8 +568,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir_off:
             report.write_reports(study_hp_off, dest=tmpdir_off)
-            md_off = (Path(tmpdir_off) / 'executive.md').read_text()
-            summary_off = (Path(tmpdir_off) / 'executive_summary.md').read_text()
+            md_off = (Path(tmpdir_off) / 'executive.md').read_text(encoding='utf-8')
+            summary_off = (Path(tmpdir_off) / 'executive_summary.md').read_text(encoding='utf-8')
 
             # HP OFF: Has AC section, lacks HP planning section
             self.assertIn('## Scenario SCOP del climatizzatore', md_off)
@@ -629,8 +629,8 @@ class AcHeatingReportsTests(IsolatedDefaultsTestCase):
             self.assertTrue(exec_md.exists())
             self.assertTrue(exec_sum.exists())
 
-            md_content = exec_md.read_text()
-            sum_content = exec_sum.read_text()
+            md_content = exec_md.read_text(encoding='utf-8')
+            sum_content = exec_sum.read_text(encoding='utf-8')
 
             # Verify real evaluated numbers appear in output
             self.assertIn('25%', md_content)

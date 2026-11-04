@@ -30,7 +30,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from feasibility import assumptions, engine, heatpump_settings, report
+from feasibility import assumptions, engine, fiscal_it, heatpump_settings, report
 from test_support import IsolatedDefaultsTestCase
 
 
@@ -237,6 +237,103 @@ class TestHeatPumpStudies(IsolatedDefaultsTestCase):
             self.assertIn('hp_curve_flow_cold', params_on)
             self.assertIn('hp_capex', params_on)
 
+    def test_study_pinned_fiscal_policy_deduction_rates(self) -> None:
+        """study evaluates pinned deduction rate when active and retains legacy rates in legacy mode."""
+        # 1. Legacy policy returns all standard deduction rates
+        legacy_p = engine.current_policy()
+        self.assertTrue(legacy_p.legacy_mode)
+        self.assertEqual(legacy_p.deduction_rates(), (0, 0.36, 0.5))
+
+        # 2. Pinned fiscal policy with deduction_rate = 0.5
+        params = {
+            'policy_version': 'italy-fiscal-v1',
+            'confirmed': True,
+            'mode': 'annual_bill',
+            'annual_bill_eur': 0.0,
+            'effective_from': '2020-01-01',
+            'effective_to': '2100-01-01',
+            'as_of': '2026-01-01',
+            'sources': ['Synthetic arithmetic fixture, not a legal source'],
+            'electric_excise': 0.02,
+            'electric_vat': 0.1,
+            'pmg_price': 0.04,
+            'pmg_nominal_escalation': 0.0,
+            'gse_fee_eur_kw_year': 0.0,
+            'gse_fee_vat': 0.22,
+            'export_irpef': 0.2,
+            'regional_additional_tax': 0.01,
+            'municipal_additional_tax': 0.005,
+            'deduction_rate': 0.5,
+        }
+        pinned_p = fiscal_it.ItalyFiscalPolicy(params, has_gas=False)
+        self.assertFalse(pinned_p.legacy_mode)
+        self.assertEqual(pinned_p.deduction_rates(), (0.5,))
+
+        s = dict(engine.defaults())
+        s.update({
+            'installation_year': 2026,
+            'pmg_election': False,
+            'deduction_eligible_confirmed': True,
+            'pmg_eligible_confirmed': False,
+            'unsupported_fiscal_year_acknowledged': True,
+            'electric_excise': 0.02,
+            'electric_vat': 0.1,
+            'pmg_price': 0.04,
+            'pmg_nominal_escalation': 0.0,
+            'gse_fee_eur_kw_year': 0.0,
+            'gse_fee_vat': 0.22,
+            'export_irpef': 0.2,
+            'regional_additional_tax': 0.01,
+            'municipal_additional_tax': 0.005,
+            'deduction_rate': 0.5,
+            'load_scenario': 'electrified',
+            'south_panels': 0,
+            'battery_kwh': 0,
+        })
+
+        fake_candidates = [
+            {
+                'id': 'no_pv_electrified',
+                'label': 'no_pv',
+                'load_scenario': 'electrified',
+                'battery_kwh': 0,
+                'theoretical': False,
+                'settings': s,
+                'metrics': {
+                    'npv_eur': {'min': 0, 'max': 0, 'median': 0},
+                    'payback_years': {'min': None, 'max': None, 'median': None},
+                    'discounted_payback_years': {'min': None, 'max': None, 'median': None},
+                    'autarky': {'min': 0, 'max': 0, 'median': 0},
+                    'self_consumption': {'min': 0, 'max': 0, 'median': 0},
+                    'package_npv_eur': {'min': -1000, 'max': 1000, 'median': 0},
+                    'grid_import_kwh': {'min': 3000, 'max': 3500, 'median': 3200},
+                },
+                'finance': {
+                    'capex_eur': 0,
+                    'conversion_capex_eur': 0,
+                    'cashflows_by_weather': {'pv_incremental': [[0] * 20] * 19},
+                    'nominal_discount_rate': 0.03,
+                },
+                'pareto': True,
+            }
+        ]
+
+        with (
+            patch('feasibility.engine.current_policy', return_value=pinned_p),
+            patch('feasibility.engine.sweep', return_value={'candidates': fake_candidates}),
+        ):
+            study_pinned = engine.study(s)
+            scenario_ids = sorted(set(c['scenario'] for c in study_pinned['scenario_candidates']))
+            self.assertEqual(scenario_ids, ['flat_deduction_0.5', 'higher_deduction_0.5', 'lower_deduction_0.5'])
+            self.assertEqual(study_pinned['counts']['financial_candidate_cases'], 3)
+            self.assertEqual(len(study_pinned['rankings']), 45)
+
+        with patch('feasibility.engine.sweep', return_value={'candidates': fake_candidates}):
+            s_legacy = {**s, 'deduction_rate': 0.5}
+            study_legacy = engine.study(s_legacy)
+            self.assertEqual(study_legacy['counts']['financial_candidate_cases'], 9)
+            self.assertEqual(len(study_legacy['rankings']), 135)
+
     def test_report_export_conditionals(self) -> None:
         """write_reports generates comprehensive HP section when ON, and maintains legacy AC report when OFF."""
         s = dict(engine.defaults())
@@ -263,8 +360,8 @@ class TestHeatPumpStudies(IsolatedDefaultsTestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             report.write_reports(study_on, dest=tmpdir)
-            md_on = (Path(tmpdir) / 'executive.md').read_text()
-            summary_on = (Path(tmpdir) / 'executive_summary.md').read_text()
+            md_on = (Path(tmpdir) / 'executive.md').read_text(encoding='utf-8')
+            summary_on = (Path(tmpdir) / 'executive_summary.md').read_text(encoding='utf-8')
 
             # 1. Primary literature citations
             self.assertIn('https://www.vaillant.com/en/products/arothermplus/', md_on)
@@ -308,7 +405,7 @@ class TestHeatPumpStudies(IsolatedDefaultsTestCase):
         study_sched = {**study_on, 'baseline_settings': s_sched}
         with tempfile.TemporaryDirectory() as tmpdir_sched:
             report.write_reports(study_sched, dest=tmpdir_sched)
-            md_sched = (Path(tmpdir_sched) / 'executive.md').read_text()
+            md_sched = (Path(tmpdir_sched) / 'executive.md').read_text(encoding='utf-8')
             self.assertIn('finestre mattina 6:00–8:00 e sera 16:00–20:00', md_sched)
 
         # Hygiene cycle enabled test
@@ -316,7 +413,7 @@ class TestHeatPumpStudies(IsolatedDefaultsTestCase):
         study_hyg = {**study_on, 'baseline_settings': s_hyg}
         with tempfile.TemporaryDirectory() as tmpdir_hyg:
             report.write_reports(study_hyg, dest=tmpdir_hyg)
-            md_hyg = (Path(tmpdir_hyg) / 'executive.md').read_text()
+            md_hyg = (Path(tmpdir_hyg) / 'executive.md').read_text(encoding='utf-8')
             self.assertIn('ciclo antilegionella abilitato a 65.0°C', md_hyg)
             self.assertIn('nessuna attestazione di adeguatezza sanitaria', md_hyg)
 
@@ -325,8 +422,8 @@ class TestHeatPumpStudies(IsolatedDefaultsTestCase):
         study_edited = {**study_on, 'baseline_settings': s_edited}
         with tempfile.TemporaryDirectory() as tmpdir_edited:
             report.write_reports(study_edited, dest=tmpdir_edited)
-            md_edited = (Path(tmpdir_edited) / 'executive.md').read_text()
-            summary_edited = (Path(tmpdir_edited) / 'executive_summary.md').read_text()
+            md_edited = (Path(tmpdir_edited) / 'executive.md').read_text(encoding='utf-8')
+            summary_edited = (Path(tmpdir_edited) / 'executive_summary.md').read_text(encoding='utf-8')
             self.assertIn('0.85', md_edited)
             self.assertIn('n = 1.4', md_edited)
             self.assertIn('0.85', summary_edited)
@@ -337,8 +434,8 @@ class TestHeatPumpStudies(IsolatedDefaultsTestCase):
         study_base = {**study_on, 'baseline_settings': s_base}
         with tempfile.TemporaryDirectory() as tmpdir_base:
             report.write_reports(study_base, dest=tmpdir_base)
-            md_base = (Path(tmpdir_base) / 'executive.md').read_text()
-            summary_base = (Path(tmpdir_base) / 'executive_summary.md').read_text()
+            md_base = (Path(tmpdir_base) / 'executive.md').read_text(encoding='utf-8')
+            summary_base = (Path(tmpdir_base) / 'executive_summary.md').read_text(encoding='utf-8')
             self.assertIn('la pompa di calore è ESCLUSA da questo scenario', md_base)
             self.assertIn('nessun servizio termico o elettrico della pompa di calore è conteggiato nel baseline storico', md_base)
             self.assertIn('la pompa di calore è esclusa dal fabbisogno', summary_base)
@@ -370,8 +467,8 @@ class TestHeatPumpStudies(IsolatedDefaultsTestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir_off:
             report.write_reports(study_off, dest=tmpdir_off)
-            md_off = (Path(tmpdir_off) / 'executive.md').read_text()
-            summary_off = (Path(tmpdir_off) / 'executive_summary.md').read_text()
+            md_off = (Path(tmpdir_off) / 'executive.md').read_text(encoding='utf-8')
+            summary_off = (Path(tmpdir_off) / 'executive_summary.md').read_text(encoding='utf-8')
 
             # Regression: legacy AC section intact
             self.assertIn('## Scenario SCOP del climatizzatore', md_off)
@@ -413,6 +510,117 @@ class TestHeatPumpStudies(IsolatedDefaultsTestCase):
         # 3. All 59 HP parameters exist
         for hp_key in heatpump_settings.HP_ALL_KEYS:
             self.assertIn(hp_key, fixture_defaults)
+
+    def test_study_candidate_joint_envelopes_mixed_aggregation(self) -> None:
+        """study candidate_joint_envelopes aggregates mixed envelope, scalar, and None metrics."""
+        s = dict(engine.defaults())
+        s.update({
+            'installation_year': 2026,
+            'pmg_election': False,
+            'pmg_eligible_confirmed': False,
+            'deduction_eligible_confirmed': True,
+            'unsupported_fiscal_year_acknowledged': True,
+            'planning_heat_pump': True,
+            'load_scenario': 'electrified',
+            'south_panels': 0,
+            'battery_kwh': 0,
+        })
+        fake_candidates = [
+            {
+                'id': 'cand_mixed',
+                'label': 'cand_mixed',
+                'load_scenario': 'electrified',
+                'battery_kwh': 0,
+                'theoretical': False,
+                'settings': s,
+                'metrics': {
+                    'npv_eur': {'min': 100.0, 'max': 200.0, 'median': 150.0, 'mean': 150.0},
+                    'payback_years': {'min': 5.0, 'max': 10.0, 'median': 7.0},
+                    'discounted_payback_years': {'min': 6.0, 'max': 12.0, 'median': 8.0},
+                    'autarky': {'min': 0.3, 'max': 0.5, 'median': 0.4},
+                    'self_consumption': {'min': 0.6, 'max': 0.8, 'median': 0.7},
+                    'mixed_env_scalar': {'min': 10.0, 'max': 20.0, 'median': 15.0},
+                    'mixed_env_none': {'min': 5.0, 'max': 15.0, 'median': 10.0},
+                    'pure_scalar': 15.0,
+                    'pure_none': None,
+                    'env_unrecovered': {'min': 4.0, 'max': None, 'median': None},
+                },
+                'finance': {
+                    'capex_eur': 0,
+                    'conversion_capex_eur': 0,
+                    'cashflows_by_weather': {'pv_incremental': [[0] * 20] * 19},
+                    'nominal_discount_rate': 0.03,
+                },
+                'pareto': True,
+            }
+        ]
+
+        eval_call_idx = 0
+
+        def fake_evaluate(params, detail=False):
+            nonlocal eval_call_idx
+            eval_call_idx += 1
+            if eval_call_idx % 2 == 1:
+                metrics = {
+                    'npv_eur': {'min': 100.0, 'max': 200.0, 'median': 150.0, 'mean': 150.0},
+                    'payback_years': {'min': 5.0, 'max': 10.0, 'median': 7.0},
+                    'discounted_payback_years': {'min': 6.0, 'max': 12.0, 'median': 8.0},
+                    'autarky': {'min': 0.3, 'max': 0.5, 'median': 0.4},
+                    'self_consumption': {'min': 0.6, 'max': 0.8, 'median': 0.7},
+                    'mixed_env_scalar': {'min': 10.0, 'max': 20.0, 'median': 15.0, 'nonrecovery_present': False},
+                    'mixed_env_none': {'min': 5.0, 'max': 15.0, 'median': 10.0, 'nonrecovery_present': False},
+                    'pure_scalar': 15.0,
+                    'pure_none': None,
+                    'env_unrecovered': {'min': 4.0, 'max': None, 'median': None, 'nonrecovery_present': True},
+                }
+            else:
+                metrics = {
+                    'npv_eur': {'min': 80.0, 'max': 220.0, 'median': 140.0, 'mean': 140.0},
+                    'payback_years': {'min': 4.0, 'max': 11.0, 'median': 6.5},
+                    'discounted_payback_years': {'min': 5.0, 'max': 13.0, 'median': 7.5},
+                    'autarky': {'min': 0.2, 'max': 0.6, 'median': 0.35},
+                    'self_consumption': {'min': 0.5, 'max': 0.9, 'median': 0.65},
+                    'mixed_env_scalar': 30.0,
+                    'mixed_env_none': None,
+                    'pure_scalar': 35.0,
+                    'pure_none': None,
+                    'env_unrecovered': 9.0,
+                }
+            return {
+                'layout': {'theoretical': False},
+                'settings': params,
+                'finance': {'capex_eur': 0.0},
+                'metrics': metrics,
+            }
+
+        with (
+            patch('feasibility.engine.sweep', return_value={'candidates': fake_candidates}),
+            patch('feasibility.engine.evaluate', side_effect=fake_evaluate),
+        ):
+            study_res = engine.study(s)
+            self.assertEqual(len(study_res['candidate_joint_envelopes']), 1)
+            bounds = study_res['candidate_joint_envelopes'][0]['metrics']
+
+            self.assertEqual(
+                bounds['mixed_env_scalar'],
+                {'min': 10.0, 'max': 30.0, 'nonrecovery_present': False},
+            )
+            self.assertEqual(
+                bounds['mixed_env_none'],
+                {'min': 5.0, 'max': None, 'nonrecovery_present': True},
+            )
+            self.assertEqual(
+                bounds['pure_scalar'],
+                {'min': 15.0, 'max': 35.0, 'nonrecovery_present': False},
+            )
+            self.assertEqual(
+                bounds['pure_none'],
+                {'min': None, 'max': None, 'nonrecovery_present': True},
+            )
+            self.assertEqual(
+                bounds['env_unrecovered'],
+                {'min': 4.0, 'max': None, 'nonrecovery_present': True},
+            )
 
 
 if __name__ == '__main__':

@@ -9,8 +9,10 @@ require a separate owner action.
 
 ## Runtime and install
 
-The service requires Linux, CPython 3.12 and a filesystem supporting SQLite WAL,
-POSIX permissions and no-follow directory access. Windows/macOS are not validated.
+Use Linux, Apple silicon macOS, or Windows x64 with CPython 3.12 on a local
+filesystem supporting SQLite WAL and private POSIX permissions or Windows ACLs.
+Storage rejects symlinks and Windows reparse points. See the README for verified
+platform versions; native macOS verification remains pending.
 The sealed private reference stays on its recorded CPython 3.12.14 build; a fresh
 interpreter does not replace that reference. New Python builds, architectures,
 BLAS or scientific versions require exact comparisons, not wider tolerances.
@@ -33,12 +35,15 @@ hash-locked `requirements-legacy.lock`. No application vendor directory, native
 library bundle, developer-home path or agent-runtime fallback is required.
 
 Locks were resolved with uv 0.12.1. Regenerate production and legacy locks using
-`uv pip compile pyproject.toml --python-version 3.12 --generate-hashes --no-header`
+`uv pip compile pyproject.toml --universal --python-version 3.12 --generate-hashes --no-header`
 with respectively no extra or `--extra legacy`, and an explicit `--output-file`.
 Use `--extra dev` for the development lock. Resolve the pinned build-system
 requirement separately for the build lock. Review the diff, audit all locks and
 run both exact gates before accepting a dependency update. Never automatically
 upgrade the numerical stack to resolve an advisory.
+
+On Windows, use the native PowerShell installation and launch commands in the
+[README](../README.md#local-setup). No WSL, Bash, or environment activation is required.
 
 ## Choose onboarding or fictional data
 
@@ -46,10 +51,12 @@ upgrade the numerical stack to resolve an advisory.
 bash feasibility/run.sh --port 8001
 ```
 
-This creates owner-only external platform user-data storage (Linux default
-`$XDG_DATA_HOME/pv-lab`, or `$HOME/.local/share/pv-lab`). `PV_DATA_ROOT` can select
+This creates owner-only external platform user-data storage. The Linux default is
+`$XDG_DATA_HOME/pv-lab` or `$HOME/.local/share/pv-lab`. The macOS default is
+`$HOME/Library/Application Support/pv-lab`. Windows defaults to
+`%LOCALAPPDATA%\pv-lab`, created with a private owner-only ACL. `PV_DATA_ROOT` can select
 another external, owner-only directory outside repositories. Existing directories
-with unsafe permissions or symlinks are rejected. Use a dedicated OS user and
+with unsafe permissions, symlinks or Windows reparse points are rejected. Use a dedicated OS user and
 local disk, not shared writable storage. Open household setup in the browser and
 supply an explicit profile; there is no inherited household or automatic activation.
 

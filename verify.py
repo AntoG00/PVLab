@@ -2,7 +2,7 @@
 """
 PV Lab - Acceptance Verification Script
 Validates the complete redesign of the PV Lab web app:
-- 7 canonical views in exact order: summary, design, financing, behavior, prices, assumptions, quote
+- 6 canonical views in exact order: summary, design, financing, behavior, prices, assumptions
 - Element IDs, controls, and layout components
 - Backend API endpoints and calculation consistency
 - Rollback backup integrity preservation
@@ -46,8 +46,8 @@ def verify_html_canonical_views():
     # View sequence
     views_pattern = r'<section\b[^>]*\bid="([^"]+)"[^>]*\bclass="[^"]*\bview\b'
     found_views = re.findall(views_pattern, html)
-    expected_views = ['summary', 'design', 'financing', 'behavior', 'prices', 'assumptions', 'quote']
-    check("Exact 7 canonical views exist in order", found_views == expected_views, f"Found: {found_views}")
+    expected_views = ['summary', 'design', 'financing', 'behavior', 'prices', 'assumptions']
+    check("Exact 6 canonical views exist in order", found_views == expected_views, f"Found: {found_views}")
 
     # Navigation buttons
     nav_pattern = r'data-view="([^"]+)"'
@@ -55,7 +55,7 @@ def verify_html_canonical_views():
     for match in re.finditer(nav_pattern, html):
         if match.group(1) not in nav_views:
             nav_views.append(match.group(1))
-    check("Navigation tab targets match canonical 7 views", nav_views == expected_views, f"Nav: {nav_views}")
+    check("Navigation tab targets match canonical 6 views", nav_views == expected_views, f"Nav: {nav_views}")
 
     # Critical Element IDs
     critical_ids = [
@@ -76,9 +76,9 @@ def verify_html_canonical_views():
         # 5. Prices & market
         'adjacentPricesContent', 'lcoeContent', 'exportValuationCards', 'marketSeasonalChart',
         # 6. Assumptions & evidence
-        'installerChecklist', 'ledger', 'calibration', 'dataNotes',
-        # 7. Contractor pitch
-        'contractorQuestionsBox', 'quoteLines', 'claims', 'solve', 'fairResult', 'onepage'
+        'ledger', 'calibration', 'dataNotes',
+        # Header / Global actions
+        'onepage'
     ]
     for cid in critical_ids:
         check(f"Element #{cid} present in index.html", f'id="{cid}"' in html)

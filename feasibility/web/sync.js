@@ -110,19 +110,49 @@ if(typeof module!=='undefined')module.exports=SharedScenarioSync;
 // Capabilities and household state stay in this tab; only display preferences persist.
 class HouseholdStorage {
  constructor(persistent){try{this.persistent=persistent===undefined?globalThis.localStorage:persistent;}catch{this.persistent=null;}this.values=new Map();}
- allowed(key){return ['pv_lab_theme','theme','pv-lab-theme'].includes(key)||/(?:^|-)(?:theme|summary-prefs|cash-curve-prefs)-v1$/.test(key);}
+ allowed(key){return ['pv_lab_theme','theme','pv-lab-theme','pv_lab_onboarding_checks_v1','pv_lab_selected_profile_v1'].includes(key)||/(?:^|-)(?:theme|summary-prefs|cash-curve-prefs|onboarding-checks|selected-profile)-v1$/.test(key);}
  getItem(key){try{return this.allowed(key)?this.persistent.getItem(key):(this.values.get(key)??null);}catch{return null;}}
  setItem(key,value){if(this.allowed(key)){try{this.persistent.setItem(key,value);}catch{}}else this.values.set(key,String(value));}
  removeItem(key){this.values.delete(key);if(this.allowed(key)){try{this.persistent.removeItem(key);}catch{}}}
  clearPrivate(){this.values.clear();}
 }
+const SELECTED_PROFILE_STORAGE_KEY = 'pv_lab_selected_profile_v1';
+
 class HouseholdClient {
- constructor({fetch:fetcher=globalThis.fetch.bind(globalThis),onClear=()=>{},onStatus=()=>{}}={}){
-  this.fetcher=fetcher;this.onClear=onClear;this.onStatus=onStatus;this.csrf=null;this.sessionPending=null;this.profileId=null;this.revision=null;this.ready=false;this.generation=0;this.controllers=new Set();
+ constructor({fetch:fetcher=globalThis.fetch.bind(globalThis),onClear=()=>{},onStatus=()=>{},storage=null}={}){
+  this.fetcher=fetcher;this.onClear=onClear;this.onStatus=onStatus;
+  this.storage=storage||(typeof localStorage!=='undefined'&&localStorage?localStorage:(typeof globalThis!=='undefined'?globalThis.localStorage:null));
+  this.csrf=null;this.sessionPending=null;this.profileId=null;
+  try{
+   const saved=this.storage?.getItem?.(SELECTED_PROFILE_STORAGE_KEY);
+   if(saved)this.profileId=saved;
+  }catch(_){}
+  this.revision=null;this.ready=false;this.generation=0;this.controllers=new Set();
  }
- clear(){this.generation++;for(const c of this.controllers)c.abort();this.controllers.clear();this.profileId=null;this.revision=null;this.ready=false;this.onClear();}
+ clear(){
+  this.generation++;
+  for(const c of this.controllers)c.abort();
+  this.controllers.clear();
+  this.profileId=null;
+  this.revision=null;
+  this.ready=false;
+  try{
+   if(!this._selecting)this.storage?.removeItem?.(SELECTED_PROFILE_STORAGE_KEY);
+  }catch(_){}
+  this.onClear();
+ }
  invalidate(){this.generation++;for(const c of this.controllers)c.abort();this.controllers.clear();this.ready=false;}
- select(id,revision=null){this.clear();this.profileId=id;this.revision=revision;}
+ select(id,revision=null){
+  this._selecting=true;
+  this.clear();
+  this._selecting=false;
+  this.profileId=id;
+  this.revision=revision;
+  try{
+   if(id)this.storage?.setItem?.(SELECTED_PROFILE_STORAGE_KEY,id);
+   else this.storage?.removeItem?.(SELECTED_PROFILE_STORAGE_KEY);
+  }catch(_){}
+ }
  stale(){return Object.assign(Error('STALE_RESPONSE: profile changed'),{code:'STALE_RESPONSE'});}
  async session(){
   if(this.csrf)return;
@@ -145,7 +175,7 @@ class HouseholdClient {
    const r=await this.fetcher(path,{method,credentials:'same-origin',headers,signal:controller.signal,...(body===undefined?{}:{body:options.raw?body:JSON.stringify(body)})});
    const value=await r.json();if(generation!==this.generation)throw this.stale();
    if(!r.ok){
-    const labels={401:'Session expired. Reconnect to continue.',409:'Inputs changed. Reload this profile before retrying.',413:'File too large. CSV limit is 16 MiB.',422:'Correct the input fields.',429:'Server busy. Wait before retrying.'};
+    const labels={401:'Session expired. Reconnect to continue.',409:'Inputs changed. Reload this profile before retrying.',413:'File too large. Upload limit is 16 MiB.',422:'Correct the input fields.',429:'Server busy. Wait before retrying.'};
     if(r.status===401){this.csrf=null;this.clear();}else if(r.status===409){this.ready=false;this.onClear();}
     const error=Object.assign(Error(labels[r.status]||value.error||'Request failed'),{status:r.status,diagnostic:value.diagnostic,retryAfter:r.headers?.get?.('Retry-After')});this.onStatus(error.message);throw error;
    }
@@ -181,10 +211,31 @@ class HouseholdClient {
    onProgress(job.state);
    if(job.state==='complete')return job;
    if(!['queued','running'].includes(job.state)){
-    if(job.error_code==='SOLAR_TIMEOUT')throw Object.assign(Error('SOLAR_TIMEOUT: Solar data request timed out; retry later.'),{code:'SOLAR_TIMEOUT'});
-    if(job.error_code==='SOLAR_NETWORK_ERROR')throw Object.assign(Error('SOLAR_NETWORK_ERROR: Solar data request network error; retry later.'),{code:'SOLAR_NETWORK_ERROR'});
-    if(job.error_code==='SOLAR_DATA_GAPS')throw Object.assign(Error('SOLAR_DATA_GAPS: PVGIS data gaps exceed the supported repair limits. Review the selected weather years; no years were omitted.'),{code:'SOLAR_DATA_GAPS'});
-    throw Error('JOB_FAILED: job '+job.state+'; review inputs and retry.');
+    if(job.error_code==='SOLAR_TIMEOUT')throw Object.assign(Error('SOLAR_TIMEOUT: Solar data request timed out; retry later.'),{code:'SOLAR_TIMEOUT',jobId:job.id,jobState:job.state,version:job.version,modelBuildId:job.model_build_id,repoUrl:job.repo_url,diagnostic:job.diagnostic});
+    if(job.error_code==='SOLAR_NETWORK_ERROR')throw Object.assign(Error('SOLAR_NETWORK_ERROR: Solar data request network error; retry later.'),{code:'SOLAR_NETWORK_ERROR',jobId:job.id,jobState:job.state,version:job.version,modelBuildId:job.model_build_id,repoUrl:job.repo_url,diagnostic:job.diagnostic});
+    if(job.error_code==='SOLAR_DATA_GAPS')throw Object.assign(Error('SOLAR_DATA_GAPS: PVGIS data gaps exceed the supported repair limits. Review the selected weather years; no years were omitted.'),{code:'SOLAR_DATA_GAPS',jobId:job.id,jobState:job.state,version:job.version,modelBuildId:job.model_build_id,repoUrl:job.repo_url,diagnostic:job.diagnostic});
+    if(job.error_code){
+     const msg=job.error||('Job '+job.state+'; review inputs and retry.');
+     throw Object.assign(Error(job.error_code+': '+msg),{
+      code:job.error_code,
+      jobState:job.state,
+      jobId:job.id,
+      version:job.version,
+      modelBuildId:job.model_build_id,
+      repoUrl:job.repo_url,
+      diagnostic:job.diagnostic,
+     });
+    }
+    const err=Object.assign(Error('JOB_FAILED: job '+job.state+'; review inputs and retry.'),{
+     jobState:job.state,
+     jobId:job.id,
+     version:job.version,
+     modelBuildId:job.model_build_id,
+     repoUrl:job.repo_url,
+     diagnostic:job.diagnostic,
+    });
+    delete err.code;
+    throw err;
    }
    await new Promise(resolve=>setTimeout(resolve,2000));
   }}finally{if(this.pendingJob?.id===id)this.pendingJob=null;}
@@ -194,8 +245,38 @@ class HouseholdClient {
   if(job.profileId!==this.profileId||job.revision!==this.revision)throw this.stale();
   await this.request('/api/jobs/'+encodeURIComponent(job.id),{},{method:'DELETE'});
  }
- async deleteProfile(){const id=this.profileId;await this.request('/api/profiles/delete',{profile_id:id});this.clear();}
- async deleteHousehold(){await this.request('/api/tenant/delete',{});this.csrf=null;this.clear();}
+ async deleteProfile(){
+  const id=this.profileId;
+  await this.request('/api/profiles/delete',{profile_id:id});
+  try{this.storage?.removeItem?.(SELECTED_PROFILE_STORAGE_KEY);}catch(_){}
+  this.clear();
+ }
+ async deleteHousehold(){
+  await this.request('/api/tenant/delete',{});
+  this.csrf=null;
+  try{this.storage?.removeItem?.(SELECTED_PROFILE_STORAGE_KEY);}catch(_){}
+  this.clear();
+ }
+ async pair(){return await this.request('/api/session/pair',{});}
+ async join(code){
+  const res=await this.request('/api/session/join',{code});
+  if(res.csrf_token)this.csrf=res.csrf_token;
+  this.clear();
+  return res;
+ }
+ async getMarketCatalog(revision=null){
+  return await this.profileRequest('/market-catalog'+(revision?'?revision='+encodeURIComponent(revision):''),undefined,{method:'GET'});
+ }
+ async uploadMarketCatalog(file,options={}){
+  if(!file)throw Error('File is required');
+  const filename=options.filename||file.name||'market.zip';
+  const query=options.replace?'?replace=1':'';
+  return await this.profileRequest('/market-catalog'+query,file,{
+   method:'POST',
+   raw:true,
+   headers:{'Content-Type':'application/zip','X-Filename':filename,...options.headers}
+  });
+ }
 }
 Object.assign(globalThis,{HouseholdClient,HouseholdStorage});
 if(typeof module!=='undefined')Object.assign(module.exports,{HouseholdClient,HouseholdStorage});

@@ -323,7 +323,12 @@ def test_resolve_budget_missing_topology_fails_closed(tmp_path):
 
 def test_run_gate_env_pv_test_workers_and_budget_json(tmp_path, monkeypatch):
     private = tmp_path / "private_gate"
-    private.mkdir(mode=0o700)
+    if os.name == 'nt':
+        from feasibility.windows_storage import directory
+        with directory(private, (), create=True):
+            pass
+    else:
+        private.mkdir(mode=0o700)
     ref_dir = private / "reference"
     ref_dir.mkdir()
     (ref_dir / "manifest.json").write_text('{"runtime_paths": {"python": "python3", "node": "node", "vendor": ""}}')
@@ -335,7 +340,7 @@ def test_run_gate_env_pv_test_workers_and_budget_json(tmp_path, monkeypatch):
     monkeypatch.setattr(runner, "validate_manifest", lambda p: {"runtime_paths": {"python": "python3", "node": "node", "vendor": ""}})
     monkeypatch.setattr(runner, "verify_environment", lambda node: None)
     monkeypatch.setattr(runner, "live_guard_hashes", lambda: "guard")
-    monkeypatch.setattr(os, "sched_setaffinity", lambda pid, cpus: captured.setdefault("affinity", set(cpus)))
+    monkeypatch.setattr(os, "sched_setaffinity", lambda pid, cpus: captured.setdefault("affinity", set(cpus)), raising=False)
 
     def fake_subprocess_run(argv, cwd=None, env=None, stdout=None, stderr=None):
         captured.setdefault("envs", []).append(dict(env))

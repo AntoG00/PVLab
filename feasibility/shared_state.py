@@ -1,6 +1,5 @@
 """Atomic shared scenario state for all clients of the local calculator."""
 from contextlib import contextmanager
-import fcntl
 import hashlib
 import json
 import os
@@ -10,7 +9,11 @@ import threading
 import uuid
 
 from feasibility import assumptions, engine
+from feasibility.file_lock import file_lock
 from feasibility.schedule import LEGACY_HEATING_KEYS, migrate_and_resolve_schedule
+
+if os.name == 'nt':
+    from feasibility.windows_storage import move
 
 HERE = Path(__file__).resolve().parent
 STATE_PATH = HERE / 'data' / 'current_scenario.json'
@@ -19,14 +22,9 @@ _LOCK = threading.RLock()
 
 @contextmanager
 def _file_lock(path):
-    lock_path = Path(str(path) + '.lock')
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with _LOCK, lock_path.open('a+') as lock_file:
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+    with file_lock(path, _LOCK):
+        yield
+
 
 
 def _state_path(path=None):
@@ -124,12 +122,15 @@ def _atomic_write(path, state):
             output.write(payload)
             output.flush()
             os.fsync(output.fileno())
-        os.replace(temporary, path)
-        directory_fd = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
+        if os.name == 'nt':
+            move(temporary, path, replace=True)
+        else:
+            os.replace(temporary, path)
+            directory_fd = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)

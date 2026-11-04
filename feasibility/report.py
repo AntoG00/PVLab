@@ -44,6 +44,7 @@ def profile_disclosures(profile, audit, revision, years, solar_parameters=None):
         }
     return {
         'profile_id': profile['id'], 'input_revision': revision,
+        'load_provenance': dict(audit.get('projection', {})),
         'solar_gap_records': solar_gaps,
         'quality': {
             'measured_training_fraction': projection.get('measured_training_fraction'),
@@ -82,10 +83,10 @@ def csv_cell(value):
 
 
 def owned_report_text(result, identity, presentation=None):
-    """Plain Markdown with escaped labels; the HTML adapter escapes it again."""
+    """Render JSON as an indented Markdown code block."""
     payload = {'identity': identity, 'disclosures': presentation, 'result': result}
     raw = json.dumps(payload, default=lambda v: v.tolist(), ensure_ascii=False, allow_nan=False, indent=2)
-    return '# Household simulation result\n\n' + '\n'.join('    ' + line for line in html.escape(raw).splitlines()) + '\n'
+    return '# Household simulation result\n\n' + '\n'.join('    ' + line for line in raw.splitlines()) + '\n'
 
 
 def owned_report_csv(result, identity, presentation=None):
@@ -453,18 +454,18 @@ def write_reports(study, dest=None):
     lines += ['Accumulo con vincoli orari di capacità, potenza, SOC ed efficienza; degrado a passi annuali da calendario e cicli. Architettura AC equivalente condivisa con clipping prima della carica; standby, stringhe/bypass e picchi intraora esclusi. Ogni annata viene ripetuta per tutta la vita del progetto;' + hp_method_desc + ' Preventivo: tempi pagamento conservati come evidenza ma non modellati; capitale iniziale resta anticipato.','',
     'Preventivi richiedono modelli/datasheet, potenze continue, DoD, efficienza e curve di degrado, garanzie, layout e condizioni. Un prezzo economicamente sostenibile deriva dal target del modello; non costituisce prezzo di mercato. Il solver IRR risolve NPV al rendimento richiesto: flussi con sostituzioni possono avere radici multiple.','']
     markdown='\n'.join(lines)
-    (dest/'executive.md').write_text(markdown)
+    (dest/'executive.md').write_text(markdown, encoding='utf-8')
     # No optional Markdown dependency: retain accessible preformatted tables.
     body=html.escape(markdown)
-    (dest/'executive.html').write_text('<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+html.escape(label)+' — studio</title><style>body{font:15px/1.5 system-ui;color:#183b33;max-width:1100px;margin:24px auto;padding:16px}pre{white-space:pre-wrap;overflow-wrap:anywhere}@media print{body{font-size:10px}}</style><h1>'+html.escape(label)+' — studio calcolato</h1><p><a href="/">Calcolatore</a> · <a href="/report.md">Markdown</a> · <a href="/api/study">Dati completi JSON</a></p><pre>'+body+'</pre></html>')
+    (dest/'executive.html').write_text('<!doctype html><html lang="it"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+html.escape(label)+' — studio</title><style>body{font:15px/1.5 system-ui;color:#183b33;max-width:1100px;margin:24px auto;padding:16px}pre{white-space:pre-wrap;overflow-wrap:anywhere}@media print{body{font-size:10px}}</style><h1>'+html.escape(label)+' — studio calcolato</h1><p><a href="/">Calcolatore</a> · <a href="/report.md">Markdown</a> · <a href="/api/study">Dati completi JSON</a></p><pre>'+body+'</pre></html>', encoding='utf-8')
     ledger_data = selected.get('assumptions') if isinstance(selected, dict) and 'assumptions' in selected else study.get('assumptions', engine.records() if hasattr(engine, 'records') else [])
     for name,obj in [('study.json',study),('input_ledger.json',ledger_data)]:
-        (dest/name).write_text(json.dumps(obj,ensure_ascii=False,indent=2,allow_nan=False))
+        (dest/name).write_text(json.dumps(obj,ensure_ascii=False,indent=2,allow_nan=False), encoding='utf-8')
     # Preserve executed acceptance results rather than claiming a rerun.
     verification=dest/'verification.json'
     evidence=json.loads(verification.read_text()) if verification.exists() else {}
     evidence.update(report_generated_utc=datetime.now(timezone.utc).isoformat(),engine='feasibility/engine.py',scenario_counts=study['counts'],calibration={k:c.get(k) for k in ['invoice','annual_kwh','annual_gas_smc','weather_count','hour_count']},status='Executed model evidence; test run recorded separately')
-    verification.write_text(json.dumps(evidence,indent=2,allow_nan=False))
+    verification.write_text(json.dumps(evidence,indent=2,allow_nan=False), encoding='utf-8')
     write_summary(study, dest=dest, selected=selected)
     return str(dest)
 
@@ -569,4 +570,4 @@ def write_summary(study, dest=None, selected=None):
     'Prima di valutare un’offerta: confermare capacità IRPEF annuale disponibile (controllo modificabile, incluse sensibilità nulla/piena), costi/scope/IVA, modelli e garanzie, potenze e degrado dell’accumulo, struttura e layout del tetto. Le rate di detrazione inutilizzabili sono perse. Tutte le ipotesi finanziarie proposte restano pendenti.',
     legacy_text('report_generic_532','Il benchmark export applica capture una sola volta. La rampa futura cambia la remunerazione, non il dispatch fisico. PMG, imposte e commissioni seguono il prezzo export. CER richiede evidenza e selezione esplicite.'),'',
     legacy_text('report_generic_533','[Report completo](executive.md) · [Studio e flussi JSON](study.json) · [Registro input](input_ledger.json) · [Verifiche](verification.json)'),'']
-    target=dest/'executive_summary.md';target.write_text('\n'.join(lines));return target
+    target=dest/'executive_summary.md';target.write_text('\n'.join(lines), encoding='utf-8');return target

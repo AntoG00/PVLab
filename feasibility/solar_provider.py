@@ -183,6 +183,13 @@ def _digest(raw):
 
 def _private_dir(path, *, allow_shared=False):
     path = Path(path)
+    if os.name == 'nt' and not allow_shared:
+        from .windows_storage import directory
+        try:
+            with directory(path.absolute(), (), create=True) as secured:
+                return secured
+        except ValueError as exc:
+            raise ValueError('owner-only cache directory required') from exc
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
     if path.is_symlink():
         raise ValueError('symlink cache directory')
@@ -195,14 +202,32 @@ def _atomic(path, raw):
     fd, temporary = tempfile.mkstemp(dir=path.parent)
     try:
         with os.fdopen(fd, 'wb') as f:
-            os.fchmod(f.fileno(), 0o600)
+            if os.name != 'nt':
+                os.fchmod(f.fileno(), 0o600)
             f.write(raw)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(temporary, path)
+        if os.name == 'nt':
+            from .windows_storage import move
+            move(temporary, path, replace=True)
+        else:
+            os.replace(temporary, path)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
+
+
+def _read_cache_entry(path):
+    from contextlib import nullcontext
+    guard = nullcontext()
+    if os.name == 'nt':
+        from .windows_storage import file
+        guard = file(path)
+    with guard, path.open('rb') as stream:
+        raw = stream.read(MAX_RESPONSE_BYTES + 1)
+    if len(raw) > MAX_RESPONSE_BYTES:
+        raise ValueError('cache size limit')
+    return strict_json(raw)
 
 
 class TenantCache:
@@ -210,32 +235,83 @@ class TenantCache:
     def __init__(self, root, tenant_id):
         if type(tenant_id) is not str or re.fullmatch('[a-f0-9]{32}', tenant_id) is None:
             raise ValueError('opaque tenant id required')
-        root = Path(root).resolve()
+        root = Path(root).absolute() if os.name == 'nt' else Path(root).resolve()
         repo = Path(__file__).resolve().parent.parent
         if root == repo or repo in root.parents:
             raise ValueError('cache must be external to repository')
+        if os.name == 'nt':
+            from .windows_storage import directory
+            try:
+                with directory(root, ('tenants', tenant_id, 'solar-cache'), create=True) as secured:
+                    self.directory = secured
+            except ValueError as exc:
+                raise ValueError('owner-only cache directory required') from exc
+            return
         self.directory = _private_dir(_private_dir(_private_dir(root) / 'tenants') / tenant_id)
         self.directory = _private_dir(self.directory / 'solar-cache')
 
-    def get(self, client, endpoint, parameters):
+    def get(self, client, endpoint, parameters, validator=None):
         key = _digest(canonical_json(dict(contract=CONTRACT, endpoint=endpoint, parameters=parameters)))
         path = self.directory / (key + '.json')
         if path.is_symlink():
             raise ValueError('symlink cache entry')
         if path.exists():
-            if path.stat().st_size > MAX_RESPONSE_BYTES:
-                raise ValueError('cache size limit')
-            obj = strict_json(path.read_bytes())
+            obj = _read_cache_entry(path)
             if (obj.get('key') != key or obj.get('sha256') != _digest(canonical_json(obj.get('response'))) or
                     type(obj.get('response')) is not dict):
                 raise ValueError('cache integrity mismatch')
             return obj['response']
         value = client.get_json(endpoint, parameters)
+        if validator is not None:
+            validator(value)
         raw = canonical_json(dict(key=key, sha256=_digest(canonical_json(value)), response=value))
         if len(raw) > MAX_RESPONSE_BYTES:
             raise ValueError('cache size limit')
         _atomic(path, raw)
         return value
+
+    def get_coverage(self, parameters, max_age_seconds=30 * 86400):
+        key = _digest(canonical_json(dict(contract=CONTRACT, purpose='coverage', parameters=parameters)))
+        path = self.directory / f'coverage-{key}.json'
+        if path.is_symlink():
+            raise ValueError('symlink cache entry')
+        if not path.exists():
+            return None
+        obj = _read_cache_entry(path)
+        if (type(obj) is not dict or obj.get('key') != key or
+                type(obj.get('coverage')) is not dict or
+                obj.get('sha256') != _digest(canonical_json(obj.get('coverage')))):
+            raise ValueError('cache integrity mismatch')
+        retrieved_raw = obj.get('retrieved_at_utc')
+        if type(retrieved_raw) is not str:
+            raise ValueError('cache integrity mismatch')
+        try:
+            m = re.fullmatch(r'(\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d)(?:\.\d+)?(Z|[+-]\d\d:\d\d)?', retrieved_raw)
+            if m is None:
+                raise ValueError('invalid timestamp')
+            base = datetime.fromisoformat(m[1] + (m[2] or '+00:00').replace('Z', '+00:00')).astimezone(timezone.utc)
+        except Exception:
+            raise ValueError('cache integrity mismatch') from None
+        now = datetime.now(timezone.utc)
+        age = (now - base).total_seconds()
+        if age < 0 or age > max_age_seconds:
+            return None
+        return obj['coverage']
+
+    def put_coverage(self, key_params, coverage_data, retrieved_at_utc):
+        key = _digest(canonical_json(dict(contract=CONTRACT, purpose='coverage', parameters=key_params)))
+        path = self.directory / f'coverage-{key}.json'
+        raw = canonical_json(dict(
+            key=key,
+            contract=CONTRACT,
+            purpose='coverage',
+            retrieved_at_utc=retrieved_at_utc,
+            sha256=_digest(canonical_json(coverage_data)),
+            coverage=coverage_data,
+        ))
+        if len(raw) > MAX_RESPONSE_BYTES:
+            raise ValueError('cache size limit')
+        _atomic(path, raw)
 
 
 def _number(value, label, minimum=None, maximum=None):
@@ -547,6 +623,31 @@ def _validate_solar(obj, parameters, plane):
 
 
 
+def _validate_and_clamp_v6_power(raw_power, n):
+    if type(raw_power) is not list or len(raw_power) != n:
+        raise ValueError('invalid array length: power')
+    clamped = list(raw_power)
+    correction_count = 0
+    correction_min = None
+    for i, v in enumerate(raw_power):
+        if v is None:
+            continue
+        if type(v) not in (int, float) or type(v) is bool:
+            raise ValueError('invalid numeric array: power')
+        vf = float(v)
+        if not math.isfinite(vf):
+            raise ValueError('invalid physical array: power')
+        if vf < 0:
+            if vf < -0.01:
+                raise ValueError('invalid physical array: power')
+            correction_count += 1
+            if correction_count > 1:
+                raise ValueError('invalid physical array: power')
+            correction_min = vf if correction_min is None else min(correction_min, vf)
+            clamped[i] = 0.0
+    return clamped, correction_count, correction_min
+
+
 _PVGIS_SOLAR_FIELDS = (
     'power',
     'direct_inclined_irradiance_before_reflectivity',
@@ -667,7 +768,13 @@ def fetch_pvgis(request, transport=None):
     if request.mounting not in ('Free standing 2025', 'Integrated 2025') or request.technology != 'cSi':
         raise ValueError('unsupported equipment contract')
     client = transport if isinstance(transport, ProviderClient) else ProviderClient(transport)
-    get = (lambda endpoint, params: request.cache.get(client, endpoint, params)) if request.cache is not None else client.get_json
+    def get(endpoint, params, validator=None):
+        if request.cache is not None:
+            return request.cache.get(client, endpoint, params, validator=validator)
+        val = client.get_json(endpoint, params)
+        if validator is not None:
+            validator(val)
+        return val
     progress = request.progress or (lambda *args: None)
     nr, ny = len(profile.roofs), len(years)
     power = np.zeros((nr, ny, 8784)); temperature = np.zeros((ny, 8784))
@@ -687,10 +794,20 @@ def fetch_pvgis(request, transport=None):
         for ri, plane in enumerate(profile.roofs):
             progress('solar', ri + yi*max(1, nr), ny*max(1, nr))
             params_v5 = _solar_parameters_v5(profile, plane, year, loss, request.mounting, request.technology)
+            def _val_v5(val):
+                _n = _normalize_v5(val, params_v5, year)
+                _sequence(_n['timestamps'], year, True)
+                _rp = _n['power']
+                if type(_rp) is not list or len(_rp) != n:
+                    raise ValueError('invalid array length: power')
+                if any(v is not None and type(v) not in (int, float) for v in _rp):
+                    raise ValueError('invalid numeric array: power')
+                if any(v is not None and (not math.isfinite(v) or v < 0) for v in _rp):
+                    raise ValueError('invalid physical array: power')
             if year < 2014:
                 params = params_v5
                 endpoint = PVGIS5_URL
-                obj = get(endpoint, params)
+                obj = get(endpoint, params, validator=_val_v5)
                 norm = _normalize_v5(obj, params, year)
                 times = norm['timestamps']
                 metadata = norm['provider_confirmed_metadata']
@@ -699,7 +816,20 @@ def fetch_pvgis(request, transport=None):
             else:
                 params = _solar_parameters(profile, plane, year, loss, request.mounting, request.technology)
                 endpoint = PVGIS_URL
-                obj = get(endpoint, params)
+                def _val_v6(val):
+                    _validate_solar(val, params, plane)
+                    _t = val.get('timestamps')
+                    _sequence(_t, year, True)
+                    for field in _PVGIS_SOLAR_FIELDS[1:]:
+                        values = val.get(field)
+                        if type(values) is not list or len(values) != n:
+                            raise ValueError('invalid array length: ' + field)
+                        for value in values:
+                            if value is not None and (type(value) not in (int, float) or not math.isfinite(value) or value < 0):
+                                raise ValueError('invalid physical array: ' + field)
+                    _rp = val.get('power')
+                    _validate_and_clamp_v6_power(_rp, n)
+                obj = get(endpoint, params, validator=_val_v6)
                 metadata = _validate_solar(obj, params, plane)
                 times = obj.get('timestamps')
                 raw_power = obj.get('power')
@@ -715,17 +845,21 @@ def fetch_pvgis(request, transport=None):
             if year in offsets and (offsets[year] != offset or solar_times[year] != times):
                 raise ValueError('cross-plane timestamp inconsistency')
             offsets[year], solar_times[year] = offset, times
-            if type(raw_power) is not list or len(raw_power) != n:
-                raise ValueError('invalid array length: power')
-            if any(v is not None and type(v) not in (int, float) for v in raw_power):
-                raise ValueError('invalid numeric array: power')
-            if any(v is not None and (not math.isfinite(v) or v < 0) for v in raw_power):
-                raise ValueError('invalid physical array: power')
-            selected = list(raw_power)
+            if primary_version == '6':
+                selected, corr_count, corr_min = _validate_and_clamp_v6_power(raw_power, n)
+            else:
+                if type(raw_power) is not list or len(raw_power) != n:
+                    raise ValueError('invalid array length: power')
+                if any(v is not None and type(v) not in (int, float) for v in raw_power):
+                    raise ValueError('invalid numeric array: power')
+                if any(v is not None and (not math.isfinite(v) or v < 0) for v in raw_power):
+                    raise ValueError('invalid physical array: power')
+                selected = list(raw_power)
+                corr_count, corr_min = 0, None
             sources = [primary_version if v is not None else None for v in selected]
             fallback = None
             if 2014 <= year <= 2023 and any(v is None for v in selected):
-                secondary_obj = get(PVGIS5_URL, params_v5)
+                secondary_obj = get(PVGIS5_URL, params_v5, validator=_val_v5)
                 secondary = _normalize_v5(secondary_obj, params_v5, year)
                 for i, value in enumerate(secondary['power']):
                     if selected[i] is None and value is not None:
@@ -738,7 +872,7 @@ def fetch_pvgis(request, transport=None):
             p, _, gap_info = _interpolate_solar_series({'power': selected}, times, n, fields=('power',))
             sources = [source if source is not None else 'interpolated' for source in sources]
             power[ri, yi, :n] = p / 1000
-            provenance['solar'].append(dict(year=year, plane_id=plane.id, endpoint=endpoint,
+            prov_entry = dict(year=year, plane_id=plane.id, endpoint=endpoint,
                 provider='PVGIS', provider_version=primary_version, dataset='SARAH-3',
                 request_parameters=params, user_shading_fraction=plane.shading_fraction,
                 response_sha256=_digest(canonical_json(obj)),
@@ -749,13 +883,28 @@ def fetch_pvgis(request, transport=None):
                 gap_counts=gap_info['gap_counts'],
                 gap_timestamps_utc=gap_info['gap_timestamps_utc'],
                 zero_fill_sensitivity=gap_info['zero_fill_sensitivity'],
-                **metadata))
+                **metadata)
+            if corr_count > 0:
+                prov_entry['correction_count'] = corr_count
+                prov_entry['correction_min'] = corr_min
+            provenance['solar'].append(prov_entry)
         progress('temperature', yi, ny)
         params = dict(latitude=profile.location.latitude, longitude=profile.location.longitude,
                       start_date=f'{year}-01-01', end_date=f'{year}-12-31', hourly='temperature_2m',
                       timezone='UTC', temperature_unit='celsius', models='era5',
                       cell_selection='nearest', elevation='nan')
-        obj = get(TEMPERATURE_URL, params)
+        def _val_temp(val):
+            if (type(val.get('utc_offset_seconds')) is not int or val['utc_offset_seconds'] != 0 or
+                    val.get('timezone', 'GMT') not in ('UTC', 'GMT', 'Etc/UTC') or
+                    val.get('hourly_units', {}).get('temperature_2m') != '°C'):
+                raise ValueError('temperature UTC/Celsius metadata required')
+            _grid = {k: _number(val.get(k), 'temperature grid coordinates') for k in ('latitude', 'longitude')}
+            if any(abs(_grid[k]-params[k]) > .26 for k in _grid):
+                raise ValueError('temperature location grid mismatch')
+            _t = val.get('hourly', {}).get('time')
+            _sequence(_t, year, False)
+            _array(val.get('hourly', {}).get('temperature_2m'), n, 'temperature', False)
+        obj = get(TEMPERATURE_URL, params, validator=_val_temp)
         if (type(obj.get('utc_offset_seconds')) is not int or obj['utc_offset_seconds'] != 0 or
                 obj.get('timezone', 'GMT') not in ('UTC', 'GMT', 'Etc/UTC') or
                 obj.get('hourly_units', {}).get('temperature_2m') != '°C'):
@@ -792,10 +941,25 @@ class _ProbePlane:
     id = 'probe'
 
 
-def check_solar_coverage(profile, transport=None):
+def check_solar_coverage(profile, transport=None, cache=None, max_age_seconds=30 * 86400):
     """Probe PVGIS 5.3 (2005, 2023) and PVGIS 6 (2014, 2025) for explicit SARAH-3 coverage."""
     p = parse_profile(profile if isinstance(profile, dict) else profile_to_dict(profile))
     plane = p.roofs[0] if getattr(p, 'roofs', None) else _ProbePlane()
+    key_params = dict(
+        contract=CONTRACT,
+        latitude=p.location.latitude,
+        longitude=p.location.longitude,
+        surface_tilt=plane.tilt_deg,
+        surface_orientation=plane.azimuth_deg % 360,
+        loss_percent=14.0,
+        mounting='Free standing 2025',
+        technology='cSi',
+        boundary_years=dict(v5=[2005, 2023], v6=[2014, 2025]),
+    )
+    if cache is not None:
+        cached = cache.get_coverage(key_params, max_age_seconds=max_age_seconds)
+        if cached is not None:
+            return cached
     client = transport if isinstance(transport, ProviderClient) else ProviderClient(transport)
     retrieval_date = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
@@ -864,11 +1028,7 @@ def check_solar_coverage(profile, transport=None):
             times = obj.get('timestamps')
             _sequence(times, y, True)
             raw_power = obj.get('power')
-            if type(raw_power) is not list or len(raw_power) != n:
-                raise ValueError('invalid array length: power')
-            for v in raw_power:
-                if v is not None and (type(v) not in (int, float) or not math.isfinite(v) or v < 0):
-                    raise ValueError('invalid physical array: power')
+            _validate_and_clamp_v6_power(raw_power, n)
             for field in _PVGIS_SOLAR_FIELDS[1:]:
                 values = obj.get(field)
                 if type(values) is not list or len(values) != n:
@@ -914,7 +1074,7 @@ def check_solar_coverage(profile, transport=None):
 
     all_years = sorted(set().union(*(s['years'] for s in sources.values()))) if sources else []
 
-    return dict(
+    result = dict(
         supported=bool(sources),
         sources=sources,
         years=all_years,
@@ -923,3 +1083,6 @@ def check_solar_coverage(profile, transport=None):
         retrieval_date_utc=retrieval_date,
         location=dict(latitude=p.location.latitude, longitude=p.location.longitude),
     )
+    if cache is not None and result['supported'] and set(sources.keys()) == {'5.3', '6'}:
+        cache.put_coverage(key_params, result, retrieval_date)
+    return result
