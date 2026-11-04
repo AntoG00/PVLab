@@ -5,8 +5,8 @@
   "files": [
     {
       "path": ".github/workflows/privacy.yml",
-      "sha256": "a9b105c06cb81dafae64fecd9bb58aa7aed33df3ba0a84d67b827b94631baf65",
-      "size": 649,
+      "sha256": "a263490574c7ab4794ed072238f421d853f566526aa1311d8cbd81d274813d85",
+      "size": 661,
       "mode": "0o644"
     },
     {
@@ -95,8 +95,8 @@
     },
     {
       "path": "docs/PUBLICATION_CHECKLIST.md",
-      "sha256": "b60c6427aff2396eb3c16ed0920a39a5a69e6dcb833dae912f4004e09f95683e",
-      "size": 7366,
+      "sha256": "6090534ffed0333c1d1ef2b5239a7098ae29b9739c8610ab901747695401b6ae",
+      "size": 7368,
       "mode": "0o644"
     },
     {
@@ -1702,6 +1702,6 @@
       "mode": "0o755"
     }
   ],
-  "reviewed_source_sha256": "3bc3808a0fc48b35630999e4f72fa207018658e60402177bd192e0b638048947",
+  "reviewed_source_sha256": "de4b7931187f78cee1367260d765badef0cd3fb4ba5e0d365fe968a52c47cb8f",
   "digest_scope": "reviewed_source_sha256 excludes checklist and generated manifests; files includes all payload except this manifest"
 }
