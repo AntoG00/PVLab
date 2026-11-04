@@ -334,12 +334,12 @@ def test_darwin_live_rss_proc_pid_rusage(monkeypatch):
 
 def test_darwin_live_limit_enforcement(tmp_path, monkeypatch):
     import ctypes
-    import sys
     from feasibility import worker_pool as module
 
     store = TenantStore(tmp_path / 'store')
     monkeypatch.setattr(module, '_child', waiting_child)
-    monkeypatch.setattr(sys, 'platform', 'darwin')
+    # Simulate the RSS probe without changing the host's process startup platform.
+    monkeypatch.setattr(module, '_worker_rss', lambda process: module._darwin_rss(process.pid))
 
     class FakeLibProc:
         def proc_pid_rusage(self, pid, flavor, buf):
@@ -358,6 +358,8 @@ def test_darwin_live_limit_enforcement(tmp_path, monkeypatch):
         assert result['state'] == 'failed'
     finally:
         pool.close()
+    diagnostic = store.job_directory(owner, job['id']) / 'diagnostic.json'
+    assert json.loads(diagnostic.read_bytes())['error_code'] == 'COMPUTE_MEMORY'
 
 
 def nonreading_child(pipe, manifest):

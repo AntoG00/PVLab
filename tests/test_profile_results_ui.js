@@ -184,13 +184,13 @@ for(const nr of [1,7])test(nr+' arbitrary planes retain IDs in a recommendation 
 });
 test('apply carries all seven roof counts only for matching sizing revision, without legacy keys',()=>{
  const profile=profileWith(7),counts=Object.fromEntries(profile.roofs.map(r=>[r.id,2]));
- const nodes=new Map(),$=id=>{if(!nodes.has(id))nodes.set(id,{textContent:'',classList:{contains:()=>false}});return nodes.get(id);};let scheduled=0;
- const ctx=loadFunctions(['profileCounts','applySolarCandidate'],{activeResultProfile:profile,householdClient:{profileId:'p',revision:'r2'},solarData:{_presentation:{profile_id:'p',input_revision:'r2'}},solarAcceptedFingerprint:'f',solarStateFingerprint:()=> 'f',isSolarSizingMatching:()=>true,shouldBlockSolarSizingForAcDraft:()=>false,solarInFlight:false,settings:{panel_watts:400,battery_kwh:0,battery_modules:0},quote:{line_items:[]},$,normalizeBatterySettings:()=>{},schedule:()=>scheduled++,nf:String,fmt:String});
+ const nodes=new Map(),$=id=>{if(!nodes.has(id))nodes.set(id,{textContent:'',classList:{contains:()=>false}});return nodes.get(id);};let scheduled=0,refreshes=0,refreshedCounts=null;
+ const ctx=loadFunctions(['profileCounts','applySolarCandidate'],{activeResultProfile:profile,householdClient:{profileId:'p',revision:'r2'},solarData:{_presentation:{profile_id:'p',input_revision:'r2'}},solarAcceptedFingerprint:'f',solarStateFingerprint:()=> 'f',isSolarSizingMatching:()=>true,shouldBlockSolarSizingForAcDraft:()=>false,solarInFlight:false,settings:{panel_watts:400,battery_kwh:0,battery_modules:0},quote:{line_items:[]},$,renderProfileRoofControls:()=>{refreshes++;refreshedCounts=JSON.parse(JSON.stringify(ctx.settings.roof_panels));},normalizeBatterySettings:()=>{},schedule:()=>scheduled++,nf:String,fmt:String});
  const candidate={roof_counts:counts,panel_count:14,kwp:5.6,battery_kwh:0,battery_modules:0,settings:{panel_watts:400}};
  ctx.applySolarCandidate(candidate);
- assert.deepEqual(JSON.parse(JSON.stringify(ctx.settings.roof_panels)),counts);assert.equal(scheduled,1);
+ assert.deepEqual(JSON.parse(JSON.stringify(ctx.settings.roof_panels)),counts);assert.equal(scheduled,1);assert.equal(refreshes,1);assert.deepEqual(refreshedCounts,counts);
  assert.equal(Object.hasOwn(ctx.settings,'south_panels'),false);assert.equal(Object.hasOwn(ctx.settings,'dormer_south_proxy'),false);
- ctx.householdClient.revision='r3';ctx.applySolarCandidate(candidate);assert.equal(scheduled,1);assert.match($('solarApplyStatus').textContent,/revision changed/);
+ ctx.householdClient.revision='r3';ctx.applySolarCandidate(candidate);assert.equal(scheduled,1);assert.match($('solarApplyStatus').textContent,/revision changed/);assert.equal(refreshes,1);
 });
 test('late result presentation cannot be accepted for another profile or revision',()=>{
  const stale=()=>Error('STALE_RESPONSE');const ctx=loadFunctions(['acceptProfilePresentation'],{activeResultProfile:profileWith(1),householdClient:{profileId:'p',revision:'new',stale}});

@@ -2,7 +2,7 @@
 
 This checklist describes preparation of a subsequent reviewed update to an existing
 local public repository. No remote, push, release publication, or deployment is authorized.
-Existing public history contains two commits; this update appends a third commit and
+Existing public history contains three commits; this update appends a fourth commit and
 must never amend, reset, rebase, or reinitialize public history.
 
 ## Release policy
@@ -21,7 +21,12 @@ must never amend, reset, rebase, or reinitialize public history.
 ## Platform validation and environment compatibility
 
 - [x] Linux (x86_64) verification current for the application and tests.
-- [ ] Windows x64: support docs retain prior native verification; not rerun here.
+- [ ] Windows x64: native CPython 3.12.16 verification ran on this update.
+  Python: 2,308 passed plus 268 subtests; Node: 466 passed; acceptance passed.
+  Exact public synthetic-reference comparison FAILED; expected values were preserved.
+  Windows exact numerical parity is an unresolved release limitation.
+  Full Python passed with four test workers; higher-concurrency runs had intermittent
+  startup/cleanup failures. No application limits or assertions were widened.
 - [ ] macOS (Apple Silicon arm64): native platform validation remains pending.
 - [x] Environment metadata: owner approved a separate current kernel/tzdata compatibility
   manifest with unchanged sealed inputs/oracle and exact comparator, after original
@@ -36,8 +41,9 @@ Pre-update Python/Node/acceptance checks: Python 2,286 passed, Node 464 passed, 
 The initial metadata-only private gate rejection is retained; the separately approved
 compatibility gate pins the current environment and compares the unchanged sealed oracle.
 
-- [x] Full private compatibility and clean exported public suites: 2,299 Python tests passed, 465 Node tests passed;
-  all acceptance scenarios and sealed references match without oracle refresh or skips.
+- [x] Full clean public suite: 2,299 Python tests passed, 466 Node tests passed;
+  Linux acceptance and sealed/synthetic references match without oracle refresh or skips.
+  The separate Windows exact-reference failure above is not waived.
 - [x] Payload bytes/hashes, relative paths, and POSIX modes audited against committed
   reviewed source allowlist; no private Git objects, private filesystem paths, or raw inputs.
 - [x] Strict export privacy and secret scans: zero findings; no legacy exemptions.
@@ -52,23 +58,25 @@ compatibility gate pins the current environment and compares the unchanged seale
   limited to IHDR/IDAT/IEND; JPEG retains only standard sRGB/JFIF metadata.
 
 Reviewed source inventory SHA256 (`reviewed_source_sha256`):
-`f08ca10ced2304bc63cbc22103fcf7379f53045540fa2cd91a244d88bab2bdc0`.
+`48e943697c448147fca454d0a22d923c36571ce7f0e95838ca6f964104ed1471`.
 
 Manifests (`PUBLIC_EXPORT_MANIFEST.json`, `SOFTWARE_MANIFEST.json`) record sanitized file
 metadata, runtime requirements, and dependency lock hashes without private paths or IDs.
 
 ## Public Git history gate
 
-The existing public repository has two commits. This update appends exactly one new
-commit (the third commit) on `main`. Never amend, reset, rebase, or reinitialize.
+The existing public repository has three commits. This update appends exactly one new
+commit (the fourth commit) on `main`. Never amend, reset, rebase, or reinitialize.
 Clean worktree and fsck required; approved author/committer identity; every object scanned;
 no inherited private refs, objects, hooks, or alternates; no remote and no tags.
 
-## Known pre-existing UI limitations
+## Roof-control verification
 
-The result-view roof controls remain hidden, and applying a sizing recommendation
-does not immediately refresh those controls. Roof edits remain available through
-onboarding. These issues predate this update; they are follow-up usability work.
+Profile roof controls become visible when populated and clear/hide without an active
+profile. Applying a matching sizing recommendation refreshes the displayed plane
+counts; stale revisions remain rejected. Focused UI checks and the full Linux
+public gate passed. The unchanged Python backend also passed the exact private
+cold/warm comparison; no numerical expectation or security protection changed.
 
 ## Future update procedure and owner approval
 

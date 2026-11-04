@@ -295,3 +295,37 @@ test('UI preflight validation blocks submission and displays feedback when panel
   assert.equal(apiCalls[0].path, '/api/evaluate');
   assert.equal(apiCalls[0].payload.settings.roof_panels.plane0, 4);
 });
+
+test('renderProfileRoofControls reveals controls when active profile roofs exist and clears/hides when absent', () => {
+  const doc = createMockDoc();
+  const rootControls = new Element('div', doc);
+  rootControls.id = 'profileRoofControls';
+  rootControls.hidden = true;
+  doc.elements.set('profileRoofControls', rootControls);
+
+  const profile = {
+    id: 'p_test',
+    roofs: [{ id: 'plane0', label: 'South Slope', max_kwp: 2.0 }],
+  };
+
+  const sandbox = {
+    activeResultProfile: profile,
+    settings: { panel_watts: 400, roof_panels: { plane0: 4 } },
+    $: id => doc.getElementById(id),
+    document: doc,
+    getRoofValidationError: () => null,
+  };
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(extractFunction('renderProfileRoofControls'), ctx);
+
+  assert.equal(rootControls.hidden, true);
+  ctx.renderProfileRoofControls();
+  assert.equal(rootControls.hidden, false);
+  assert.equal(rootControls.children.length > 0, true);
+
+  ctx.activeResultProfile = null;
+  ctx.renderProfileRoofControls();
+  assert.equal(rootControls.hidden, true);
+  assert.equal(rootControls.textContent, '');
+  assert.equal(rootControls.children.length, 0);
+});

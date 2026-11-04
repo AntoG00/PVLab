@@ -95,8 +95,8 @@
     },
     {
       "path": "docs/PUBLICATION_CHECKLIST.md",
-      "sha256": "8c5acf103756b6d87f1190ba51e9eba342d68c951aaf0c3dee853132ca42379a",
-      "size": 5181,
+      "sha256": "f269127bcd09d52c87bc3e31170cfe95752d0a9329b4ca8428733f575277099d",
+      "size": 5763,
       "mode": "0o644"
     },
     {
@@ -419,8 +419,8 @@
     },
     {
       "path": "feasibility/web/app.js",
-      "sha256": "d7b61fea73ac32da441b258fda40a07853dffc613bc25c26b7064ddc3ae0e905",
-      "size": 984915,
+      "sha256": "6db077416d45e5dffb271414061b83656970a4f0c9d0a69fa94c0a2e81b64b05",
+      "size": 985136,
       "mode": "0o755"
     },
     {
@@ -1235,8 +1235,8 @@
     },
     {
       "path": "tests/test_profile_results_ui.js",
-      "sha256": "22183dcfbbc2339e3a349693e72d37d0c4211f2e04cca30d4e3cd325ba509425",
-      "size": 18651,
+      "sha256": "684ef59836fa1866ebad34d164c0858d5e442837a8c65479ca74c0b12aa32064",
+      "size": 18891,
       "mode": "0o644"
     },
     {
@@ -1331,8 +1331,8 @@
     },
     {
       "path": "tests/test_roof_capacity_ui.js",
-      "sha256": "c374adb236a716b208eb0cdb72875f6d63dabea228c90fca4d2e237b952ac8f6",
-      "size": 9840,
+      "sha256": "b98e9f3809577981e023dac9f161c0befee30fdf08dab9f227eb45b0736d2799",
+      "size": 11003,
       "mode": "0o644"
     },
     {
@@ -1637,8 +1637,8 @@
     },
     {
       "path": "tests/test_worker_pool.py",
-      "sha256": "74d9ea77bc5c40c2af1a4decf70bafcd6c8a0ef2269298bc2454ceb6cfaaab16",
-      "size": 20412,
+      "sha256": "e3e3dc645864f58cf51b3a10593625ee7a0e8d7200239226b2433bfc4b8e4b61",
+      "size": 20681,
       "mode": "0o644"
     },
     {
@@ -1696,6 +1696,6 @@
       "mode": "0o755"
     }
   ],
-  "reviewed_source_sha256": "f08ca10ced2304bc63cbc22103fcf7379f53045540fa2cd91a244d88bab2bdc0",
+  "reviewed_source_sha256": "48e943697c448147fca454d0a22d923c36571ce7f0e95838ca6f964104ed1471",
   "digest_scope": "reviewed_source_sha256 excludes checklist and generated manifests; files includes all payload except this manifest"
 }

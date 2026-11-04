@@ -351,8 +351,9 @@ function showRoofValidationError(err){
  }
 }
 function renderProfileRoofControls(){
- if(!activeResultProfile)return;
- const root=$('profileRoofControls');if(!root)return;root.textContent='';
+ const root=$('profileRoofControls');if(!root)return;
+ if(!activeResultProfile||!Array.isArray(activeResultProfile.roofs)||!activeResultProfile.roofs.length){root.textContent='';root.hidden=true;return;}
+ root.textContent='';root.hidden=false;
  const pw=Number(settings.panel_watts);
  for(const r of activeResultProfile.roofs){
   const maxCount=Math.floor((r.max_kwp*1000+1e-7)/pw);
@@ -14565,6 +14566,7 @@ function applySolarCandidate(rec, label = 'recommended system') {
 
   if (typeof syncQuoteFields === 'function') syncQuoteFields();
   if (typeof renderControls === 'function') renderControls();
+  if (typeof renderProfileRoofControls === 'function') renderProfileRoofControls();
   if (typeof renderRoofLimitsComparison === 'function') renderRoofLimitsComparison();
 
   if (isNoInstall) {
