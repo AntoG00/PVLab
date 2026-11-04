@@ -220,3 +220,38 @@ def test_cli_output_and_safety_checks(generator_mod):
 
         with pytest.raises(FileExistsError):
             generator_mod.main(["--output", str(outside_dir), "--planes", "3"])
+
+
+def test_seasonal_cosine_table_exact_and_stubbed(generator_mod, monkeypatch):
+    """Ensure generate() uses the frozen seasonal cosine table and matches reference.json without host np.cos."""
+    import hashlib
+
+    table_path = Path(generator_mod.__file__).resolve().parent / "seasonal_cosine.json"
+    assert table_path.exists()
+    table = json.loads(table_path.read_text(encoding="utf-8"))
+    assert set(table.keys()) >= {"365", "366"}
+    assert len(table["365"]) == 365
+    assert len(table["366"]) == 366
+
+    # Validate 731 samples: shapes and all finite
+    for n_str in ("365", "366"):
+        samples = np.array([float.fromhex(h) for h in table[n_str]], dtype=np.float64)
+        assert samples.shape == (int(n_str),)
+        assert np.all(np.isfinite(samples))
+
+    # Reset cached table before call to exercise file load
+    monkeypatch.setattr(generator_mod, "_SEASONAL_COSINE_TABLE", None)
+
+    def raising_cos(*args, **kwargs):
+        raise RuntimeError("Host np.cos should not be called by generate()")
+
+    monkeypatch.setattr(generator_mod.np, "cos", raising_cos)
+    actual = generator_mod.generate(plane_count=2)
+
+    ref_path = Path(generator_mod.__file__).resolve().parent / "reference.json"
+    expected = json.loads(ref_path.read_text(encoding="utf-8"))["snapshots"]["2"]["arrays"]
+    for k, spec in expected.items():
+        arr = actual[k]
+        assert list(arr.shape) == spec["shape"], f"{k} shape mismatch"
+        assert arr.dtype.str == spec["dtype"], f"{k} dtype mismatch"
+        assert hashlib.sha256(arr.tobytes(order="C")).hexdigest() == spec["sha256"], f"{k} sha mismatch"

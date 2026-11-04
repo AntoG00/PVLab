@@ -2,7 +2,7 @@
 
 This checklist describes preparation of a subsequent reviewed update to an existing
 local public repository. No remote, push, release publication, or deployment is authorized.
-Existing public history contains three commits; this update appends a fourth commit and
+Existing public history contains four commits; this update appends a fifth commit and
 must never amend, reset, rebase, or reinitialize public history.
 
 ## Release policy
@@ -21,12 +21,12 @@ must never amend, reset, rebase, or reinitialize public history.
 ## Platform validation and environment compatibility
 
 - [x] Linux (x86_64) verification current for the application and tests.
-- [ ] Windows x64: native CPython 3.12.16 verification ran on this update.
-  Python: 2,308 passed plus 268 subtests; Node: 466 passed; acceptance passed.
-  Exact public synthetic-reference comparison FAILED; expected values were preserved.
-  Windows exact numerical parity is an unresolved release limitation.
-  Full Python passed with four test workers; higher-concurrency runs had intermittent
-  startup/cleanup failures. No application limits or assertions were widened.
+- [x] Windows x64: native CPython 3.12.16 verification passed with four test workers.
+  Python: 2,310 passed plus 268 subtests; Node: 466 passed; acceptance, lifecycle smoke,
+  and exact two/seven-plane synthetic-reference comparisons passed. The earlier
+  64-difference failure is retained as a historical receipt, now resolved.
+  Higher-concurrency runs had intermittent startup/cleanup failures; no application
+  limits or assertions were widened.
 - [ ] macOS (Apple Silicon arm64): native platform validation remains pending.
 - [x] Environment metadata: owner approved a separate current kernel/tzdata compatibility
   manifest with unchanged sealed inputs/oracle and exact comparator, after original
@@ -41,9 +41,9 @@ Pre-update Python/Node/acceptance checks: Python 2,286 passed, Node 464 passed, 
 The initial metadata-only private gate rejection is retained; the separately approved
 compatibility gate pins the current environment and compares the unchanged sealed oracle.
 
-- [x] Full clean public suite: 2,299 Python tests passed, 466 Node tests passed;
+- [x] Full clean public suite: 2,301 Python tests passed, 466 Node tests passed;
   Linux acceptance and sealed/synthetic references match without oracle refresh or skips.
-  The separate Windows exact-reference failure above is not waived.
+  Exact Windows synthetic-reference parity is resolved without an oracle refresh or waiver.
 - [x] Payload bytes/hashes, relative paths, and POSIX modes audited against committed
   reviewed source allowlist; no private Git objects, private filesystem paths, or raw inputs.
 - [x] Strict export privacy and secret scans: zero findings; no legacy exemptions.
@@ -58,15 +58,15 @@ compatibility gate pins the current environment and compares the unchanged seale
   limited to IHDR/IDAT/IEND; JPEG retains only standard sRGB/JFIF metadata.
 
 Reviewed source inventory SHA256 (`reviewed_source_sha256`):
-`48e943697c448147fca454d0a22d923c36571ce7f0e95838ca6f964104ed1471`.
+`03174b53244b9ed30105f59159ba38c3f0d8bc8b88029cbb89429f8ae1241607`.
 
 Manifests (`PUBLIC_EXPORT_MANIFEST.json`, `SOFTWARE_MANIFEST.json`) record sanitized file
 metadata, runtime requirements, and dependency lock hashes without private paths or IDs.
 
 ## Public Git history gate
 
-The existing public repository has three commits. This update appends exactly one new
-commit (the fourth commit) on `main`. Never amend, reset, rebase, or reinitialize.
+The existing public repository has four commits. This update appends exactly one new
+commit (the fifth commit) on `main`. Never amend, reset, rebase, or reinitialize.
 Clean worktree and fsck required; approved author/committer identity; every object scanned;
 no inherited private refs, objects, hooks, or alternates; no remote and no tags.
 
@@ -77,6 +77,26 @@ profile. Applying a matching sizing recommendation refreshes the displayed plane
 counts; stale revisions remain rejected. Focused UI checks and the full Linux
 public gate passed. The unchanged Python backend also passed the exact private
 cold/warm comparison; no numerical expectation or security protection changed.
+
+## 2026-11-04 Windows parity verification and synchronized candidate
+
+The verified parity fix is committed and synchronized into the public export candidate,
+appending a fifth public commit while preserving all four prior commits. No remote,
+push, publication, or deployment is authorized. Confirmed diagnosis: 21 of 731 original synthetic
+analytic cosine daily samples differed in the last bit under Windows UCRT vs Linux glibc.
+Across 64 snapshot differences, 24 were floats (largest absolute delta 2.2737367544323206e-13 kWh)
+and 40 were hash/fingerprint fields; no recorded financial numeric value changed. The fixed
+generator freezes the original 731 float.hex values, preserving every Linux input array bit,
+with reference.json unchanged. The compiler now writes canonical NPZ ZipInfo metadata
+(create_system=3, permissions 0o600<<16), preserving exact original Linux archive bytes where
+Windows previously set create_system=0 on 10 entries. No production numerical equation,
+tolerance, expected output, hash validation, or worker/security limit changed. The unchanged
+full exact two/seven-plane comparison now passes on Linux and native Windows. The full
+Linux gate passed (2,301 Python and 466 Node tests, acceptance, exact public reference),
+and the sealed private cold/warm comparison passed exactly. The full native Windows gate
+passed with four test workers: 2,310 Python tests plus 268 subtests, 466 Node tests,
+acceptance and lifecycle smoke checks; no skips. This clears the exact-parity blocker
+for the synchronized candidate; exact owner approval remains required before any future push.
 
 ## Future update procedure and owner approval
 

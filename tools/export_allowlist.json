@@ -102,6 +102,7 @@
     "tests/fixtures/public_demo/generate.py",
     "tests/fixtures/public_demo/profile.json",
     "tests/fixtures/public_demo/reference.json",
+    "tests/fixtures/public_demo/seasonal_cosine.json",
     "tests/heating_oracle.py",
     "tests/historical_weather.py",
     "tests/quote_scenario_fixture.js",

@@ -17,6 +17,7 @@ import uuid
 from types import MappingProxyType
 import zipfile
 import numpy as np
+from numpy.lib.format import write_array
 
 from .load_projection import (LoadProjection, checked_years, immutable_array, utc_slots,
                               STANDARD, projection_digest, _totals)
@@ -262,7 +263,16 @@ def compile_dataset(profile, solar_artifact, load_projection):
                 audit['solar_source']['gap_records'] = gap_records
     audit_raw = canonical_json(audit)
     archive = io.BytesIO()
-    np.savez_compressed(archive, **data)
+    # Pin ZIP metadata to the original Linux encoding: host OS flags otherwise
+    # change the archive digest and runtime identity for identical array bytes.
+    with zipfile.ZipFile(archive, mode='w', compression=zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
+        for key, val in data.items():
+            zinfo = zipfile.ZipInfo(f'{key}.npy')
+            zinfo.compress_type = zipfile.ZIP_DEFLATED
+            zinfo.create_system = 3
+            zinfo.external_attr = 0o600 << 16
+            with zf.open(zinfo, 'w', force_zip64=True) as fid:
+                write_array(fid, np.asanyarray(val), allow_pickle=False)
     archive_raw = archive.getvalue()
     check_npz_bounds(archive_raw)
     manifest = dict(schema_version=2, compiler_version=COMPILER_VERSION, calendar_version=CALENDAR_VERSION,

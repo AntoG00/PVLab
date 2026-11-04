@@ -19,6 +19,26 @@ YEARS = (2023, 2024)
 LEAP_YEARS = {2024}
 ROME_TZ = ZoneInfo("Europe/Rome")
 
+_SEASONAL_COSINE_TABLE: dict[int, np.ndarray] | None = None
+
+
+def _get_seasonal_cosine_table() -> dict[int, np.ndarray]:
+    """Load the frozen analytic synthetic seasonal cosine table.
+
+    Exact float.hex entries computed on Linux NumPy preserve the original
+    analytic formula cos(2*pi*d/n) without host libm last-bit divergence.
+    """
+    global _SEASONAL_COSINE_TABLE
+    if _SEASONAL_COSINE_TABLE is None:
+        table_path = Path(__file__).resolve().parent / "seasonal_cosine.json"
+        raw = json.loads(table_path.read_text(encoding="utf-8"))
+        _SEASONAL_COSINE_TABLE = {
+            int(k): np.array([float.fromhex(h) for h in v], dtype=np.float64)
+            for k, v in raw.items()
+            if k in ("365", "366")
+        }
+    return _SEASONAL_COSINE_TABLE
+
 
 def generate(plane_count: int = 2) -> dict[str, np.ndarray]:
     """Generate synthetic time series for years 2023 and 2024.
@@ -76,7 +96,6 @@ def generate(plane_count: int = 2) -> dict[str, np.ndarray]:
         h_std_arr = np.zeros(valid_hours, dtype=np.int32)
         h_civ_arr = np.zeros(valid_hours, dtype=np.int32)
         ts_arr = np.zeros(valid_hours, dtype="<U20")
-        d_of_y = np.repeat(np.arange(d_in_y, dtype=np.float64), 24)
 
         base_dt = datetime(y, 1, 1, 0, 0, tzinfo=timezone.utc)
         for i in range(valid_hours):
@@ -98,9 +117,9 @@ def generate(plane_count: int = 2) -> dict[str, np.ndarray]:
         # load_standard uses fixed standard UTC+1 hour
         load_standard[y_idx, :valid_hours] = 0.2 + 0.1 * ((h_std_arr >= 18) & (h_std_arr <= 21)).astype(np.float64)
 
-        # seasonal temperature uses fixed-standard day of year
-        seasonal_angle = 2.0 * np.pi * d_of_y / float(d_in_y)
-        cos_seasonal = np.cos(seasonal_angle)
+        # seasonal temperature uses fixed-standard day of year (frozen table avoids host libm divergence)
+        cos_daily = _get_seasonal_cosine_table()[d_in_y]
+        cos_seasonal = np.repeat(cos_daily, 24)
         temp_val = 12.0 + 8.0 * cos_seasonal
         temperature[y_idx, :valid_hours] = temp_val
 

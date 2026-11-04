@@ -337,3 +337,25 @@ def test_gap_records_older_metadata_untracked():
     disc = profile_disclosures(profile, audit_without_gaps, revision='rev0', years=[2023, 2024, 2028])
     assert disc['solar_gap_records']['status'] == 'untracked'
     assert 'untracked' in disc['solar_gap_records']['note'].lower()
+
+
+def test_compile_dataset_windows_parity_canonical_npz(monkeypatch):
+    """Simulated Windows ZipInfo constructor default (create_system=0) must produce identical archive bytes."""
+    profile, solar, load = inputs(nr=1, years=(2023, 2024, 2028))
+    canonical = compile_dataset(profile, solar, load)
+
+    orig_init = zipfile.ZipInfo.__init__
+
+    def win_zipinfo_init(self, *args, **kwargs):
+        orig_init(self, *args, **kwargs)
+        self.create_system = 0
+
+    monkeypatch.setattr(zipfile.ZipInfo, '__init__', win_zipinfo_init)
+    simulated_win = compile_dataset(profile, solar, load)
+
+    assert simulated_win.archive_bytes == canonical.archive_bytes
+    assert simulated_win.digest == canonical.digest
+    with np.load(io.BytesIO(simulated_win.archive_bytes), allow_pickle=False) as loaded:
+        for name, arr in canonical.arrays.items():
+            np.testing.assert_array_equal(loaded[name], arr)
+            assert loaded[name].dtype == arr.dtype

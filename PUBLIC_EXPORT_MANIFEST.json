@@ -95,8 +95,8 @@
     },
     {
       "path": "docs/PUBLICATION_CHECKLIST.md",
-      "sha256": "f269127bcd09d52c87bc3e31170cfe95752d0a9329b4ca8428733f575277099d",
-      "size": 5763,
+      "sha256": "e0c8a2d927b4dfef35b41dbafb56ae2a688d737e1e785b18e5075597e94524f4",
+      "size": 7366,
       "mode": "0o644"
     },
     {
@@ -155,8 +155,8 @@
     },
     {
       "path": "feasibility/dataset_compile.py",
-      "sha256": "cfe47f53f4fa794e06fe086b57fbd603af3486bf3116adbe8c00e567480565b6",
-      "size": 14499,
+      "sha256": "cb719cfec542cd5117b9fc3b948eb3a2b9676178981bde9ffec94fdb54164817",
+      "size": 15121,
       "mode": "0o644"
     },
     {
@@ -593,8 +593,8 @@
     },
     {
       "path": "tests/fixtures/public_demo/generate.py",
-      "sha256": "43b1b32f4113624ef4d0d1eab03d809679cda0b4df0b5fb37c42cb517866d6e7",
-      "size": 32677,
+      "sha256": "e5ded004a0faf0b7a62bc3fd04a4be649b360a64cea0bc6f6410455cfb1ed714",
+      "size": 33437,
       "mode": "0o644"
     },
     {
@@ -607,6 +607,12 @@
       "path": "tests/fixtures/public_demo/reference.json",
       "sha256": "b7189d9b446a1dc115e4c0b220f3c1868f6645014019a22d9f3a65016cbda149",
       "size": 1001739,
+      "mode": "0o644"
+    },
+    {
+      "path": "tests/fixtures/public_demo/seasonal_cosine.json",
+      "sha256": "6a3e3706b4ee58cb8fdc123781416b640fdd5f27593829719d4ec61f9df3838e",
+      "size": 21115,
       "mode": "0o644"
     },
     {
@@ -857,8 +863,8 @@
     },
     {
       "path": "tests/test_dataset_compile.py",
-      "sha256": "9fcca2685da7fda5962484885220f19f651f42bc4ad554842a263259d7cc1651",
-      "size": 15258,
+      "sha256": "a26dd06dd7aa0d9210693100eb215632f403df14cec2a5881b243432c79dadf3",
+      "size": 16225,
       "mode": "0o644"
     },
     {
@@ -1253,8 +1259,8 @@
     },
     {
       "path": "tests/test_public_demo.py",
-      "sha256": "8d50cdd7bbac5dd09458273520c246a71b8a6f37739cb1be1b0f64a1888cc1f0",
-      "size": 8024,
+      "sha256": "4e4251f934c48cd8381cb09f9d0e87c2a15c9cec95c1415e6fbeb0da316dcfab",
+      "size": 9640,
       "mode": "0o644"
     },
     {
@@ -1649,8 +1655,8 @@
     },
     {
       "path": "tools/export_allowlist.json",
-      "sha256": "d3c8c64f2e03d89844da1ecea5b3e751e0af23e735a30846e3788aa05dc660e6",
-      "size": 14131,
+      "sha256": "71e27a0b636c58b1d4b8bbdb5906e3133daf8a77ff7cfd77c70d5fe6e8b73ae1",
+      "size": 14186,
       "mode": "0o644"
     },
     {
@@ -1696,6 +1702,6 @@
       "mode": "0o755"
     }
   ],
-  "reviewed_source_sha256": "48e943697c448147fca454d0a22d923c36571ce7f0e95838ca6f964104ed1471",
+  "reviewed_source_sha256": "03174b53244b9ed30105f59159ba38c3f0d8bc8b88029cbb89429f8ae1241607",
   "digest_scope": "reviewed_source_sha256 excludes checklist and generated manifests; files includes all payload except this manifest"
 }
