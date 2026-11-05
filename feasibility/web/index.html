@@ -337,7 +337,6 @@
             <button id="runSolarSizing" type="button" class="action-btn">Run sizing analysis</button>
             <span id="solarStatus" role="status" class="muted"></span>
             <button id="runBatterySizing" type="button" style="display:none;">Run battery sizing</button>
-            <span id="batStatus" role="status" style="display:none;"></span>
           </div>
         </div>
         <div id="hpContextNoticeDesign" class="hp-notice-card" hidden></div>
@@ -480,6 +479,7 @@
               <span style="--series:#bd8334">Annualized marginal battery cost (net deduction)</span>
               <span style="--series:#7b827c">Annualized marginal battery cost (gross)</span>
             </div>
+            <p id="batStatus" role="status" class="muted">Run sizing analysis to calculate the storage charts.</p>
             <div id="batChart2" class="chart"></div>
             <div id="batOptimumCallout" class="notice"></div>
             <details>

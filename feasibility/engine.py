@@ -159,11 +159,6 @@ def _panel_total(s):
     return sum(_panel_counts(s).values())
 
 
-def _require_legacy_sizing():
-    if _dynamic_roofs() is not None:
-        raise ValueError('Standalone battery sizing is unavailable for dynamic roofs')
-
-
 VALUATION_UNITS = ('EUR', 'weighted_kWh')
 VALUATION_MODES = ('flat', 'shape_scaled', 'absolute_proxy')
 VALID_VALUATION_COMBINATIONS = {
@@ -5090,147 +5085,165 @@ def _battery_sizing_cached(runtime_key, key_settings, key_options, quote_fingerp
     chart3_efc=[row for row in full_cap_dispatch if row['capacity_kwh']>0]
     
     # 7. Chart 4 Heatmap PV kWp x Battery kWh genuine discounted NPV
-    roof_names=['south','west','east','dormer','flat','secondary_south']
-    base_counts={r:s[f'{r}_panels'] for r in roof_names}
-    base_total=sum(base_counts.values())
-    
-    target_pv_grid=[3.0,4.8,6.0,7.2,8.4,9.6]
-    current_exact_kwp=float(round(kwp,3))
-    
-    if not is_mixed:
-        bat_grid=[0.0,2.5,5.0,7.5,10.0,12.0,15.0,20.0,25.0]
-        if selected_cap not in bat_grid:
-            bat_grid.append(selected_cap)
-        bat_grid=sorted(set(bat_grid))
-    else:
-        bat_grid=[float(c) for c in full_capacities]
-    
-    # Generate unique layout configs
-    unique_layouts={}
-    for p_target in target_pv_grid:
-        if base_total>0:
-            ratio=p_target*1000.0/(base_total*s['panel_watts'])
-            scaled_panels={r:int(round(base_counts[r]*ratio)) for r in roof_names}
-            if sum(scaled_panels.values())==0 and p_target>0:
-                scaled_panels['south']=max(1,int(round(p_target*1000.0/s['panel_watts'])))
-        else:
-            scaled_panels={r:0 for r in roof_names}
-            scaled_panels['south']=max(1,int(round(p_target*1000.0/s['panel_watts'])))
-        exact_p=float(round(sum(scaled_panels.values())*s['panel_watts']/1000.0,3))
-        if exact_p not in unique_layouts:
-            unique_layouts[exact_p]=scaled_panels
-            
-    # Always include the exact current configuration layout
-    if current_exact_kwp not in unique_layouts:
-        unique_layouts[current_exact_kwp]=base_counts
-        
-    sorted_pv_axis=sorted(unique_layouts.keys())
-    heatmap_cells=[]
-    
-    for exact_kwp in sorted_pv_axis:
-        scaled_panels=unique_layouts[exact_kwp]
-        s_pv={**s,**{f'{r}_panels':scaled_panels[r] for r in roof_names}}
-        pv_prof=_map_pv_profile(pv_profile(s_pv),mappings,target_len)
-        
-        for b_kwh in bat_grid:
-            comp_cell=rep_for_cap.get(b_kwh) if is_mixed else None
-            s_cell=_candidate_battery_settings(s_pv,b_kwh,comp_cell)
-            s_cell.update({
-                'quote_total':None,
-                'deduction_rate':deduction_rate,
-                'battery_calendar_fade':deg_annual,
-                'battery_replace_year':lifetime if s['battery_replace_year']>0 or opt.get('battery_lifetime_years') is not None else 0
-            })
+    chart4_npv_heatmap = None
+    if _dynamic_roofs() is None:
+        roof_names=['south','west','east','dormer','flat','secondary_south']
+        base_counts={r:s[f'{r}_panels'] for r in roof_names}
+        base_total=sum(base_counts.values())
 
-            # Exact parity with current configuration when layout and battery match
-            if math.isclose(exact_kwp,current_exact_kwp,abs_tol=1e-4) and math.isclose(b_kwh,selected_cap,abs_tol=1e-4):
+        target_pv_grid=[3.0,4.8,6.0,7.2,8.4,9.6]
+        current_exact_kwp=float(round(kwp,3))
+
+        if not is_mixed:
+            bat_grid=[0.0,2.5,5.0,7.5,10.0,12.0,15.0,20.0,25.0]
+            if selected_cap not in bat_grid:
+                bat_grid.append(selected_cap)
+            bat_grid=sorted(set(bat_grid))
+        else:
+            bat_grid=[float(c) for c in full_capacities]
+
+        # Generate unique layout configs
+        unique_layouts={}
+        for p_target in target_pv_grid:
+            if base_total>0:
+                ratio=p_target*1000.0/(base_total*s['panel_watts'])
+                scaled_panels={r:int(round(base_counts[r]*ratio)) for r in roof_names}
+                if sum(scaled_panels.values())==0 and p_target>0:
+                    scaled_panels['south']=max(1,int(round(p_target*1000.0/s['panel_watts'])))
+            else:
+                scaled_panels={r:0 for r in roof_names}
+                scaled_panels['south']=max(1,int(round(p_target*1000.0/s['panel_watts'])))
+            exact_p=float(round(sum(scaled_panels.values())*s['panel_watts']/1000.0,3))
+            if exact_p not in unique_layouts:
+                unique_layouts[exact_p]=scaled_panels
+
+        # Always include the exact current configuration layout
+        if current_exact_kwp not in unique_layouts:
+            unique_layouts[current_exact_kwp]=base_counts
+
+        sorted_pv_axis=sorted(unique_layouts.keys())
+        heatmap_cells=[]
+
+        for exact_kwp in sorted_pv_axis:
+            scaled_panels=unique_layouts[exact_kwp]
+            s_pv={**s,**{f'{r}_panels':scaled_panels[r] for r in roof_names}}
+            pv_prof=_map_pv_profile(pv_profile(s_pv),mappings,target_len)
+
+            for b_kwh in bat_grid:
+                comp_cell=rep_for_cap.get(b_kwh) if is_mixed else None
+                s_cell=_candidate_battery_settings(s_pv,b_kwh,comp_cell)
                 s_cell.update({
-                    **s,
                     'quote_total':None,
                     'deduction_rate':deduction_rate,
                     'battery_calendar_fade':deg_annual,
                     'battery_replace_year':lifetime if s['battery_replace_year']>0 or opt.get('battery_lifetime_years') is not None else 0
                 })
+
+                # Exact parity with current configuration when layout and battery match
+                if math.isclose(exact_kwp,current_exact_kwp,abs_tol=1e-4) and math.isclose(b_kwh,selected_cap,abs_tol=1e-4):
+                    s_cell.update({
+                        **s,
+                        'quote_total':None,
+                        'deduction_rate':deduction_rate,
+                        'battery_calendar_fade':deg_annual,
+                        'battery_replace_year':lifetime if s['battery_replace_year']>0 or opt.get('battery_lifetime_years') is not None else 0
+                    })
+                    if is_mixed:
+                        comp_cell=selected_comp
+
+
+                if spread_delta!=0.0:
+                    eff_market=(base_export_price+spread_delta)/(capture if capture>0 else 1.0)
+                    s_cell['export_market_price']=eff_market
+
+                # Apply sensitivity cost multiplier if sensitivity_cost_delta_pct was specified
+                if cost_multiplier!=1.0 and b_kwh>0:
+                    if s_cell.get('battery_module_cost_override') is not None:
+                        s_cell['battery_module_cost_override']=float(s_cell['battery_module_cost_override'])*cost_multiplier
+                    if s_cell.get('battery_secondary_module_cost_override') is not None:
+                        s_cell['battery_secondary_module_cost_override']=float(s_cell['battery_secondary_module_cost_override'])*cost_multiplier
+                    s_cell['battery_cost_kwh']=float(s_cell.get('battery_cost_kwh',0.0))*cost_multiplier
+                    s_cell['battery_module_extra_cost']=float(s_cell.get('battery_module_extra_cost',0.0))*cost_multiplier
+                    s_cell['battery_secondary_module_extra_cost']=float(s_cell.get('battery_secondary_module_extra_cost',0.0))*cost_multiplier
+
+                # If quote variants provided, the quote-variant capex overrides
+                if marginal_source=='quote_variants' and b_kwh>0:
+                    b_capex_target=battery_capex_amount(b_kwh)
+                    s_cell['battery_module_cost_override']=None
+                    s_cell['battery_secondary_module_cost_override']=None
+                    s_cell['battery_module_extra_cost']=0.0
+                    s_cell['battery_secondary_module_extra_cost']=0.0
+                    s_cell['battery_cost_kwh']=float(b_capex_target/(b_kwh*vat_multiplier*premium_multiplier))
+
+                s_cell=_routing_settings(s_cell,basis='pv_incremental',enforce_clipping=True)
+                annual=dispatch_lifetime(
+                    pv_prof,
+                    load_mapped,
+                    ev_mapped,
+                    valid_mapped,
+                    pzo_mapped,
+                    s['horizon_years'],
+                    s['ev_start_year'],
+                    s['inverter_kw'],
+                    b_kwh,
+                    s['charge_kw'],
+                    s['discharge_kw'],
+                    sqrt_rte,
+                    s['pv_first_year_loss'],
+                    s['pv_annual_fade'],
+                    deg_annual,
+                    s['battery_cycle_fade'],
+                    lifetime if s['battery_replace_year']>0 or opt.get('battery_lifetime_years') is not None else 0,
+                    s['pv_battery_coupling']=='dc_coupled',physical_parameters(s_cell),month_mapped,hour_mapped
+                )
+                fin,_=_financial(s_cell,annual,exact_kwp,calculate_irr=False)
+                npv_dict=fin['pv_incremental']['npv']
+                feasible,clip_fraction,clip_cap=_routing_clipping_feasibility(s_cell,annual)
+                cell_data=dict(
+                    physical_feasible=feasible,
+                    annual_clipping_fraction_max=clip_fraction,
+                    clipping_fraction_limit=clip_cap,
+                    pv_kwp=exact_kwp,
+                    battery_kwh=float(b_kwh),
+                    routing_priority=s_cell['routing_priority'],
+                    resolved_routing_priority=resolve_routing_priority(s_cell),
+                    npv_median=float(npv_dict['median']),
+                    npv_mean=float(npv_dict['mean']),
+                    npv_min=float(npv_dict['min']),
+                    npv_max=float(npv_dict['max']),
+                    capex_eur=float(fin['capex_eur']),
+                    settings=s_cell
+                )
                 if is_mixed:
-                    comp_cell=selected_comp
+                    cell_data.update(
+                        composition=comp_cell,
+                        outside_analysis_search_range=bool(b_kwh>max_cap)
+                    )
+                else:
+                    mod_kwh = float(s.get('battery_module_kwh', 0.0) or 0.0)
+                    is_multiple = bool(mod_kwh > 0 and math.isclose(b_kwh % mod_kwh, 0.0, abs_tol=1e-6))
+                    is_analytical = bool(b_kwh > 0 and not is_multiple)
+                    cell_data.update(
+                        is_analytical_sample=is_analytical,
+                        capacity_nature='analytical_pro_rata' if is_analytical else 'hardware_multiple'
+                    )
+                heatmap_cells.append(cell_data)
 
-
-            if spread_delta!=0.0:
-                eff_market=(base_export_price+spread_delta)/(capture if capture>0 else 1.0)
-                s_cell['export_market_price']=eff_market
-
-            # Apply sensitivity cost multiplier if sensitivity_cost_delta_pct was specified
-            if cost_multiplier!=1.0 and b_kwh>0:
-                if s_cell.get('battery_module_cost_override') is not None:
-                    s_cell['battery_module_cost_override']=float(s_cell['battery_module_cost_override'])*cost_multiplier
-                if s_cell.get('battery_secondary_module_cost_override') is not None:
-                    s_cell['battery_secondary_module_cost_override']=float(s_cell['battery_secondary_module_cost_override'])*cost_multiplier
-                s_cell['battery_cost_kwh']=float(s_cell.get('battery_cost_kwh',0.0))*cost_multiplier
-                s_cell['battery_module_extra_cost']=float(s_cell.get('battery_module_extra_cost',0.0))*cost_multiplier
-                s_cell['battery_secondary_module_extra_cost']=float(s_cell.get('battery_secondary_module_extra_cost',0.0))*cost_multiplier
-
-            # If quote variants provided, the quote-variant capex overrides
-            if marginal_source=='quote_variants' and b_kwh>0:
-                b_capex_target=battery_capex_amount(b_kwh)
-                s_cell['battery_module_cost_override']=None
-                s_cell['battery_secondary_module_cost_override']=None
-                s_cell['battery_module_extra_cost']=0.0
-                s_cell['battery_secondary_module_extra_cost']=0.0
-                s_cell['battery_cost_kwh']=float(b_capex_target/(b_kwh*vat_multiplier*premium_multiplier))
-
-            s_cell=_routing_settings(s_cell,basis='pv_incremental',enforce_clipping=True)
-            annual=dispatch_lifetime(
-                pv_prof,
-                load_mapped,
-                ev_mapped,
-                valid_mapped,
-                pzo_mapped,
-                s['horizon_years'],
-                s['ev_start_year'],
-                s['inverter_kw'],
-                b_kwh,
-                s['charge_kw'],
-                s['discharge_kw'],
-                sqrt_rte,
-                s['pv_first_year_loss'],
-                s['pv_annual_fade'],
-                deg_annual,
-                s['battery_cycle_fade'],
-                lifetime if s['battery_replace_year']>0 or opt.get('battery_lifetime_years') is not None else 0,
-                s['pv_battery_coupling']=='dc_coupled',physical_parameters(s_cell),month_mapped,hour_mapped
-            )
-            fin,_=_financial(s_cell,annual,exact_kwp,calculate_irr=False)
-            npv_dict=fin['pv_incremental']['npv']
-            feasible,clip_fraction,clip_cap=_routing_clipping_feasibility(s_cell,annual)
-            cell_data=dict(
-                physical_feasible=feasible,
-                annual_clipping_fraction_max=clip_fraction,
-                clipping_fraction_limit=clip_cap,
-                pv_kwp=exact_kwp,
-                battery_kwh=float(b_kwh),
-                routing_priority=s_cell['routing_priority'],
-                resolved_routing_priority=resolve_routing_priority(s_cell),
-                npv_median=float(npv_dict['median']),
-                npv_mean=float(npv_dict['mean']),
-                npv_min=float(npv_dict['min']),
-                npv_max=float(npv_dict['max']),
-                capex_eur=float(fin['capex_eur']),
-                settings=s_cell
-            )
-            if is_mixed:
-                cell_data.update(
-                    composition=comp_cell,
-                    outside_analysis_search_range=bool(b_kwh>max_cap)
-                )
-            else:
-                mod_kwh = float(s.get('battery_module_kwh', 0.0) or 0.0)
-                is_multiple = bool(mod_kwh > 0 and math.isclose(b_kwh % mod_kwh, 0.0, abs_tol=1e-6))
-                is_analytical = bool(b_kwh > 0 and not is_multiple)
-                cell_data.update(
-                    is_analytical_sample=is_analytical,
-                    capacity_nature='analytical_pro_rata' if is_analytical else 'hardware_multiple'
-                )
-            heatmap_cells.append(cell_data)
+        chart4_npv_heatmap = dict(
+            pv_grid_kwp=sorted_pv_axis,
+            battery_grid_kwh=bat_grid,
+            cells=heatmap_cells,
+            current_configuration=dict(
+                pv_kwp=current_exact_kwp,
+                battery_kwh=selected_cap,
+                settings={**s,'quote_total':None},
+                **({
+                    'composition':selected_comp,
+                    'outside_analysis_search_range':bool(selected_cap>max_cap)
+                } if is_mixed else {})
+            ),
+            roof_mix_note='Roof sections scaled proportionally from current layout; roof fit not physically verified for larger arrays.'
+        )
 
     # 8. Chart 5 Needed capacity CDF (365 days pooled across historical weather analogues)
     rep_choice=opt.get('weather_representative','median')
@@ -5478,21 +5491,7 @@ def _battery_sizing_cached(runtime_key, key_settings, key_options, quote_fingerp
             charge_input_efc_definition='AC charge input / capacity approx physical_efc / sqrt(RTE).',
             cycle_conversion_note='Both charge-input cycles * (P_import * RTE - P_export) and delivered cycles * (P_import - P_export / RTE) produce the identical annual euro margin. Chart 3 provides a single-year equivalent-cycle heuristic approximation that omits multi-year future export price ramp; direct authoritative sizing decisions to the full discounted NPV heatmap (Chart 4), which models complete lifetime cash flows and future export price ramp.'
         ),
-        chart4_npv_heatmap=dict(
-            pv_grid_kwp=sorted_pv_axis,
-            battery_grid_kwh=bat_grid,
-            cells=heatmap_cells,
-            current_configuration=dict(
-                pv_kwp=current_exact_kwp,
-                battery_kwh=selected_cap,
-                settings={**s,'quote_total':None},
-                **({
-                    'composition':selected_comp,
-                    'outside_analysis_search_range':bool(selected_cap>max_cap)
-                } if is_mixed else {})
-            ),
-            roof_mix_note='Roof sections scaled proportionally from current layout; roof fit not physically verified for larger arrays.'
-        ),
+        chart4_npv_heatmap=chart4_npv_heatmap,
         chart5_needed_capacity_cdf=dict(
             cdf_points=cdf_points,
             percentiles=cdf_percentiles,
@@ -5531,7 +5530,6 @@ def _battery_sizing_cached(runtime_key, key_settings, key_options, quote_fingerp
 
 def battery_sizing(settings=None, options=None, quote=None):
     """Perform comprehensive battery sizing analysis over all historical weather years."""
-    _require_legacy_sizing()
     s=validate(settings)
     
     # Normalize quote if provided: validates line items and applies equipment specs (DoD, RTE, power)

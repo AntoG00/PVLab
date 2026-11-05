@@ -94,7 +94,8 @@
     "screenshots/02-battery-tradeoff.png",
     "screenshots/03-sankey-and-dispatch.png",
     "screenshots/04-sensitivity-tornado.png",
-    "screenshots/05-economic-sensitivity.png",
+    "screenshots/05-marginal-battery-savings.png",
+    "screenshots/06-battery-tradeoff-heatmap.png",
     "screenshots/readme-example.jpg",
     "tests/fixtures/consumption/hourly_italian_semicolon_comma_bom.csv",
     "tests/fixtures/heatpump_results_fixture.json",
@@ -334,11 +335,18 @@
       "reason": "Owner approved this exact README screenshot on 2026-11-04; visually reviewed fictional demo results with no personal names or coordinates and no personal image metadata."
     },
     {
-      "path": "screenshots/05-economic-sensitivity.png",
-      "sha256": "bd36ecd46a822ebe6d50aabd454c149ccb89beb9221f87302bf31eb40cced703",
+      "path": "screenshots/05-marginal-battery-savings.png",
+      "sha256": "68b39b129f7327926abc07d474bb722e97061c32c07d9d56586629afecad0fc0",
       "synthetic": true,
       "public_screenshot": true,
-      "reason": "Owner approved this exact README screenshot on 2026-11-04; visually reviewed fictional demo results with no personal names or coordinates and no personal image metadata."
+      "reason": "Owner approved this exact README screenshot on 2026-11-05; visually reviewed fictional demo results with no personal names or coordinates and no personal image metadata."
+    },
+    {
+      "path": "screenshots/06-battery-tradeoff-heatmap.png",
+      "sha256": "027f7e3ebdfc4665a865cc32482cf83db35f700c416d7a84d3988f425e145ce9",
+      "synthetic": true,
+      "public_screenshot": true,
+      "reason": "Owner approved this exact README screenshot on 2026-11-05; visually reviewed fictional demo results with no personal names or coordinates and no personal image metadata."
     },
     {
       "path": "screenshots/readme-example.jpg",

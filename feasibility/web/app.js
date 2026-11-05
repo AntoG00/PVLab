@@ -13391,7 +13391,7 @@ function renderBatteryEfcChart(data) {
 
 function renderBatteryNpvHeatmap(data) {
   const target = $('batChart4');
-  if (!target) return;
+  if (!target || !data.chart4_npv_heatmap) return;
   const hm = data.chart4_npv_heatmap;
   const pvs = hm.pv_grid_kwp;
   const bats = hm.battery_grid_kwh;
@@ -13631,7 +13631,6 @@ function renderBatterySocHeatmap(data) {
 }
 
 async function runBatterySizingAnalysis(customOptions = null) {
-  if(typeof activeResultProfile!=='undefined'&&activeResultProfile){if($('batteryStatus'))$('batteryStatus').textContent='Use joint solar and storage sizing for profile planes.';return;}
   const btn = $('runBatterySizing');
   if (btn) btn.disabled = true;
   batteryInFlight = true;

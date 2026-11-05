@@ -19,11 +19,13 @@
 
   ![Sizing recommendations and solar array capacity curve](screenshots/02-battery-tradeoff.png)
 
-  ![Economic sensitivity across sizing scenarios](screenshots/05-economic-sensitivity.png)
+  ![Storage capacity marginal battery savings vs annualized installed cost](screenshots/05-marginal-battery-savings.png)
+
+  ![PV kWp × Battery kWh discounted NPV tradeoff heatmap](screenshots/06-battery-tradeoff-heatmap.png)
 
 * **Size multi-orientation rooftops**: Model up to 12 roof orientations with custom tilt, azimuth, panel wattage, and shading fractions, or fetch solar irradiance and ambient temperature data from PVGIS 6 (SARAH-3) and Open-Meteo ERA5 to compare normalized yield by roof plane.
 
-* **Simulate hourly physical dispatch and hydronic heat pumps**: Execute Numba-accelerated 8,760/8,784-hour simulations (`dispatch_physical_year`, `simulate_shared_heat_pump`) that pair AC/DC-coupled battery routing and degradation with air-to-water heat pump performance maps, EN 442 radiator output scaling, weather-compensated flow curves, and domestic hot water tank storage.
+* **Simulate hourly physical dispatch and hydronic heat pumps**: Execute Numba-accelerated 8,760/8,784-hour simulations (`dispatch_physical_year`, `simulate_shared_heat_pump`) that pair AC/DC-coupled battery routing and degradation with air-to-water heat pump performance maps (not tested and probably a bit rudimentary), EN 442 radiator output scaling, weather-compensated flow curves, and domestic hot water tank storage.
 
   ![Annual energy flow and average-day dispatch](screenshots/03-sankey-and-dispatch.png)
 

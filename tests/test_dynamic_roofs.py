@@ -177,10 +177,15 @@ def test_quote_and_capex_totals(monkeypatch):
     assert set(quote['result']['layout']['counts']) == {'plane0', 'plane1'}
 
 
-def test_standalone_battery_sizing_guard(monkeypatch):
-    bind(monkeypatch)
-    with pytest.raises(ValueError, match='Standalone battery sizing is unavailable'):
-        e.battery_sizing({'roof_panels': {'plane0': 1}})
+def test_profile_battery_sizing_returns_storage_charts(monkeypatch):
+    bind(monkeypatch, 1)
+    result = e.battery_sizing({'roof_panels': {'plane0': 1}}, {'max_capacity': 10})
+    assert result['chart4_npv_heatmap'] is None
+    assert result['chart1_capacity_dispatch']['capacities'][-1]['capacity_kwh'] == 10
+    assert result['chart2_incremental_savings']
+    assert result['chart3_efc_breakeven']
+    assert result['chart5_needed_capacity_cdf']['cdf_points']
+    assert result['chart6_soc_heatmap']
 
 
 def test_runtime_profile_binding(monkeypatch):

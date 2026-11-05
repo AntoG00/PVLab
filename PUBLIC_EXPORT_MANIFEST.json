@@ -41,8 +41,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "229a04b5467610658e453b356c5810a20153341b3b3e16ada61ee21d53f0fa52",
-      "size": 20327,
+      "sha256": "3236600574db9a619288e77aa37972da58c5346ab079d90a32200501b22a674c",
+      "size": 20506,
       "mode": "0o644"
     },
     {
@@ -161,8 +161,8 @@
     },
     {
       "path": "feasibility/engine.py",
-      "sha256": "c58d8dbc428f67ef943dc590feb9021ff7c3ec4818e10d67fb3a2dd0a7828e23",
-      "size": 613011,
+      "sha256": "7fc115ec8863c374405ffe49a4265b76abcf2c4b72507088cc3e9ff3c2926ce0",
+      "size": 613406,
       "mode": "0o755"
     },
     {
@@ -419,8 +419,8 @@
     },
     {
       "path": "feasibility/web/app.js",
-      "sha256": "6db077416d45e5dffb271414061b83656970a4f0c9d0a69fa94c0a2e81b64b05",
-      "size": 985136,
+      "sha256": "7121166eebf333b9c17c123074c87e0c6f9794ebdb61c5427beaa282332dd705",
+      "size": 984977,
       "mode": "0o755"
     },
     {
@@ -455,8 +455,8 @@
     },
     {
       "path": "feasibility/web/index.html",
-      "sha256": "c98bcaa502f5f1161478c4dde10531cce1254ea7be460a8dd3eef1a1fc324900",
-      "size": 74472,
+      "sha256": "8200c69fda007623affeb17476a1c9ea35a5233e2eb9b546c908f8a20d4c1294",
+      "size": 74510,
       "mode": "0o755"
     },
     {
@@ -562,9 +562,15 @@
       "mode": "0o644"
     },
     {
-      "path": "screenshots/05-economic-sensitivity.png",
-      "sha256": "bd36ecd46a822ebe6d50aabd454c149ccb89beb9221f87302bf31eb40cced703",
-      "size": 472624,
+      "path": "screenshots/05-marginal-battery-savings.png",
+      "sha256": "68b39b129f7327926abc07d474bb722e97061c32c07d9d56586629afecad0fc0",
+      "size": 308797,
+      "mode": "0o644"
+    },
+    {
+      "path": "screenshots/06-battery-tradeoff-heatmap.png",
+      "sha256": "027f7e3ebdfc4665a865cc32482cf83db35f700c416d7a84d3988f425e145ce9",
+      "size": 279208,
       "mode": "0o644"
     },
     {
@@ -893,8 +899,8 @@
     },
     {
       "path": "tests/test_dynamic_roofs.py",
-      "sha256": "940b8fb5b6f135665b2f04c8fac5aa468b2e13c164bc95bc853cffa4b4d5a320",
-      "size": 11259,
+      "sha256": "96a5e792282cfa51c74ca5a033cf33622120a682c15808d0eb5c525bcc04da4b",
+      "size": 11543,
       "mode": "0o644"
     },
     {
@@ -1655,8 +1661,8 @@
     },
     {
       "path": "tools/export_allowlist.json",
-      "sha256": "71e27a0b636c58b1d4b8bbdb5906e3133daf8a77ff7cfd77c70d5fe6e8b73ae1",
-      "size": 14186,
+      "sha256": "ac4bc4d077448df14ca9ecbdf1463cb378d976e4c5b710726cf0b2299f84ce90",
+      "size": 14649,
       "mode": "0o644"
     },
     {
@@ -1702,6 +1708,6 @@
       "mode": "0o755"
     }
   ],
-  "reviewed_source_sha256": "f7bb882308565f8c6382c911b3f1817e84702f0722ff95cae2ba66e2464ecb0d",
+  "reviewed_source_sha256": "bde47fdef19fa8bbe3a904223f039d5c6fc6eadb9a466278b2c3ccc04755d279",
   "digest_scope": "reviewed_source_sha256 excludes checklist and generated manifests; files includes all payload except this manifest"
 }
