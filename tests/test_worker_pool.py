@@ -380,9 +380,11 @@ if os.name == 'nt':
             result = wait_job(store, owner, job, timeout=4)
             assert result['state'] == 'failed'
             assert result['result_ref'] is None
-            diagnostic = store.job_directory(owner, job['id']) / 'diagnostic.json'
-            assert json.loads(diagnostic.read_bytes())['error_code'] == 'COMPUTE_TIMEOUT'
-            assert not pool._workers
+            # The failed state is committed before the monitor publishes the diagnostic.
+            with pool._lock:
+                diagnostic = store.job_directory(owner, job['id']) / 'diagnostic.json'
+                assert json.loads(diagnostic.read_bytes())['error_code'] == 'COMPUTE_TIMEOUT'
+                assert not pool._workers
         finally:
             pool.close()
 

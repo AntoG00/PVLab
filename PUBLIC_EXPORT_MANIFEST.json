@@ -1649,8 +1649,8 @@
     },
     {
       "path": "tests/test_worker_pool.py",
-      "sha256": "e3e3dc645864f58cf51b3a10593625ee7a0e8d7200239226b2433bfc4b8e4b61",
-      "size": 20681,
+      "sha256": "489c14050b71a854d36ab048a99436a8b01532222ae57a18d3d0e92ccf9fc767",
+      "size": 20811,
       "mode": "0o644"
     },
     {
@@ -1708,6 +1708,6 @@
       "mode": "0o755"
     }
   ],
-  "reviewed_source_sha256": "bde47fdef19fa8bbe3a904223f039d5c6fc6eadb9a466278b2c3ccc04755d279",
+  "reviewed_source_sha256": "9b53f4926c687e169b810e0ef4bcbd5e323903399156dd377b3a3d73567035d5",
   "digest_scope": "reviewed_source_sha256 excludes checklist and generated manifests; files includes all payload except this manifest"
 }
