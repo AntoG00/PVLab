@@ -11,8 +11,8 @@
     },
     {
       "path": ".github/workflows/tests.yml",
-      "sha256": "578fe0922e9a50e38abd8ba69b5e22e955bd9a1b977ba9d75d7f10fecf33187d",
-      "size": 9074,
+      "sha256": "44ad599cb3510486a8119aee28fa9cfb74bd1b2c7b680641be288194971086b8",
+      "size": 9199,
       "mode": "0o644"
     },
     {
@@ -95,8 +95,8 @@
     },
     {
       "path": "docs/PUBLICATION_CHECKLIST.md",
-      "sha256": "d5c229423e0f3f0ad805ed7a9c9d23c9b18f2e18518889d8f7b8cfd8cd2c74ca",
-      "size": 7366,
+      "sha256": "933fd87fbec692125487cd167bfec27fb71609fadaf4068eda1c1ffb3a3a62c8",
+      "size": 7371,
       "mode": "0o644"
     },
     {
@@ -1702,6 +1702,6 @@
       "mode": "0o755"
     }
   ],
-  "reviewed_source_sha256": "54e2a79fa7948938d475d2d922d1a5da62c53f115545ac2d9bb97072eee900dc",
+  "reviewed_source_sha256": "cec76185dc90f20966cd72310ab6785a35fa33bb507bc0bd5a7a9e2c26c1fd86",
   "digest_scope": "reviewed_source_sha256 excludes checklist and generated manifests; files includes all payload except this manifest"
 }

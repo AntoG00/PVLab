@@ -97,7 +97,8 @@ jobs:
           $dest = Join-Path $env:RUNNER_TEMP "pv lab àé"
           $zipPath = Join-Path $env:RUNNER_TEMP "repo.zip"
           New-Item -ItemType Directory -Force -Path $dest
-          git archive --format=zip HEAD -o $zipPath
+          # Preserve the reviewed LF bytes even when Git for Windows enables autocrlf.
+          git -c core.autocrlf=false -c core.eol=lf archive --format=zip HEAD -o $zipPath
           if ($LASTEXITCODE -ne 0) { throw "git archive failed with exit code $LASTEXITCODE" }
           Expand-Archive -LiteralPath $zipPath -DestinationPath $dest -Force
           Remove-Item -Force $zipPath
