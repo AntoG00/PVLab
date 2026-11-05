@@ -2,7 +2,7 @@
 
 This checklist describes preparation of a subsequent reviewed update to an existing
 local public repository. No remote, push, release publication, or deployment is authorized.
-Existing public history contains ten commits; this update appends an eleventh commit and
+Existing public history contains eleven commits; this update appends a twelfth commit and
 must never amend, reset, rebase, or reinitialize public history.
 
 ## Release policy
@@ -58,15 +58,15 @@ compatibility gate pins the current environment and compares the unchanged seale
   limited to IHDR/IDAT/IEND; JPEG retains only standard sRGB/JFIF metadata.
 
 Reviewed source inventory SHA256 (`reviewed_source_sha256`):
-`cec76185dc90f20966cd72310ab6785a35fa33bb507bc0bd5a7a9e2c26c1fd86`.
+`f7bb882308565f8c6382c911b3f1817e84702f0722ff95cae2ba66e2464ecb0d`.
 
 Manifests (`PUBLIC_EXPORT_MANIFEST.json`, `SOFTWARE_MANIFEST.json`) record sanitized file
 metadata, runtime requirements, and dependency lock hashes without private paths or IDs.
 
 ## Public Git history gate
 
-The existing public repository has ten commits. This update appends exactly one new
-commit (the eleventh commit) on `main`. Never amend, reset, rebase, or reinitialize.
+The existing public repository has eleven commits. This update appends exactly one new
+commit (the twelfth commit) on `main`. Never amend, reset, rebase, or reinitialize.
 Clean worktree and fsck required; approved author/committer identity; every object scanned;
 no inherited private refs, objects, hooks, or alternates; no remote and no tags.
 

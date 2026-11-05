@@ -95,8 +95,8 @@
     },
     {
       "path": "docs/PUBLICATION_CHECKLIST.md",
-      "sha256": "933fd87fbec692125487cd167bfec27fb71609fadaf4068eda1c1ffb3a3a62c8",
-      "size": 7371,
+      "sha256": "cbc335b7ed91fb0cb7893eee72b9277636656fca509e42369ecc44a0b03986a8",
+      "size": 7374,
       "mode": "0o644"
     },
     {
@@ -395,8 +395,8 @@
     },
     {
       "path": "feasibility/tenant_store.py",
-      "sha256": "f6d655a48556aabd45f92cc8270c8ffb3cef1cb20b3373869bf6947d1b8da289",
-      "size": 41883,
+      "sha256": "49a3a3c678cb8c5d574a89b448aec01cc802732f91d3deb1c0a14403fe9d68f4",
+      "size": 42236,
       "mode": "0o644"
     },
     {
@@ -1702,6 +1702,6 @@
       "mode": "0o755"
     }
   ],
-  "reviewed_source_sha256": "cec76185dc90f20966cd72310ab6785a35fa33bb507bc0bd5a7a9e2c26c1fd86",
+  "reviewed_source_sha256": "f7bb882308565f8c6382c911b3f1817e84702f0722ff95cae2ba66e2464ecb0d",
   "digest_scope": "reviewed_source_sha256 excludes checklist and generated manifests; files includes all payload except this manifest"
 }

@@ -180,14 +180,21 @@ class TenantStore:
     @staticmethod
     def _check_windows_database(directory):
         for suffix in ('', '-wal', '-shm', '-journal'):
-            try:
-                with windows_storage.file(directory / ('tenants.sqlite3' + suffix), mutable=True):
-                    pass
-            except FileNotFoundError:
-                if not suffix:
-                    raise StoreError() from None
-            except (OSError, ValueError) as exc:
-                raise StoreError() from exc
+            path = directory / ('tenants.sqlite3' + suffix)
+            for attempt in range(5):
+                try:
+                    with windows_storage.file(path, mutable=True):
+                        pass
+                except FileNotFoundError:
+                    if not suffix:
+                        raise StoreError() from None
+                except (OSError, ValueError) as exc:
+                    # Windows can deny opens while SQLite deletes a sidecar.
+                    if suffix and getattr(exc, 'winerror', None) == 5 and attempt < 4:
+                        time.sleep(0.05)
+                        continue
+                    raise StoreError() from exc
+                break
 
     @contextmanager
     def _connection(self):
